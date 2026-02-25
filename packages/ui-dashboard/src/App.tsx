@@ -1,6 +1,8 @@
 import { useWebSocket } from './hooks/useWebSocket';
 import { Header } from './components/Header';
+import { StatsBar } from './components/StatsBar';
 import { AgentCard } from './components/AgentCard';
+import { ActivityPulse } from './components/ActivityPulse';
 import { EventStream } from './components/EventStream';
 
 const WS_URL = `ws://${window.location.hostname}:${window.location.port || '3141'}/ws`;
@@ -14,6 +16,9 @@ function App() {
       <Header connected={connected} agentCount={agentList.length} />
 
       <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full">
+        {/* Stats Bar */}
+        <StatsBar agents={agentList} events={events} />
+
         {/* Agent Grid */}
         <section>
           <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
@@ -37,6 +42,9 @@ function App() {
             </div>
           )}
         </section>
+
+        {/* Activity Pulse */}
+        <ActivityPulse events={events} />
 
         {/* Event Stream */}
         <section>
