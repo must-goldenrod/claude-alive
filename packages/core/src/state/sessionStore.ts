@@ -56,8 +56,11 @@ export class SessionStore {
       return null;
     }
 
-    const agent = this.agents.get(sessionId);
-    if (!agent) return null;
+    let agent = this.agents.get(sessionId);
+    if (!agent) {
+      // Auto-create agent for sessions that started before the server
+      agent = this.createAgent(sessionId, data.cwd ?? '');
+    }
 
     const toolName = data.tool_name ?? undefined;
     const result = transition(agent.state, event, toolName);

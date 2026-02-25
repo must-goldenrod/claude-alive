@@ -1,6 +1,28 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import type { HookEventPayload } from '@claude-alive/core';
+import type { HookEventPayload, HookEventData } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
+
+/**
+ * Normalize incoming event payload. Claude Code hook stdin sends raw
+ * HookEventData ({ hook_event_name, session_id, ... }). Our wrapped format
+ * adds { event, tool, timestamp, data }. Accept both.
+ */
+function normalizePayload(raw: Record<string, unknown>): HookEventPayload {
+  // Already in wrapped format
+  if (raw.event && raw.data) {
+    return raw as unknown as HookEventPayload;
+  }
+
+  // Raw Claude Code hook stdin — wrap it
+  const data = raw as unknown as HookEventData;
+  return {
+    event: data.hook_event_name,
+    tool: data.tool_name ?? 'system',
+    session_id: data.session_id,
+    timestamp: Date.now(),
+    data,
+  };
+}
 
 export interface HttpRouterOptions {
   onEvent: (payload: HookEventPayload) => void;
@@ -43,7 +65,8 @@ export function createHttpServer(options: HttpRouterOptions) {
     if (req.method === 'POST' && url.pathname === '/api/event') {
       try {
         const body = await readBody(req);
-        const payload = JSON.parse(body) as HookEventPayload;
+        const raw = JSON.parse(body) as Record<string, unknown>;
+        const payload = normalizePayload(raw);
         onEvent(payload);
         sendJson(res, 200, { ok: true });
       } catch {
