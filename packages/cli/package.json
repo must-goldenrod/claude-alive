@@ -1,0 +1,19 @@
+{
+  "name": "@claude-alive/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "claude-alive": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@claude-alive/hooks": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22"
+  }
+}
