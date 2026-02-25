@@ -1,0 +1,29 @@
+{
+  "name": "@claude-alive/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@claude-alive/core": "workspace:*",
+    "@react-three/drei": "^10",
+    "@react-three/fiber": "^9",
+    "react": "^19",
+    "react-dom": "^19",
+    "three": "^0.175"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.175",
+    "@vitejs/plugin-react": "^4",
+    "tailwindcss": "^4",
+    "typescript": "^5.7",
+    "vite": "^6"
+  }
+}

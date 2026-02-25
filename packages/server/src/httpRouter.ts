@@ -5,7 +5,7 @@ import { createStaticHandler } from './staticFiles.js';
 export interface HttpRouterOptions {
   onEvent: (payload: HookEventPayload) => void;
   getSnapshot: () => object;
-  /** Path to the UI dashboard dist directory. Defaults to ../../ui-dashboard/dist relative to server dist. */
+  /** Path to the UI dist directory. Defaults to ../../ui/dist relative to server dist. */
   uiDistPath?: string;
 }
 
