@@ -1,0 +1,19 @@
+{
+  "name": "claude-alive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time animated UI for Claude Code powered by hooks",
+  "license": "MIT",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "typescript": "^5.7"
+  },
+  "packageManager": "pnpm@10.28.2"
+}
