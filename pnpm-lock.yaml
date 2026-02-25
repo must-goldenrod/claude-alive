@@ -42,6 +42,9 @@ importers:
         specifier: ^8
         version: 8.19.0
     devDependencies:
+      '@claude-alive/ui-dashboard':
+        specifier: workspace:*
+        version: link:../ui-dashboard
       '@types/ws':
         specifier: ^8
         version: 8.18.1

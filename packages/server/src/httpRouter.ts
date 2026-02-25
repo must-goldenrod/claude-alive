@@ -1,9 +1,12 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { HookEventPayload } from '@claude-alive/core';
+import { createStaticHandler } from './staticFiles.js';
 
 export interface HttpRouterOptions {
   onEvent: (payload: HookEventPayload) => void;
   getSnapshot: () => object;
+  /** Path to the UI dashboard dist directory. Defaults to ../../ui-dashboard/dist relative to server dist. */
+  uiDistPath?: string;
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -26,7 +29,8 @@ function sendJson(res: ServerResponse, status: number, data: unknown): void {
 }
 
 export function createHttpServer(options: HttpRouterOptions) {
-  const { onEvent, getSnapshot } = options;
+  const { onEvent, getSnapshot, uiDistPath } = options;
+  const serveStatic = createStaticHandler(uiDistPath);
 
   const server = createServer(async (req, res) => {
     if (req.method === 'OPTIONS') {
@@ -73,6 +77,12 @@ export function createHttpServer(options: HttpRouterOptions) {
     if (req.method === 'GET' && url.pathname === '/health') {
       sendJson(res, 200, { ok: true });
       return;
+    }
+
+    // Static file serving + SPA fallback
+    if (req.method === 'GET') {
+      const served = await serveStatic(url.pathname, res);
+      if (served) return;
     }
 
     sendJson(res, 404, { error: 'Not found' });
