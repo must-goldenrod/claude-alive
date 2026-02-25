@@ -2,9 +2,11 @@ import type { Entity } from './renderer';
 import type { SpriteSet } from './sprites';
 import type { TileMap } from './tilemap';
 import type { Direction } from './seats';
+import type { MatrixEffect } from './matrixEffect';
 import { generateSpriteSet } from './sprites';
 import { findPath, isWalkable } from './tilemap';
 import { TILE_SIZE, CHAR_WIDTH, CHAR_HEIGHT, WALK_SPEED } from './constants';
+import { renderMatrixEffect, getEffectCharacterOpacity } from './matrixEffect';
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -388,6 +390,32 @@ function drawBubble(
   ctx.textBaseline = 'middle';
   const icons: Record<string, string> = { waiting: '…', permission: '?', error: '!' };
   ctx.fillText(icons[type] ?? '', bx + bubbleSize / 2, by + bubbleSize / 2);
+}
+
+// ── Effect entity ───────────────────────────────────────────────────────
+
+/** Create an entity that renders a character with a matrix effect overlay */
+export function makeEffectEntity(char: Character, effect: MatrixEffect): Entity {
+  return {
+    x: char.x,
+    y: char.y,
+    width: char.width,
+    height: char.height,
+    render: (ctx: CanvasRenderingContext2D, zoom: number) => {
+      const opacity = getEffectCharacterOpacity(effect);
+
+      // Draw character with opacity
+      if (opacity > 0) {
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        char.render(ctx, zoom);
+        ctx.restore();
+      }
+
+      // Draw matrix rain on top
+      renderMatrixEffect(ctx, effect, CHAR_WIDTH, CHAR_HEIGHT, zoom);
+    },
+  };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

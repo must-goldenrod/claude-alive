@@ -1,27 +1,27 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import PixelCanvas from './components/PixelCanvas';
-import { createOfficeState, spawnCharacter, updateOffice, getEntities } from './engine/officeState';
-import type { OfficeState } from './engine/officeState';
+import StatusOverlay from './components/StatusOverlay';
+import { createOfficeState, updateOffice, getEntities } from './engine/officeState';
+import { useOfficeWebSocket } from './hooks/useOfficeWebSocket';
 import type { Entity } from './engine/renderer';
 
-const officeState: OfficeState = createOfficeState();
+// Derive WebSocket URL from current page location (same pattern as dashboard)
+function getWsUrl(): string {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}/ws`;
+}
 
-// Spawn 3 test characters
-spawnCharacter(officeState, 'test-agent-1');
-spawnCharacter(officeState, 'test-agent-2');
-spawnCharacter(officeState, 'test-agent-3');
+const officeState = createOfficeState();
 
 export default function App() {
   const camera = useRef(officeState.camera);
   const entities = useRef<Entity[]>(getEntities(officeState));
+  const wsUrl = useMemo(getWsUrl, []);
+  const wsStatus = useOfficeWebSocket(wsUrl, officeState);
 
-  // Sync camera ref back to state and update entities each frame via the game loop update
+  // Game loop: update office state and sync entities each frame
   useEffect(() => {
     const originalCamera = officeState.camera;
-    // The PixelCanvas game loop calls update -> render each frame.
-    // We hook into it by keeping entities.current fresh.
-    // The update callback is passed to PixelCanvas via a ref pattern:
-    // we update office state and entity list from a rAF-driven interval.
     let running = true;
     let lastTime = performance.now();
 
@@ -53,11 +53,18 @@ export default function App() {
   }, []);
 
   return (
-    <PixelCanvas
-      camera={camera}
-      tileMap={officeState.tileMap}
-      entities={entities}
-      onTileClick={handleTileClick}
-    />
+    <>
+      <PixelCanvas
+        camera={camera}
+        tileMap={officeState.tileMap}
+        entities={entities}
+        onTileClick={handleTileClick}
+      />
+      <StatusOverlay
+        connected={wsStatus.connected}
+        agentCount={wsStatus.agentCount}
+        url={wsStatus.url}
+      />
+    </>
   );
 }
