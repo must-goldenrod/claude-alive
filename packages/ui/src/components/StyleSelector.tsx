@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { UIStyle } from '../App.tsx';
 
 interface StyleSelectorProps {
@@ -5,14 +6,20 @@ interface StyleSelectorProps {
   onChange: (style: UIStyle) => void;
 }
 
-const STYLES: { key: UIStyle; label: string }[] = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'pixel', label: 'Pixel Office' },
-  { key: 'three-d', label: '3D Battlefield' },
-  { key: 'hybrid', label: 'Hybrid' },
+const STYLE_KEYS: { key: UIStyle; labelKey: string }[] = [
+  { key: 'dashboard', labelKey: 'styles.dashboard' },
+  { key: 'three-d', labelKey: 'styles.threeDField' },
+  { key: 'pixel', labelKey: 'styles.pixel' },
 ];
 
 export function StyleSelector({ current, onChange }: StyleSelectorProps) {
+  const { t, i18n } = useTranslation();
+  const isKo = i18n.language?.startsWith('ko');
+
+  const toggleLang = () => {
+    i18n.changeLanguage(isKo ? 'en' : 'ko');
+  };
+
   return (
     <div
       style={{
@@ -42,7 +49,7 @@ export function StyleSelector({ current, onChange }: StyleSelectorProps) {
         claude-alive
       </span>
 
-      {STYLES.map(({ key, label }) => {
+      {STYLE_KEYS.map(({ key, labelKey }) => {
         const active = key === current;
         return (
           <button
@@ -62,10 +69,30 @@ export function StyleSelector({ current, onChange }: StyleSelectorProps) {
               transition: 'background 0.15s, color 0.15s',
             }}
           >
-            {label}
+            {t(labelKey)}
           </button>
         );
       })}
+
+      <button
+        onClick={toggleLang}
+        style={{
+          marginLeft: 'auto',
+          height: 28,
+          padding: '0 10px',
+          border: '1px solid var(--border-color)',
+          borderRadius: 4,
+          cursor: 'pointer',
+          fontSize: 11,
+          fontWeight: 600,
+          fontFamily: 'inherit',
+          color: 'var(--text-secondary)',
+          background: 'transparent',
+          transition: 'background 0.15s',
+        }}
+      >
+        {isKo ? 'EN' : '한'}
+      </button>
     </div>
   );
 }

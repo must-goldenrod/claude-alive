@@ -1,17 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AgentInfo, ToolAnimation } from '@claude-alive/core';
 import { useNow } from '../hooks/useNow';
 
-const STATE_CONFIG: Record<string, { color: string; label: string; animation?: string }> = {
-  spawning: { color: 'var(--accent-purple)', label: 'spawning', animation: 'pulse 1s infinite' },
-  idle: { color: 'var(--text-secondary)', label: 'idle' },
-  listening: { color: 'var(--accent-blue)', label: 'listening', animation: 'pulse 1.5s infinite' },
-  active: { color: 'var(--accent-green)', label: 'active', animation: 'pulse 0.8s infinite' },
-  waiting: { color: 'var(--accent-amber)', label: 'waiting', animation: 'blink 1s infinite' },
-  error: { color: 'var(--accent-red)', label: 'error', animation: 'shake 0.3s ease-in-out' },
-  done: { color: 'var(--accent-green)', label: 'done' },
-  despawning: { color: 'var(--accent-red)', label: 'leaving', animation: 'fadeOut 0.5s forwards' },
-  removed: { color: 'var(--text-secondary)', label: 'removed' },
+const STATE_CONFIG: Record<string, { color: string; labelKey: string; animation?: string }> = {
+  spawning: { color: 'var(--accent-purple)', labelKey: 'states.spawning', animation: 'pulse 1s infinite' },
+  idle: { color: 'var(--text-secondary)', labelKey: 'states.idle' },
+  listening: { color: 'var(--accent-blue)', labelKey: 'states.listening', animation: 'pulse 1.5s infinite' },
+  active: { color: 'var(--accent-green)', labelKey: 'states.active', animation: 'pulse 0.8s infinite' },
+  waiting: { color: 'var(--accent-amber)', labelKey: 'states.waiting', animation: 'blink 1s infinite' },
+  error: { color: 'var(--accent-red)', labelKey: 'states.error', animation: 'shake 0.3s ease-in-out' },
+  done: { color: 'var(--accent-green)', labelKey: 'states.done' },
+  despawning: { color: 'var(--accent-red)', labelKey: 'states.leaving', animation: 'fadeOut 0.5s forwards' },
+  removed: { color: 'var(--text-secondary)', labelKey: 'states.removed' },
 };
 
 const TOOL_ANIMATION_ICONS: Record<ToolAnimation, string> = {
@@ -30,14 +31,14 @@ const TOOL_ANIMATION_COLORS: Record<ToolAnimation, string> = {
   thinking: 'var(--text-secondary)',
 };
 
-function formatTimeSince(now: number, timestamp: number): string {
+function formatTimeSince(now: number, timestamp: number, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (!timestamp) return '';
   const seconds = Math.floor((now - timestamp) / 1000);
-  if (seconds < 1) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 1) return t('time.justNow');
+  if (seconds < 60) return t('time.secondsAgo', { count: seconds });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+  if (minutes < 60) return t('time.minutesAgo', { count: minutes });
+  return t('time.hoursAgo', { count: Math.floor(minutes / 60) });
 }
 
 function formatTime(ts: number): string {
@@ -46,19 +47,22 @@ function formatTime(ts: number): string {
 
 interface AgentCardProps {
   agent: AgentInfo;
+  subAgents?: AgentInfo[];
   onRename?: (sessionId: string, name: string | null) => void;
 }
 
 const IDLE_CONFIG = STATE_CONFIG.idle;
 
-export function AgentCard({ agent, onRename }: AgentCardProps) {
+export function AgentCard({ agent, subAgents = [], onRename }: AgentCardProps) {
+  const { t } = useTranslation();
   const config = STATE_CONFIG[agent.state] ?? IDLE_CONFIG;
   const shortId = agent.sessionId.slice(0, 8);
   const now = useNow();
-  const timeSince = formatTimeSince(now, agent.lastEventTime);
+  const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const animation = agent.currentToolAnimation;
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(agent.displayName ?? '');
+  const [showInactiveSubs, setShowInactiveSubs] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -75,7 +79,7 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
 
   return (
     <div
-      className="rounded-lg p-4 border transition-all duration-300 relative overflow-hidden"
+      className="rounded-lg p-5 border transition-all duration-300 relative overflow-hidden"
       style={{
         background: 'var(--bg-card)',
         borderColor: agent.state === 'active' ? config.color : 'var(--border-color)',
@@ -83,9 +87,9 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
       }}
     >
       {/* Header: Avatar + Name + Time */}
-      <div className="flex items-center gap-3 mb-2">
+      <div className="flex items-center gap-3 mb-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold shrink-0"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold shrink-0"
           style={{
             background: `${config.color}20`,
             color: config.color,
@@ -98,7 +102,7 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
           {editing ? (
             <input
               ref={inputRef}
-              className="text-sm font-medium w-full rounded px-1 py-0.5 outline-none"
+              className="text-base font-medium w-full rounded px-2 py-1 outline-none"
               style={{
                 background: 'var(--bg-secondary)',
                 color: 'var(--text-primary)',
@@ -115,20 +119,20 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
             />
           ) : (
             <div
-              className="text-sm font-medium cursor-pointer hover:underline truncate"
+              className="text-base font-medium cursor-pointer hover:underline truncate"
               style={{ color: 'var(--text-primary)' }}
               onClick={() => { setNameInput(agent.displayName ?? ''); setEditing(true); }}
-              title="Click to rename"
+              title={t('agents.clickToRename')}
             >
               {displayLabel}
             </div>
           )}
-          <div className="text-[10px] truncate" style={{ color: 'var(--text-secondary)' }}>
-            {agent.parentId ? 'sub-agent' : 'agent'} · {shortId}
+          <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+            {agent.parentId ? t('agents.subAgent') : t('agents.agent')} · {shortId}
           </div>
         </div>
         {timeSince && (
-          <div className="text-[10px] shrink-0" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-xs shrink-0" style={{ color: 'var(--text-secondary)' }}>
             {timeSince}
           </div>
         )}
@@ -136,7 +140,7 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
 
       {/* Project/folder path */}
       <div
-        className="text-[11px] mb-2 px-2 py-1 rounded truncate font-mono"
+        className="text-xs mb-3 px-2.5 py-1.5 rounded truncate font-mono"
         style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
         title={agent.cwd}
       >
@@ -144,16 +148,16 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
       </div>
 
       {/* Meta row: started at, events count, tools used */}
-      <div className="flex items-center gap-3 mb-2 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-        <span title="Started at">
+      <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+        <span title={t('agents.startedAt')}>
           {'\u23F0'} {formatTime(agent.createdAt)}
         </span>
-        <span title="Total events received">
-          {'\u26A1'} {agent.totalEvents ?? 0} events
+        <span title={t('agents.totalEvents')}>
+          {'\u26A1'} {agent.totalEvents ?? 0} {t('agents.events')}
         </span>
         {agent.toolsUsed && agent.toolsUsed.length > 0 && (
           <span title={`Tools: ${agent.toolsUsed.join(', ')}`}>
-            {'\uD83D\uDEE0'} {agent.toolsUsed.length} tools
+            {'\uD83D\uDEE0'} {agent.toolsUsed.length} {t('agents.tools')}
           </span>
         )}
       </div>
@@ -161,7 +165,7 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
       {/* Last prompt preview */}
       {agent.lastPrompt && (
         <div
-          className="text-[10px] mb-2 truncate italic"
+          className="text-xs mb-3 truncate italic"
           style={{ color: 'var(--text-secondary)' }}
           title={agent.lastPrompt}
         >
@@ -173,22 +177,22 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div
-            className="w-2 h-2 rounded-full"
+            className="w-2.5 h-2.5 rounded-full"
             style={{ background: config.color, animation: config.animation }}
           />
-          <span className="text-xs font-medium" style={{ color: config.color }}>
-            {config.label}
+          <span className="text-sm font-medium" style={{ color: config.color }}>
+            {t(config.labelKey)}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {animation && (
-            <span className="text-xs" title={animation}>
+            <span className="text-sm" title={animation}>
               {TOOL_ANIMATION_ICONS[animation]}
             </span>
           )}
           {agent.currentTool && (
             <span
-              className="text-xs px-2 py-0.5 rounded"
+              className="text-xs px-2 py-1 rounded"
               style={{ background: `${config.color}15`, color: config.color }}
             >
               {agent.currentTool}
@@ -197,9 +201,67 @@ export function AgentCard({ agent, onRename }: AgentCardProps) {
         </div>
       </div>
 
+      {/* Sub-agents */}
+      {subAgents.length > 0 && (() => {
+        const activeSubs = subAgents.filter(s => s.state !== 'despawning' && s.state !== 'removed');
+        const inactiveSubs = subAgents.filter(s => s.state === 'despawning' || s.state === 'removed');
+        const visibleSubs = showInactiveSubs ? subAgents : activeSubs;
+
+        return (
+          <div
+            className="mt-3 pt-3 border-t space-y-1.5"
+            style={{ borderColor: 'var(--border-color)' }}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                {t('agents.subAgents')} ({activeSubs.length} active{inactiveSubs.length > 0 ? ` / ${subAgents.length} total` : ''})
+              </span>
+              {inactiveSubs.length > 0 && (
+                <button
+                  className="text-xs px-1.5 py-0.5 rounded hover:brightness-125"
+                  style={{ color: 'var(--text-secondary)', background: 'var(--bg-secondary)' }}
+                  onClick={() => setShowInactiveSubs(!showInactiveSubs)}
+                >
+                  {showInactiveSubs ? t('agents.hideInactive') : t('agents.inactiveCount', { count: inactiveSubs.length })}
+                </button>
+              )}
+            </div>
+            {visibleSubs.map(sub => {
+              const subConfig = STATE_CONFIG[sub.state] ?? IDLE_CONFIG;
+              return (
+                <div
+                  key={sub.sessionId}
+                  className="flex items-center gap-2 px-2 py-1 rounded text-xs"
+                  style={{ background: 'var(--bg-secondary)' }}
+                >
+                  <div
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: subConfig.color }}
+                  />
+                  <span className="font-mono truncate" style={{ color: 'var(--text-secondary)' }}>
+                    {sub.sessionId.slice(0, 8)}
+                  </span>
+                  <span className="font-medium" style={{ color: subConfig.color }}>
+                    {t(subConfig.labelKey)}
+                  </span>
+                  {sub.currentTool && (
+                    <span
+                      className="ml-auto shrink-0 px-1.5 py-0.5 rounded"
+                      style={{ background: `${subConfig.color}15`, color: subConfig.color }}
+                    >
+                      {sub.currentTool}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {/* Activity indicator bar at bottom */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-0.5"
+        className="absolute bottom-0 left-0 right-0 h-1"
         style={{
           background: animation
             ? TOOL_ANIMATION_COLORS[animation]

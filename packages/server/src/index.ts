@@ -53,7 +53,15 @@ function renameAgent(sessionId: string, name: string | null): boolean {
   return store.renameAgent(sessionId, name);
 }
 
-const httpServer = createHttpServer({ onEvent, getSnapshot, renameAgent });
+function removeAgent(sessionId: string): boolean {
+  const ok = store.removeAgent(sessionId);
+  if (ok) {
+    broadcaster.broadcast({ type: 'agent:despawn', sessionId });
+  }
+  return ok;
+}
+
+const httpServer = createHttpServer({ onEvent, getSnapshot, renameAgent, removeAgent });
 const broadcaster = new WSBroadcaster(httpServer, { getSnapshot });
 
 httpServer.listen(PORT, () => {

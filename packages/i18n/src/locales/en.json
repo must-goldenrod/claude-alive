@@ -1,0 +1,102 @@
+{
+  "header": {
+    "title": "claude-alive",
+    "dashboard": "dashboard",
+    "connected": "connected",
+    "disconnected": "disconnected",
+    "agentCount_one": "{{count}} agent",
+    "agentCount_other": "{{count}} agents"
+  },
+  "stats": {
+    "events": "Events",
+    "eventsPerMin": "Events/min",
+    "active": "Active",
+    "topTool": "Top tool"
+  },
+  "agents": {
+    "noAgentsYet": "No agents yet",
+    "startSession": "Start a Claude Code session — it will appear here automatically.",
+    "projects": "Projects",
+    "subAgent": "sub-agent",
+    "agent": "agent",
+    "subAgents": "Sub-agents",
+    "activeTotal": "{{active}} active / {{total}} total",
+    "activeOnly": "{{active}} active",
+    "agentCount_one": "{{count}} agent",
+    "agentCount_other": "{{count}} agents",
+    "activeSlash": "{{active}} active / ",
+    "hideInactive": "hide inactive",
+    "inactiveCount": "+{{count}} inactive",
+    "clickToRename": "Click to rename",
+    "events": "events",
+    "tools": "tools",
+    "startedAt": "Started at",
+    "totalEvents": "Total events received"
+  },
+  "states": {
+    "spawning": "spawning",
+    "idle": "idle",
+    "listening": "listening",
+    "active": "active",
+    "waiting": "waiting",
+    "error": "error",
+    "done": "done",
+    "leaving": "leaving",
+    "removed": "removed"
+  },
+  "notifications": {
+    "needsPermission": "Needs permission",
+    "errorOccurred": "Error occurred",
+    "taskCompleted": "Task completed"
+  },
+  "activity": {
+    "title": "Activity (last 60s)",
+    "tools": "tools",
+    "prompts": "prompts",
+    "permissions": "permissions",
+    "system": "system"
+  },
+  "eventStream": {
+    "title": "Live Event Stream",
+    "waiting": "Waiting for events...",
+    "unknownAgent": "unknown"
+  },
+  "hookEvents": {
+    "SessionStart": "Session started",
+    "SessionEnd": "Session ended",
+    "UserPromptSubmit": "User input",
+    "PreToolUse": "Tool started",
+    "PostToolUse": "Tool finished",
+    "PostToolUseFailure": "Tool failed",
+    "PermissionRequest": "Permission needed",
+    "Stop": "Stopped",
+    "Notification": "Notification",
+    "SubagentStart": "Sub-agent started",
+    "SubagentStop": "Sub-agent stopped",
+    "TeammateIdle": "Teammate idle",
+    "TaskCompleted": "Task completed",
+    "ConfigChange": "Config changed",
+    "PreCompact": "Compacting",
+    "WorktreeCreate": "Worktree created",
+    "WorktreeRemove": "Worktree removed"
+  },
+  "time": {
+    "justNow": "just now",
+    "secondsAgo": "{{count}}s ago",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago"
+  },
+  "styles": {
+    "dashboard": "Dashboard",
+    "threeDField": "3D Field",
+    "pixel": "Pixel Office"
+  },
+  "hud": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "agents": "Agents:",
+    "agent": "Agent",
+    "tool": "Tool:"
+  },
+  "loading": "Loading 3D scene..."
+}

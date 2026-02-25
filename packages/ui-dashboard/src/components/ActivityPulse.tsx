@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { EventLogEntry } from '@claude-alive/core';
 import { useNow } from '../hooks/useNow';
 
 const WINDOW_SECONDS = 60;
-const MAX_HEIGHT = 40;
+const MAX_HEIGHT = 48;
 
 type EventCategory = 'tool' | 'prompt' | 'permission' | 'system';
 
@@ -34,6 +35,7 @@ interface ActivityPulseProps {
 }
 
 export function ActivityPulse({ events }: ActivityPulseProps) {
+  const { t } = useTranslation();
   const now = useNow();
 
   const bars = useMemo(() => {
@@ -64,7 +66,7 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
 
     return buckets.map((bucket) => {
       const total = bucketTotal(bucket);
-      const height = Math.max(total > 0 ? 2 : 0, (total / maxTotal) * MAX_HEIGHT);
+      const height = Math.max(total > 0 ? 3 : 0, (total / maxTotal) * MAX_HEIGHT);
       // Dominant category determines color
       let color = CATEGORY_COLORS.tool;
       if (bucket.system >= bucket.tool && bucket.system >= bucket.prompt && bucket.system >= bucket.permission) {
@@ -84,34 +86,34 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
       style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
     >
       <div
-        className="px-4 py-2 text-xs font-medium border-b flex items-center justify-between"
+        className="px-5 py-3 text-sm font-medium border-b flex items-center justify-between"
         style={{
           color: 'var(--text-secondary)',
           borderColor: 'var(--border-color)',
           background: 'var(--bg-secondary)',
         }}
       >
-        <span>Activity (last 60s)</span>
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.tool }} />
-            tools
+        <span>{t('activity.title')}</span>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.tool }} />
+            {t('activity.tools')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.prompt }} />
-            prompts
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.prompt }} />
+            {t('activity.prompts')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.permission }} />
-            permissions
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.permission }} />
+            {t('activity.permissions')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.system }} />
-            system
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.system }} />
+            {t('activity.system')}
           </span>
         </div>
       </div>
-      <div className="px-4 py-3 flex items-end gap-px" style={{ height: MAX_HEIGHT + 24 }}>
+      <div className="px-4 py-4 flex items-end gap-px" style={{ height: MAX_HEIGHT + 32 }}>
         {bars.map((bar, i) => (
           <div
             key={i}

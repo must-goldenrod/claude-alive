@@ -28,6 +28,7 @@ export interface HttpRouterOptions {
   onEvent: (payload: HookEventPayload) => void;
   getSnapshot: () => object;
   renameAgent: (sessionId: string, name: string | null) => boolean;
+  removeAgent: (sessionId: string) => boolean;
   /** Path to the UI dist directory. Defaults to ../../ui/dist relative to server dist. */
   uiDistPath?: string;
 }
@@ -45,14 +46,14 @@ function sendJson(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
   res.end(JSON.stringify(data));
 }
 
 export function createHttpServer(options: HttpRouterOptions) {
-  const { onEvent, getSnapshot, renameAgent, uiDistPath } = options;
+  const { onEvent, getSnapshot, renameAgent, removeAgent, uiDistPath } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
   const server = createServer(async (req, res) => {
@@ -103,6 +104,14 @@ export function createHttpServer(options: HttpRouterOptions) {
       } catch {
         sendJson(res, 400, { error: 'Invalid JSON' });
       }
+      return;
+    }
+
+    // DELETE /api/agents/:id — remove an agent
+    const deleteMatch = url.pathname.match(/^\/api\/agents\/([^/]+)$/);
+    if (req.method === 'DELETE' && deleteMatch) {
+      const ok = removeAgent(deleteMatch[1]!);
+      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' });
       return;
     }
 

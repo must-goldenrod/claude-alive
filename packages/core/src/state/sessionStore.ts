@@ -140,8 +140,8 @@ export class SessionStore {
     return agent;
   }
 
-  removeAgent(sessionId: string): void {
-    this.agents.delete(sessionId);
+  removeAgent(sessionId: string): boolean {
+    return this.agents.delete(sessionId);
   }
 
   getAgent(sessionId: string): AgentInfo | undefined {

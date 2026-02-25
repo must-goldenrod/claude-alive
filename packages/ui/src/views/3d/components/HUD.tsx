@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { BattleAgent } from '../hooks/useBattlefieldState';
 
 interface HUDProps {
@@ -7,6 +8,7 @@ interface HUDProps {
 }
 
 export function HUD({ connected, agents, selectedAgent }: HUDProps) {
+  const { t } = useTranslation();
   return (
     <>
       {/* Connection status - top right */}
@@ -31,7 +33,7 @@ export function HUD({ connected, agents, selectedAgent }: HUDProps) {
           boxShadow: connected ? '0 0 6px var(--accent-green)' : '0 0 6px var(--accent-red)',
         }} />
         <span style={{ color: 'var(--text-secondary)' }}>
-          {connected ? 'Connected' : 'Disconnected'}
+          {connected ? t('hud.connected') : t('hud.disconnected')}
         </span>
       </div>
 
@@ -47,7 +49,7 @@ export function HUD({ connected, agents, selectedAgent }: HUDProps) {
         fontSize: 13,
         color: 'var(--text-secondary)',
       }}>
-        Agents: <span style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{agents.length}</span>
+        {t('hud.agents')} <span style={{ color: 'var(--accent-blue)', fontWeight: 600 }}>{agents.length}</span>
       </div>
 
       {/* Selected agent info - bottom panel */}
@@ -69,7 +71,7 @@ export function HUD({ connected, agents, selectedAgent }: HUDProps) {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-              Agent {selectedAgent.sessionId.slice(0, 8)}
+              {t('hud.agent')} {selectedAgent.sessionId.slice(0, 8)}
             </span>
             <span style={{
               padding: '2px 8px',
@@ -85,7 +87,7 @@ export function HUD({ connected, agents, selectedAgent }: HUDProps) {
           </div>
           {selectedAgent.toolAnimation && (
             <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
-              Tool: <span style={{ color: 'var(--accent-purple)' }}>{selectedAgent.toolAnimation}</span>
+              {t('hud.tool')} <span style={{ color: 'var(--accent-purple)' }}>{selectedAgent.toolAnimation}</span>
             </div>
           )}
         </div>

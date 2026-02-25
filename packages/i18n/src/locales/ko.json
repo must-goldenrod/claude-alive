@@ -1,0 +1,102 @@
+{
+  "header": {
+    "title": "claude-alive",
+    "dashboard": "대시보드",
+    "connected": "연결됨",
+    "disconnected": "연결 끊김",
+    "agentCount_one": "에이전트 {{count}}개",
+    "agentCount_other": "에이전트 {{count}}개"
+  },
+  "stats": {
+    "events": "이벤트",
+    "eventsPerMin": "이벤트/분",
+    "active": "활성",
+    "topTool": "최다 도구"
+  },
+  "agents": {
+    "noAgentsYet": "아직 에이전트가 없습니다",
+    "startSession": "Claude Code 세션을 시작하면 자동으로 여기에 나타납니다.",
+    "projects": "프로젝트",
+    "subAgent": "서브 에이전트",
+    "agent": "에이전트",
+    "subAgents": "서브 에이전트",
+    "activeTotal": "{{active}}개 활성 / {{total}}개 전체",
+    "activeOnly": "{{active}}개 활성",
+    "agentCount_one": "에이전트 {{count}}개",
+    "agentCount_other": "에이전트 {{count}}개",
+    "activeSlash": "{{active}}개 활성 / ",
+    "hideInactive": "비활성 숨기기",
+    "inactiveCount": "+{{count}}개 비활성",
+    "clickToRename": "클릭하여 이름 변경",
+    "events": "이벤트",
+    "tools": "도구",
+    "startedAt": "시작 시간",
+    "totalEvents": "전체 이벤트 수"
+  },
+  "states": {
+    "spawning": "생성 중",
+    "idle": "대기",
+    "listening": "수신 중",
+    "active": "활성",
+    "waiting": "대기 중",
+    "error": "오류",
+    "done": "완료",
+    "leaving": "종료 중",
+    "removed": "제거됨"
+  },
+  "notifications": {
+    "needsPermission": "권한 필요",
+    "errorOccurred": "오류 발생",
+    "taskCompleted": "작업 완료"
+  },
+  "activity": {
+    "title": "활동 (최근 60초)",
+    "tools": "도구",
+    "prompts": "프롬프트",
+    "permissions": "권한",
+    "system": "시스템"
+  },
+  "eventStream": {
+    "title": "실시간 이벤트 스트림",
+    "waiting": "이벤트 대기 중...",
+    "unknownAgent": "알 수 없음"
+  },
+  "hookEvents": {
+    "SessionStart": "세션 시작",
+    "SessionEnd": "세션 종료",
+    "UserPromptSubmit": "사용자 입력",
+    "PreToolUse": "도구 실행",
+    "PostToolUse": "도구 완료",
+    "PostToolUseFailure": "도구 실패",
+    "PermissionRequest": "권한 요청",
+    "Stop": "정지",
+    "Notification": "알림",
+    "SubagentStart": "서브에이전트 시작",
+    "SubagentStop": "서브에이전트 종료",
+    "TeammateIdle": "팀원 대기",
+    "TaskCompleted": "작업 완료",
+    "ConfigChange": "설정 변경",
+    "PreCompact": "컨텍스트 압축",
+    "WorktreeCreate": "워크트리 생성",
+    "WorktreeRemove": "워크트리 제거"
+  },
+  "time": {
+    "justNow": "방금",
+    "secondsAgo": "{{count}}초 전",
+    "minutesAgo": "{{count}}분 전",
+    "hoursAgo": "{{count}}시간 전"
+  },
+  "styles": {
+    "dashboard": "대시보드",
+    "threeDField": "3D 필드",
+    "pixel": "픽셀 오피스"
+  },
+  "hud": {
+    "connected": "연결됨",
+    "disconnected": "연결 끊김",
+    "agents": "에이전트:",
+    "agent": "에이전트",
+    "tool": "도구:"
+  },
+  "loading": "3D 씬 로딩 중..."
+}

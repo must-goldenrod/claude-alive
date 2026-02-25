@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AgentInfo, EventLogEntry } from '@claude-alive/core';
-import { useNow } from '../hooks/useNow';
+import { useNow } from '../hooks/useNow.ts';
 
 interface StatsBarProps {
   agents: AgentInfo[];
@@ -8,15 +9,14 @@ interface StatsBarProps {
 }
 
 export function StatsBar({ agents, events }: StatsBarProps) {
+  const { t } = useTranslation();
   const now = useNow();
   const stats = useMemo(() => {
     const activeAgents = agents.filter((a) => a.state === 'active' || a.state === 'listening').length;
 
-    // Events per minute: count events in last 60s, extrapolate
     const oneMinuteAgo = now - 60_000;
     const recentCount = events.filter((e) => e.timestamp >= oneMinuteAgo).length;
 
-    // Most used tool
     const toolCounts = new Map<string, number>();
     for (const e of events) {
       if (e.tool) {
@@ -42,10 +42,10 @@ export function StatsBar({ agents, events }: StatsBarProps) {
   }, [agents, events, now]);
 
   const items = [
-    { label: 'Events', value: String(stats.totalEvents) },
-    { label: 'Events/min', value: String(stats.eventsPerMinute) },
-    { label: 'Active', value: `${stats.activeAgents}/${stats.totalAgents}` },
-    { label: 'Top tool', value: stats.mostUsedTool },
+    { label: t('stats.events'), value: String(stats.totalEvents) },
+    { label: t('stats.eventsPerMin'), value: String(stats.eventsPerMinute) },
+    { label: t('stats.active'), value: `${stats.activeAgents}/${stats.totalAgents}` },
+    { label: t('stats.topTool'), value: stats.mostUsedTool },
   ];
 
   return (
@@ -56,13 +56,13 @@ export function StatsBar({ agents, events }: StatsBarProps) {
       {items.map((item) => (
         <div
           key={item.label}
-          className="px-4 py-2 text-center"
-          style={{ background: 'var(--bg-card)' }}
+          className="text-center"
+          style={{ background: 'var(--bg-card)', padding: '24px 20px' }}
         >
-          <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+          <div className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
             {item.value}
           </div>
-          <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-sm" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>
             {item.label}
           </div>
         </div>

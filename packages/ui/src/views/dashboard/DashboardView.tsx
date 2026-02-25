@@ -1,17 +1,50 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useWebSocket } from './hooks/useWebSocket.ts';
 import { Header } from './components/Header.tsx';
 import { StatsBar } from './components/StatsBar.tsx';
-import { AgentCard } from './components/AgentCard.tsx';
+import { NotificationBanner } from './components/NotificationBanner.tsx';
+import { ProjectGroup } from './components/ProjectGroup.tsx';
 import { ActivityPulse } from './components/ActivityPulse.tsx';
 import { EventStream } from './components/EventStream.tsx';
+import type { AgentInfo } from '@claude-alive/core';
 
 const WS_URL = `ws://${window.location.hostname}:${window.location.port || '3141'}/ws`;
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
+interface ProjectGroupData {
+  cwd: string;
+  projectName: string;
+  agents: AgentInfo[];
+}
+
+function groupByProject(agents: AgentInfo[]): ProjectGroupData[] {
+  const groups = new Map<string, AgentInfo[]>();
+  for (const agent of agents) {
+    const key = agent.cwd;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(agent);
+  }
+
+  return Array.from(groups.entries())
+    .map(([cwd, groupAgents]) => ({
+      cwd,
+      projectName: cwd.split('/').filter(Boolean).pop() ?? cwd,
+      agents: groupAgents,
+    }))
+    .sort((a, b) => {
+      const aActive = a.agents.some(ag => ag.state === 'active' || ag.state === 'listening');
+      const bActive = b.agents.some(ag => ag.state === 'active' || ag.state === 'listening');
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return a.projectName.localeCompare(b.projectName);
+    });
+}
+
 export function DashboardView() {
+  const { t } = useTranslation();
   const { agents, events, connected } = useWebSocket(WS_URL);
   const agentList = Array.from(agents.values());
+  const projectGroups = useMemo(() => groupByProject(agentList), [agentList]);
 
   const handleRename = useCallback((sessionId: string, name: string | null) => {
     fetch(`${API_BASE}/api/agents/${sessionId}/name`, {
@@ -22,32 +55,41 @@ export function DashboardView() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+    <div className="min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       <Header connected={connected} agentCount={agentList.length} />
 
-      <main className="flex-1 p-6 space-y-6 max-w-7xl mx-auto w-full overflow-y-auto">
+      <main className="p-8 space-y-8 max-w-screen-2xl mx-auto w-full">
         {/* Stats Bar */}
         <StatsBar agents={agentList} events={events} />
 
-        {/* Agent Grid */}
+        {/* Notification Banner */}
+        <NotificationBanner agents={agentList} />
+
+        {/* Project Groups */}
         <section>
-          <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Agents
+          <h2 className="text-base font-medium mb-4" style={{ color: 'var(--text-secondary)' }}>
+            {t('agents.projects')}
           </h2>
-          {agentList.length === 0 ? (
+          {projectGroups.length === 0 ? (
             <div
-              className="rounded-lg border p-8 text-center"
+              className="rounded-lg border p-10 text-center"
               style={{ borderColor: 'var(--border-color)', background: 'var(--bg-card)' }}
             >
-              <div className="text-lg mb-2" style={{ color: 'var(--text-secondary)' }}>No agents yet</div>
-              <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Start a Claude Code session — it will appear here automatically.
+              <div className="text-xl mb-3" style={{ color: 'var(--text-secondary)' }}>{t('agents.noAgentsYet')}</div>
+              <div className="text-base" style={{ color: 'var(--text-secondary)' }}>
+                {t('agents.startSession')}
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {agentList.map(agent => (
-                <AgentCard key={agent.sessionId} agent={agent} onRename={handleRename} />
+            <div className="space-y-5">
+              {projectGroups.map(group => (
+                <ProjectGroup
+                  key={group.cwd}
+                  cwd={group.cwd}
+                  projectName={group.projectName}
+                  agents={group.agents}
+                  onRename={handleRename}
+                />
               ))}
             </div>
           )}
@@ -58,7 +100,7 @@ export function DashboardView() {
 
         {/* Event Stream */}
         <section>
-          <EventStream events={events} />
+          <EventStream events={events} agents={agentList} />
         </section>
       </main>
     </div>

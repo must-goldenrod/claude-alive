@@ -1,10 +1,18 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, lazy, Suspense, Component } from 'react';
+import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSelector } from './components/StyleSelector.tsx';
 import { DashboardView } from './views/dashboard/DashboardView.tsx';
 import { PixelView } from './views/pixel/PixelView.tsx';
-import { HybridView } from './views/hybrid/HybridView.tsx';
 
-export type UIStyle = 'dashboard' | 'pixel' | 'three-d' | 'hybrid';
+export type UIStyle = 'dashboard' | 'three-d' | 'pixel';
+
+const VALID_STYLES: UIStyle[] = ['dashboard', 'three-d', 'pixel'];
+
+function getInitialStyle(): UIStyle {
+  const stored = localStorage.getItem('claude-alive-style');
+  return VALID_STYLES.includes(stored as UIStyle) ? (stored as UIStyle) : 'dashboard';
+}
 
 // Lazy-load the 3D view to avoid loading Three.js (~1MB) when not needed
 const LazyThreeDView = lazy(() =>
@@ -12,6 +20,7 @@ const LazyThreeDView = lazy(() =>
 );
 
 function LoadingFallback() {
+  const { t } = useTranslation();
   return (
     <div
       style={{
@@ -24,15 +33,20 @@ function LoadingFallback() {
         fontSize: 14,
       }}
     >
-      Loading 3D scene...
+      {t('loading')}
     </div>
   );
 }
 
+// Silent error boundary — on crash, just render children as-is (or nothing)
+class SilentErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() { return this.state.hasError ? null : this.props.children; }
+}
+
 export default function App() {
-  const [style, setStyle] = useState<UIStyle>(
-    (localStorage.getItem('claude-alive-style') as UIStyle) || 'dashboard'
-  );
+  const [style, setStyle] = useState<UIStyle>(getInitialStyle);
 
   const handleStyleChange = (newStyle: UIStyle) => {
     setStyle(newStyle);
@@ -40,17 +54,32 @@ export default function App() {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div style={{
+      width: '100vw',
+      height: style === 'dashboard' ? 'auto' : '100vh',
+      minHeight: '100vh',
+      overflow: style === 'dashboard' ? 'auto' : 'hidden',
+    }}>
       <StyleSelector current={style} onChange={handleStyleChange} />
-      <div style={{ paddingTop: 40, height: '100%', boxSizing: 'border-box' }}>
+      <div style={{
+        paddingTop: 40,
+        height: style === 'dashboard' ? 'auto' : '100%',
+        minHeight: style === 'dashboard' ? 'calc(100vh - 40px)' : undefined,
+        boxSizing: 'border-box',
+      }}>
         {style === 'dashboard' && <DashboardView />}
-        {style === 'pixel' && <PixelView />}
         {style === 'three-d' && (
-          <Suspense fallback={<LoadingFallback />}>
-            <LazyThreeDView />
-          </Suspense>
+          <SilentErrorBoundary>
+            <Suspense fallback={<LoadingFallback />}>
+              <LazyThreeDView />
+            </Suspense>
+          </SilentErrorBoundary>
         )}
-        {style === 'hybrid' && <HybridView />}
+        {style === 'pixel' && (
+          <SilentErrorBoundary>
+            <PixelView />
+          </SilentErrorBoundary>
+        )}
       </div>
     </div>
   );

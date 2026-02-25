@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@claude-alive/core": "workspace:*",
+    "@claude-alive/i18n": "workspace:*",
+    "i18next": "^24",
+    "react-i18next": "^15",
     "react": "^19",
     "react-dom": "^19"
   },
