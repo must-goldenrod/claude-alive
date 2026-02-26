@@ -7,7 +7,7 @@ export interface DashboardState {
   connected: boolean;
 }
 
-export function useWebSocket(url: string) {
+export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) => void) {
   const [state, setState] = useState<DashboardState>({
     agents: new Map(),
     events: [],
@@ -32,6 +32,7 @@ export function useWebSocket(url: string) {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data) as WSServerMessage;
+      onRawMessage?.(msg);
 
       setState(prev => {
         const agents = new Map(prev.agents);
@@ -86,7 +87,7 @@ export function useWebSocket(url: string) {
         return { agents, events, connected: true };
       });
     };
-  }, [url]);
+  }, [url, onRawMessage]);
 
   useEffect(() => {
     connect();

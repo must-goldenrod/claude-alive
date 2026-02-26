@@ -1,44 +1,16 @@
-import { useState, lazy, Suspense, Component } from 'react';
+import { useState, Component } from 'react';
 import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
 import { StyleSelector } from './components/StyleSelector.tsx';
-import { DashboardView } from './views/dashboard/DashboardView.tsx';
-import { PixelView } from './views/pixel/PixelView.tsx';
+import { UnifiedView } from './views/unified/UnifiedView.tsx';
+import type { ViewMode } from './views/unified/UnifiedView.tsx';
 
-export type UIStyle = 'dashboard' | 'three-d' | 'pixel';
+const VALID_MODES: ViewMode[] = ['three-d', 'pixel', 'bishoujo'];
 
-const VALID_STYLES: UIStyle[] = ['dashboard', 'three-d', 'pixel'];
-
-function getInitialStyle(): UIStyle {
+function getInitialMode(): ViewMode {
   const stored = localStorage.getItem('claude-alive-style');
-  return VALID_STYLES.includes(stored as UIStyle) ? (stored as UIStyle) : 'dashboard';
+  return VALID_MODES.includes(stored as ViewMode) ? (stored as ViewMode) : 'pixel';
 }
 
-// Lazy-load the 3D view to avoid loading Three.js (~1MB) when not needed
-const LazyThreeDView = lazy(() =>
-  import('./views/3d/ThreeDView.tsx').then(m => ({ default: m.ThreeDView }))
-);
-
-function LoadingFallback() {
-  const { t } = useTranslation();
-  return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'var(--text-secondary)',
-        fontSize: 14,
-      }}
-    >
-      {t('loading')}
-    </div>
-  );
-}
-
-// Silent error boundary — on crash, just render children as-is (or nothing)
 class SilentErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
   static getDerivedStateFromError() { return { hasError: true }; }
@@ -46,40 +18,20 @@ class SilentErrorBoundary extends Component<{ children: ReactNode }, { hasError:
 }
 
 export default function App() {
-  const [style, setStyle] = useState<UIStyle>(getInitialStyle);
+  const [mode, setMode] = useState<ViewMode>(getInitialMode);
 
-  const handleStyleChange = (newStyle: UIStyle) => {
-    setStyle(newStyle);
-    localStorage.setItem('claude-alive-style', newStyle);
+  const handleModeChange = (newMode: ViewMode) => {
+    setMode(newMode);
+    localStorage.setItem('claude-alive-style', newMode);
   };
 
   return (
-    <div style={{
-      width: '100vw',
-      height: style === 'dashboard' ? 'auto' : '100vh',
-      minHeight: '100vh',
-      overflow: style === 'dashboard' ? 'auto' : 'hidden',
-    }}>
-      <StyleSelector current={style} onChange={handleStyleChange} />
-      <div style={{
-        paddingTop: 40,
-        height: style === 'dashboard' ? 'auto' : '100%',
-        minHeight: style === 'dashboard' ? 'calc(100vh - 40px)' : undefined,
-        boxSizing: 'border-box',
-      }}>
-        {style === 'dashboard' && <DashboardView />}
-        {style === 'three-d' && (
-          <SilentErrorBoundary>
-            <Suspense fallback={<LoadingFallback />}>
-              <LazyThreeDView />
-            </Suspense>
-          </SilentErrorBoundary>
-        )}
-        {style === 'pixel' && (
-          <SilentErrorBoundary>
-            <PixelView />
-          </SilentErrorBoundary>
-        )}
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      <StyleSelector current={mode} onChange={handleModeChange} />
+      <div style={{ paddingTop: 44, height: '100%', boxSizing: 'border-box' }}>
+        <SilentErrorBoundary>
+          <UnifiedView viewMode={mode} />
+        </SilentErrorBoundary>
       </div>
     </div>
   );

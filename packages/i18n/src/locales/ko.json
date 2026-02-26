@@ -89,7 +89,8 @@
   "styles": {
     "dashboard": "대시보드",
     "threeDField": "3D 필드",
-    "pixel": "픽셀 오피스"
+    "pixel": "픽셀 오피스",
+    "bishoujo": "비쇼죠"
   },
   "hud": {
     "connected": "연결됨",
@@ -98,5 +99,6 @@
     "agent": "에이전트",
     "tool": "도구:"
   },
-  "loading": "3D 씬 로딩 중..."
+  "loading": "3D 씬 로딩 중...",
+  "loadingBishoujo": "Live2D 씬 로딩 중..."
 }

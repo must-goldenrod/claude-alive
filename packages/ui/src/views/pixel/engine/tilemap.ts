@@ -1,6 +1,6 @@
 import { DEFAULT_COLS, DEFAULT_ROWS } from './constants';
 
-export const TileType = { VOID: 0, FLOOR: 1, WALL: 2 } as const;
+export const TileType = { VOID: 0, FLOOR: 1, WALL: 2, DESK: 3, COMPUTER: 4 } as const;
 export type TileTypeValue = (typeof TileType)[keyof typeof TileType];
 
 export interface TileMap {
@@ -22,23 +22,44 @@ function getTile(map: TileMap, col: number, row: number): TileTypeValue {
   return map.tiles[tileIndex(map, col, row)];
 }
 
-/** Create a default office layout */
+/** Create office with 4 desk clusters, each with desks and computers */
 export function createDefaultOffice(): TileMap {
   const cols = DEFAULT_COLS;
   const rows = DEFAULT_ROWS;
   const tiles: TileTypeValue[] = new Array(cols * rows).fill(TileType.FLOOR);
 
+  // Outer walls
   for (let c = 0; c < cols; c++) {
     for (let r = 0; r < rows; r++) {
-      const i = r * cols + c;
-      // Outer walls
       if (c === 0 || c === cols - 1 || r === 0 || r === rows - 1) {
-        tiles[i] = TileType.WALL;
-        continue;
+        tiles[r * cols + c] = TileType.WALL;
       }
-      // Desk rows: rows 3 and 7, columns 3-7 and 12-16
-      if ((r === 3 || r === 7) && ((c >= 3 && c <= 7) || (c >= 12 && c <= 16))) {
-        tiles[i] = TileType.WALL;
+    }
+  }
+
+  // 4 desk clusters (2 top, 2 bottom)
+  // Each cluster: 2 rows of desks, 3 desks wide
+  // Cluster A: top-left  (cols 3-5,  rows 3)
+  // Cluster B: top-right (cols 12-14, rows 3)
+  // Cluster C: bot-left  (cols 3-5,  rows 8)
+  // Cluster D: bot-right (cols 12-14, rows 8)
+
+  const clusters = [
+    { startCol: 3, row: 3 },   // A
+    { startCol: 12, row: 3 },  // B
+    { startCol: 3, row: 8 },   // C
+    { startCol: 12, row: 8 },  // D
+  ];
+
+  for (const cluster of clusters) {
+    for (let dc = 0; dc < 3; dc++) {
+      const c = cluster.startCol + dc;
+      const r = cluster.row;
+      // Desk tile
+      tiles[r * cols + c] = TileType.DESK;
+      // Computer on desk (center desk only)
+      if (dc === 1) {
+        tiles[r * cols + c] = TileType.COMPUTER;
       }
     }
   }

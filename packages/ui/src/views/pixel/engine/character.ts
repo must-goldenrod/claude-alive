@@ -1,11 +1,12 @@
 import type { Entity } from './renderer';
-import type { SpriteSet } from './sprites';
+import type { SpriteSet, SubAgentSpriteSet } from './sprites';
 import type { TileMap } from './tilemap';
 import type { Direction } from './seats';
 import type { MatrixEffect } from './matrixEffect';
-import { generateSpriteSet } from './sprites';
+import { generateSpriteSet, generateSubAgentSprites } from './sprites';
 import { findPath, isWalkable } from './tilemap';
 import { TILE_SIZE, CHAR_WIDTH, CHAR_HEIGHT, WALK_SPEED } from './constants';
+import { SUB_AGENT_WIDTH, SUB_AGENT_HEIGHT } from './sprites';
 import { renderMatrixEffect, getEffectCharacterOpacity } from './matrixEffect';
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -40,19 +41,28 @@ export interface Character extends Entity {
 
   // Sprite
   sprites: SpriteSet;
+  subSprites: SubAgentSpriteSet | null;
   paletteIndex: number;
 
   // Speech bubble
   bubble: 'none' | 'waiting' | 'permission' | 'error';
+
+  // Sub-agent distinction
+  isSubAgent: boolean;
+  label: string | null; // display name shown above head
+
+  // Tooltip (set by click)
+  showTooltip: boolean;
+  tooltipTool: string | null;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────
 
-const WALK_ANIM_PERIOD = 0.3;   // seconds per walk frame
-const ACTION_ANIM_PERIOD = 0.5; // seconds per type/read frame
-const WANDER_MIN = 5;           // minimum seconds between wanders
-const WANDER_MAX = 10;          // maximum seconds between wanders
-const WANDER_RANGE = 3;         // max tiles to wander from seat
+const WALK_ANIM_PERIOD = 0.3;
+const ACTION_ANIM_PERIOD = 0.5;
+const WANDER_MIN = 5;
+const WANDER_MAX = 10;
+const WANDER_RANGE = 3;
 
 // ── Creation ────────────────────────────────────────────────────────────
 
@@ -62,8 +72,13 @@ export function createCharacter(
   paletteIndex: number,
   startCol: number,
   startRow: number,
+  isSubAgent = false,
+  label: string | null = null,
 ): Character {
   const sprites = generateSpriteSet(paletteIndex);
+  const subSprites = isSubAgent ? generateSubAgentSprites(paletteIndex) : null;
+  const charW = isSubAgent ? SUB_AGENT_WIDTH : CHAR_WIDTH;
+  const charH = isSubAgent ? SUB_AGENT_HEIGHT : CHAR_HEIGHT;
 
   const char: Character = {
     id,
@@ -86,17 +101,23 @@ export function createCharacter(
     wanderTimer: randomWanderTime(),
 
     sprites,
+    subSprites,
     paletteIndex,
 
     bubble: 'none',
 
-    // Entity fields (updated each frame in syncEntityPosition)
-    x: startCol * TILE_SIZE,
-    y: (startRow + 1) * TILE_SIZE, // bottom of sprite
-    width: CHAR_WIDTH,
-    height: CHAR_HEIGHT,
+    isSubAgent,
+    label,
+    showTooltip: false,
+    tooltipTool: null,
 
-    render: () => {}, // set below
+    // Entity fields
+    x: startCol * TILE_SIZE,
+    y: (startRow + 1) * TILE_SIZE,
+    width: charW,
+    height: charH,
+
+    render: () => {},
   };
 
   char.render = makeRenderFn(char);
@@ -119,7 +140,6 @@ export function updateCharacter(char: Character, dt: number, tileMap: TileMap): 
       break;
     case 'waiting':
     case 'error':
-      // Static, no animation updates needed
       break;
   }
 
@@ -128,7 +148,6 @@ export function updateCharacter(char: Character, dt: number, tileMap: TileMap): 
 
 function updateWalking(char: Character, dt: number) {
   if (!char.path || char.pathIndex >= char.path.length) {
-    // Arrived at destination
     arriveAtDestination(char);
     return;
   }
@@ -139,7 +158,6 @@ function updateWalking(char: Character, dt: number) {
   const dist = Math.sqrt(dx * dx + dy * dy);
 
   if (dist < 0.05) {
-    // Snap to tile and move to next waypoint
     char.tileX = target.col;
     char.tileY = target.row;
     char.pathIndex++;
@@ -149,12 +167,10 @@ function updateWalking(char: Character, dt: number) {
       return;
     }
   } else {
-    // Move toward target
     const step = Math.min(WALK_SPEED * dt, dist);
     char.tileX += (dx / dist) * step;
     char.tileY += (dy / dist) * step;
 
-    // Update direction based on dominant movement axis
     if (Math.abs(dx) > Math.abs(dy)) {
       char.direction = dx > 0 ? 'right' : 'left';
     } else {
@@ -162,7 +178,6 @@ function updateWalking(char: Character, dt: number) {
     }
   }
 
-  // Walk animation
   char.animTimer += dt;
   if (char.animTimer >= WALK_ANIM_PERIOD) {
     char.animTimer -= WALK_ANIM_PERIOD;
@@ -174,7 +189,6 @@ function arriveAtDestination(char: Character) {
   char.path = null;
   char.pathIndex = 0;
 
-  // If at seat, face desk
   if (char.seatCol !== null && char.seatRow !== null &&
       Math.round(char.tileX) === char.seatCol && Math.round(char.tileY) === char.seatRow) {
     if (char.seatFacing) {
@@ -197,7 +211,6 @@ function updateIdle(char: Character, dt: number, tileMap: TileMap) {
 }
 
 function tryWander(char: Character, tileMap: TileMap) {
-  // Pick a random walkable tile nearby
   const baseCol = char.seatCol ?? Math.round(char.tileX);
   const baseRow = char.seatRow ?? Math.round(char.tileY);
 
@@ -234,7 +247,6 @@ function updateActionAnim(char: Character, dt: number) {
 
 // ── Public actions ──────────────────────────────────────────────────────
 
-/** Assign a seat. Character will walk there if not already there. */
 export function assignSeat(
   char: Character,
   col: number,
@@ -246,7 +258,6 @@ export function assignSeat(
   char.seatRow = row;
   char.seatFacing = facing;
 
-  // Walk to seat if not already there
   const curCol = Math.round(char.tileX);
   const curRow = Math.round(char.tileY);
   if (curCol !== col || curRow !== row) {
@@ -263,13 +274,11 @@ export function assignSeat(
   }
 }
 
-/** Start typing or reading animation. Character walks to seat first if needed. */
 export function startToolActivity(
   char: Character,
   animation: 'typing' | 'reading',
   tileMap: TileMap,
 ): void {
-  // If we have a seat and aren't there, walk there first
   if (char.seatCol !== null && char.seatRow !== null) {
     const curCol = Math.round(char.tileX);
     const curRow = Math.round(char.tileY);
@@ -285,7 +294,6 @@ export function startToolActivity(
         char.state = 'walking';
         char.animFrame = 0;
         char.animTimer = 0;
-        // Activity will start when arriving -- for now just set walking
         return;
       }
     }
@@ -299,7 +307,6 @@ export function startToolActivity(
   }
 }
 
-/** Return character to idle */
 export function setCharacterIdle(char: Character): void {
   char.state = 'idle';
   char.animFrame = 0;
@@ -312,7 +319,7 @@ export function setCharacterIdle(char: Character): void {
 
 function syncEntityPosition(char: Character) {
   char.x = char.tileX * TILE_SIZE;
-  char.y = (char.tileY + 1) * TILE_SIZE; // bottom of sprite = bottom of tile
+  char.y = (char.tileY + 1) * TILE_SIZE;
 }
 
 function makeRenderFn(char: Character): (ctx: CanvasRenderingContext2D, zoom: number) => void {
@@ -320,8 +327,8 @@ function makeRenderFn(char: Character): (ctx: CanvasRenderingContext2D, zoom: nu
     const sprite = getCurrentSprite(char);
     const flipH = char.direction === 'left';
 
-    const w = CHAR_WIDTH * zoom;
-    const h = CHAR_HEIGHT * zoom;
+    const w = char.width * zoom;
+    const h = char.height * zoom;
 
     ctx.imageSmoothingEnabled = false;
 
@@ -335,31 +342,71 @@ function makeRenderFn(char: Character): (ctx: CanvasRenderingContext2D, zoom: nu
       ctx.drawImage(sprite, 0, 0, w, h);
     }
 
+    // Name label above head (sub-agents with labels)
+    if (char.isSubAgent && char.label) {
+      drawNameLabel(ctx, char.label, w, zoom);
+    }
+
     // Speech bubble
     if (char.bubble !== 'none') {
       drawBubble(ctx, char.bubble, w, zoom);
+    }
+
+    // Click tooltip
+    if (char.showTooltip) {
+      drawTooltip(ctx, char, w, zoom);
     }
   };
 }
 
 function getCurrentSprite(char: Character): HTMLCanvasElement {
-  const { sprites, state, direction, animFrame } = char;
-  // Resolve direction for sprites (left uses right sprites, flipped at render)
+  const { sprites, subSprites, isSubAgent, state, direction, animFrame } = char;
+  const spriteSet = isSubAgent && subSprites ? subSprites : sprites;
   const spriteDir = direction === 'left' ? 'right' : direction;
 
   switch (state) {
     case 'walking':
-      return sprites.walk[spriteDir][animFrame % 2];
+      return spriteSet.walk[spriteDir][animFrame % 2];
     case 'typing':
-      return sprites.type[animFrame % 2];
+      return spriteSet.type[animFrame % 2];
     case 'reading':
-      return sprites.read[animFrame % 2];
+      return spriteSet.read[animFrame % 2];
     case 'idle':
     case 'waiting':
     case 'error':
     default:
-      return sprites.idle[spriteDir];
+      return spriteSet.idle[spriteDir];
   }
+}
+
+function drawNameLabel(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  charWidth: number,
+  zoom: number,
+) {
+  const fontSize = Math.max(8, 4 * zoom);
+  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  const textWidth = ctx.measureText(name).width;
+  const padX = 3 * zoom;
+  const padY = 2 * zoom;
+  const bgW = textWidth + padX * 2;
+  const bgH = fontSize + padY * 2;
+  const bgX = charWidth / 2 - bgW / 2;
+  const bgY = -bgH - 2 * zoom;
+
+  // Background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.beginPath();
+  ctx.roundRect(bgX, bgY, bgW, bgH, 2 * zoom);
+  ctx.fill();
+
+  // Text
+  ctx.fillStyle = '#e0e0e8';
+  ctx.fillText(name, charWidth / 2, bgY + bgH - padY);
 }
 
 function drawBubble(
@@ -368,9 +415,9 @@ function drawBubble(
   charWidth: number,
   zoom: number,
 ) {
-  const bubbleSize = Math.max(4, 3 * zoom);
+  const bubbleSize = Math.max(6, 4 * zoom);
   const bx = charWidth / 2 - bubbleSize / 2;
-  const by = -bubbleSize - zoom;
+  const by = -bubbleSize - 2 * zoom;
 
   const colors: Record<string, string> = {
     waiting: '#F39C12',
@@ -383,18 +430,59 @@ function drawBubble(
   ctx.arc(bx + bubbleSize / 2, by + bubbleSize / 2, bubbleSize / 2, 0, Math.PI * 2);
   ctx.fill();
 
-  // Icon inside
   ctx.fillStyle = '#fff';
-  ctx.font = `${Math.max(6, 2 * zoom)}px monospace`;
+  ctx.font = `${Math.max(8, 3 * zoom)}px monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const icons: Record<string, string> = { waiting: '…', permission: '?', error: '!' };
+  const icons: Record<string, string> = { waiting: '...', permission: '?', error: '!' };
   ctx.fillText(icons[type] ?? '', bx + bubbleSize / 2, by + bubbleSize / 2);
+}
+
+function drawTooltip(
+  ctx: CanvasRenderingContext2D,
+  char: Character,
+  charWidth: number,
+  zoom: number,
+) {
+  const name = char.label || char.sessionId.slice(0, 8);
+  const tool = char.tooltipTool;
+  const text = tool ? `${name}: ${tool}` : name;
+
+  const fontSize = Math.max(8, 4 * zoom);
+  ctx.font = `${fontSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  const textWidth = ctx.measureText(text).width;
+  const padX = 4 * zoom;
+  const padY = 3 * zoom;
+  const bgW = textWidth + padX * 2;
+  const bgH = fontSize + padY * 2;
+  const bgX = charWidth / 2 - bgW / 2;
+
+  // Position: above name label if sub-agent, else above head
+  const labelOffset = (char.isSubAgent && char.label) ? (fontSize + 6 * zoom) : 0;
+  const bgY = -bgH - 4 * zoom - labelOffset;
+
+  // Background with accent border
+  ctx.fillStyle = 'rgba(10, 10, 20, 0.9)';
+  ctx.beginPath();
+  ctx.roundRect(bgX, bgY, bgW, bgH, 3 * zoom);
+  ctx.fill();
+
+  ctx.strokeStyle = '#448aff';
+  ctx.lineWidth = Math.max(1, zoom * 0.5);
+  ctx.beginPath();
+  ctx.roundRect(bgX, bgY, bgW, bgH, 3 * zoom);
+  ctx.stroke();
+
+  // Text
+  ctx.fillStyle = '#e0e0e8';
+  ctx.fillText(text, charWidth / 2, bgY + bgH - padY);
 }
 
 // ── Effect entity ───────────────────────────────────────────────────────
 
-/** Create an entity that renders a character with a matrix effect overlay */
 export function makeEffectEntity(char: Character, effect: MatrixEffect): Entity {
   return {
     x: char.x,
@@ -404,7 +492,6 @@ export function makeEffectEntity(char: Character, effect: MatrixEffect): Entity 
     render: (ctx: CanvasRenderingContext2D, zoom: number) => {
       const opacity = getEffectCharacterOpacity(effect);
 
-      // Draw character with opacity
       if (opacity > 0) {
         ctx.save();
         ctx.globalAlpha = opacity;
@@ -412,10 +499,24 @@ export function makeEffectEntity(char: Character, effect: MatrixEffect): Entity 
         ctx.restore();
       }
 
-      // Draw matrix rain on top
-      renderMatrixEffect(ctx, effect, CHAR_WIDTH, CHAR_HEIGHT, zoom);
+      renderMatrixEffect(ctx, effect, char.width, char.height, zoom);
     },
   };
+}
+
+// ── Hit testing ─────────────────────────────────────────────────────────
+
+/** Check if world coordinates hit a character */
+export function hitTestCharacter(
+  char: Character,
+  worldX: number,
+  worldY: number,
+): boolean {
+  const left = char.x;
+  const right = char.x + char.width;
+  const top = char.y - char.height;
+  const bottom = char.y;
+  return worldX >= left && worldX <= right && worldY >= top && worldY <= bottom;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

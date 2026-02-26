@@ -1,7 +1,7 @@
 import type { Entity } from './renderer';
 import type { TileMap } from './tilemap';
 import type { Camera } from './camera';
-import type { Seat } from './seats';
+import type { Seat, Zone } from './seats';
 import type { Character } from './character';
 import type { MatrixEffect } from './matrixEffect';
 import { createDefaultOffice } from './tilemap';
@@ -19,6 +19,8 @@ export interface ActiveEffect {
   effect: MatrixEffect;
 }
 
+const ZONES: Zone[] = ['A', 'B', 'C', 'D'];
+
 export interface OfficeState {
   tileMap: TileMap;
   characters: Map<string, Character>;
@@ -27,6 +29,8 @@ export interface OfficeState {
   camera: Camera;
   selectedCharacterId: string | null;
   nextPaletteIndex: number;
+  projectZones: Map<string, Zone>; // project (cwd) → assigned zone
+  nextZoneIndex: number;
 }
 
 export function createOfficeState(): OfficeState {
@@ -41,36 +45,62 @@ export function createOfficeState(): OfficeState {
     camera: createCamera(),
     selectedCharacterId: null,
     nextPaletteIndex: 0,
+    projectZones: new Map(),
+    nextZoneIndex: 0,
   };
+}
+
+// ── Zone assignment ─────────────────────────────────────────────────────
+
+function getZoneForProject(state: OfficeState, project: string | undefined): Zone {
+  if (!project) return ZONES[state.nextZoneIndex % ZONES.length];
+  const existing = state.projectZones.get(project);
+  if (existing) return existing;
+  const zone = ZONES[state.nextZoneIndex % ZONES.length];
+  state.projectZones.set(project, zone);
+  state.nextZoneIndex++;
+  return zone;
 }
 
 // ── Spawn / Despawn ─────────────────────────────────────────────────────
 
-export function spawnCharacter(state: OfficeState, sessionId: string): Character {
-  // If already exists, just return it
+export interface SpawnOptions {
+  isSubAgent?: boolean;
+  label?: string | null;
+  project?: string;
+}
+
+export function spawnCharacter(
+  state: OfficeState,
+  sessionId: string,
+  options?: SpawnOptions,
+): Character {
   const existing = state.characters.get(sessionId);
   if (existing) return existing;
 
   const paletteIndex = state.nextPaletteIndex;
   state.nextPaletteIndex++;
 
-  // Find a walkable spawn point (center-ish of the map)
   const centerCol = Math.floor(state.tileMap.cols / 2);
   const centerRow = Math.floor(state.tileMap.rows / 2);
   const spawn = findNearestWalkable(state.tileMap, centerCol, centerRow) ?? { col: 2, row: 2 };
 
   const id = `char-${sessionId}`;
-  const char = createCharacter(id, sessionId, paletteIndex, spawn.col, spawn.row);
+  const char = createCharacter(
+    id, sessionId, paletteIndex, spawn.col, spawn.row,
+    options?.isSubAgent ?? false,
+    options?.label ?? null,
+  );
 
-  // Try to assign a seat
-  const seat = assignNearestSeat(state.seats, id, spawn.col, spawn.row);
+  // Assign seat with zone preference
+  const zone = getZoneForProject(state, options?.project);
+  const seat = assignNearestSeat(state.seats, id, spawn.col, spawn.row, zone);
   if (seat) {
     assignSeat(char, seat.col, seat.row, seat.facing, state.tileMap);
   }
 
   state.characters.set(sessionId, char);
 
-  // Start spawn effect
   state.effects.push({
     sessionId,
     character: char,

@@ -11,12 +11,15 @@
   "dependencies": {
     "@claude-alive/core": "workspace:*",
     "@claude-alive/i18n": "workspace:*",
-    "i18next": "^24",
-    "react-i18next": "^15",
+    "@naari3/pixi-live2d-display": "^1.2.5",
+    "@pixi/react": "^8.0.5",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
+    "i18next": "^24",
+    "pixi.js": "^8.16.0",
     "react": "^19",
     "react-dom": "^19",
+    "react-i18next": "^15",
     "three": "^0.175"
   },
   "devDependencies": {

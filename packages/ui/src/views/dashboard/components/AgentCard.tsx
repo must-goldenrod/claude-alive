@@ -80,7 +80,7 @@ export function AgentCard({ agent, subAgents = [], onRename }: AgentCardProps) {
 
   return (
     <div
-      className="rounded-lg p-5 border transition-all duration-300 relative overflow-hidden"
+      className="rounded-lg p-6 border transition-all duration-300 relative overflow-hidden"
       style={{
         background: 'var(--bg-card)',
         borderColor: agent.state === 'active' ? config.color : 'var(--border-color)',
@@ -88,7 +88,7 @@ export function AgentCard({ agent, subAgents = [], onRename }: AgentCardProps) {
       }}
     >
       {/* Header: Avatar + Name + Time */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3.5 mb-4">
         <div
           className="w-11 h-11 rounded-lg flex items-center justify-center text-lg font-bold shrink-0"
           style={{
@@ -141,7 +141,7 @@ export function AgentCard({ agent, subAgents = [], onRename }: AgentCardProps) {
 
       {/* Project/folder path */}
       <div
-        className="text-xs mb-3 px-2.5 py-1.5 rounded truncate font-mono"
+        className="text-xs mb-4 px-3 py-2 rounded truncate font-mono"
         style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}
         title={agent.cwd}
       >
@@ -149,7 +149,7 @@ export function AgentCard({ agent, subAgents = [], onRename }: AgentCardProps) {
       </div>
 
       {/* Meta row: started at, events count, tools used */}
-      <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+      <div className="flex items-center gap-4 mb-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
         <span title={t('agents.startedAt')}>
           {'\u23F0'} {formatTime(agent.createdAt)}
         </span>
@@ -166,7 +166,7 @@ export function AgentCard({ agent, subAgents = [], onRename }: AgentCardProps) {
       {/* Last prompt preview */}
       {agent.lastPrompt && (
         <div
-          className="text-xs mb-3 truncate italic"
+          className="text-xs mb-4 truncate italic"
           style={{ color: 'var(--text-secondary)' }}
           title={agent.lastPrompt}
         >

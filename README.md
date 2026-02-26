@@ -15,6 +15,9 @@ All views update in real-time, share a single WebSocket, and support Korean/Engl
 ## Quick Start
 
 ```bash
+# All commands must be run from the project root
+cd claude-alive
+
 # 1. Install dependencies and build
 pnpm install
 pnpm build

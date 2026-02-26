@@ -18,14 +18,14 @@ export function NotificationBanner({ agents }: NotificationBannerProps) {
   if (attentionAgents.length === 0) return null;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {attentionAgents.map((agent) => {
         const config = ATTENTION_STATES[agent.state]!;
         const label = agent.displayName || agent.projectName || agent.sessionId.slice(0, 8);
         return (
           <div
             key={agent.sessionId}
-            className="flex items-center gap-3 px-5 py-3 rounded-lg border"
+            className="flex items-center gap-4 px-5 py-4 rounded-lg border"
             style={{
               borderColor: config.color,
               background: `${config.color}10`,

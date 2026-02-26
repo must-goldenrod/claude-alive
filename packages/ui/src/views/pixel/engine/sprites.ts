@@ -19,7 +19,6 @@ export interface DirectionalFrames {
   down: HTMLCanvasElement;
   up: HTMLCanvasElement;
   right: HTMLCanvasElement;
-  // left = flipped right (handled at render time)
 }
 
 export interface SpriteSet {
@@ -31,110 +30,91 @@ export interface SpriteSet {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function createSpriteCanvas(): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+function createSpriteCanvas(w = CHAR_WIDTH, h = CHAR_HEIGHT): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
   const canvas = document.createElement('canvas');
-  canvas.width = CHAR_WIDTH;
-  canvas.height = CHAR_HEIGHT;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
   return { canvas, ctx };
 }
 
-function fillRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string) {
+function fill(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string) {
   ctx.fillStyle = color;
   ctx.fillRect(x, y, w, h);
 }
 
-// ── Draw functions ──────────────────────────────────────────────────────
-
-// Character layout (16x32):
-//   Hair:   row 0-3   (top of head)
-//   Head:   row 2-9   (8px tall, centered)
-//   Body:   row 10-21 (12px tall)
-//   Legs:   row 22-29 (8px tall)
-//   Feet:   row 30-31
+// ── Draw functions (all coords are 2x of original 16x32) ───────────────
+// Character layout (32x64):
+//   Hair:   row 0-7   (top of head)
+//   Head:   row 4-19  (16px tall)
+//   Body:   row 20-43 (24px tall)
+//   Legs:   row 44-59 (16px tall)
+//   Feet:   row 60-63
 
 function drawHead(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  // Hair (top of head)
-  fillRect(ctx, 4, 0, 8, 4, p.hair);
-  // Face / head
-  fillRect(ctx, 4, 2, 8, 8, p.skin);
-  // Hair sides
-  fillRect(ctx, 4, 2, 2, 3, p.hair);
-  fillRect(ctx, 10, 2, 2, 3, p.hair);
-  // Eyes (looking down)
-  fillRect(ctx, 6, 6, 2, 1, '#222');
-  fillRect(ctx, 9, 6, 2, 1, '#222');
+  fill(ctx, 8, 0, 16, 8, p.hair);
+  fill(ctx, 8, 4, 16, 16, p.skin);
+  fill(ctx, 8, 4, 4, 6, p.hair);
+  fill(ctx, 20, 4, 4, 6, p.hair);
+  fill(ctx, 12, 12, 4, 2, '#222');
+  fill(ctx, 18, 12, 4, 2, '#222');
 }
 
 function drawHeadUp(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  // Hair covers most of back of head
-  fillRect(ctx, 4, 0, 8, 4, p.hair);
-  fillRect(ctx, 4, 2, 8, 8, p.hair);
-  // Small strip of skin at neck
-  fillRect(ctx, 5, 8, 6, 2, p.skin);
+  fill(ctx, 8, 0, 16, 8, p.hair);
+  fill(ctx, 8, 4, 16, 16, p.hair);
+  fill(ctx, 10, 16, 12, 4, p.skin);
 }
 
 function drawHeadRight(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  fillRect(ctx, 4, 0, 8, 4, p.hair);
-  fillRect(ctx, 4, 2, 8, 8, p.skin);
-  // Hair on left side
-  fillRect(ctx, 4, 2, 3, 4, p.hair);
-  // Eye (right-facing, single eye visible)
-  fillRect(ctx, 10, 6, 1, 1, '#222');
+  fill(ctx, 8, 0, 16, 8, p.hair);
+  fill(ctx, 8, 4, 16, 16, p.skin);
+  fill(ctx, 8, 4, 6, 8, p.hair);
+  fill(ctx, 20, 12, 2, 2, '#222');
 }
 
 function drawBody(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  fillRect(ctx, 3, 10, 10, 12, p.shirt);
+  fill(ctx, 6, 20, 20, 24, p.shirt);
 }
 
-function drawBodyWithArms(ctx: CanvasRenderingContext2D, p: CharacterPalette, leftArmDown: boolean, rightArmDown: boolean) {
-  // Torso
-  fillRect(ctx, 4, 10, 8, 12, p.shirt);
-  // Arms
-  if (leftArmDown) {
-    fillRect(ctx, 2, 11, 2, 9, p.shirt);
-    fillRect(ctx, 2, 20, 2, 1, p.skin); // hand
+function drawBodyWithArms(ctx: CanvasRenderingContext2D, p: CharacterPalette, leftDown: boolean, rightDown: boolean) {
+  fill(ctx, 8, 20, 16, 24, p.shirt);
+  if (leftDown) {
+    fill(ctx, 4, 22, 4, 18, p.shirt);
+    fill(ctx, 4, 40, 4, 2, p.skin);
   } else {
-    // arm raised forward
-    fillRect(ctx, 2, 11, 2, 6, p.shirt);
-    fillRect(ctx, 2, 17, 2, 1, p.skin);
+    fill(ctx, 4, 22, 4, 12, p.shirt);
+    fill(ctx, 4, 34, 4, 2, p.skin);
   }
-  if (rightArmDown) {
-    fillRect(ctx, 12, 11, 2, 9, p.shirt);
-    fillRect(ctx, 12, 20, 2, 1, p.skin);
+  if (rightDown) {
+    fill(ctx, 24, 22, 4, 18, p.shirt);
+    fill(ctx, 24, 40, 4, 2, p.skin);
   } else {
-    fillRect(ctx, 12, 11, 2, 6, p.shirt);
-    fillRect(ctx, 12, 17, 2, 1, p.skin);
+    fill(ctx, 24, 22, 4, 12, p.shirt);
+    fill(ctx, 24, 34, 4, 2, p.skin);
   }
 }
 
 function drawLegsStanding(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  // Left leg
-  fillRect(ctx, 4, 22, 4, 8, p.pants);
-  // Right leg
-  fillRect(ctx, 8, 22, 4, 8, p.pants);
-  // Feet
-  fillRect(ctx, 4, 30, 4, 2, '#1a1a1a');
-  fillRect(ctx, 8, 30, 4, 2, '#1a1a1a');
+  fill(ctx, 8, 44, 8, 16, p.pants);
+  fill(ctx, 16, 44, 8, 16, p.pants);
+  fill(ctx, 8, 60, 8, 4, '#1a1a1a');
+  fill(ctx, 16, 60, 8, 4, '#1a1a1a');
 }
 
-function drawLegsWalkFrame1(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  // Left leg forward
-  fillRect(ctx, 3, 22, 4, 8, p.pants);
-  fillRect(ctx, 3, 30, 4, 2, '#1a1a1a');
-  // Right leg back
-  fillRect(ctx, 9, 22, 4, 8, p.pants);
-  fillRect(ctx, 9, 30, 4, 2, '#1a1a1a');
+function drawLegsWalk1(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
+  fill(ctx, 6, 44, 8, 16, p.pants);
+  fill(ctx, 6, 60, 8, 4, '#1a1a1a');
+  fill(ctx, 18, 44, 8, 16, p.pants);
+  fill(ctx, 18, 60, 8, 4, '#1a1a1a');
 }
 
-function drawLegsWalkFrame2(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
-  // Left leg back
-  fillRect(ctx, 3, 22, 4, 8, p.pants);
-  fillRect(ctx, 3, 30, 4, 2, '#1a1a1a');
-  // Right leg forward
-  fillRect(ctx, 9, 22, 4, 8, p.pants);
-  fillRect(ctx, 9, 30, 4, 2, '#1a1a1a');
+function drawLegsWalk2(ctx: CanvasRenderingContext2D, p: CharacterPalette) {
+  fill(ctx, 6, 44, 8, 16, p.pants);
+  fill(ctx, 6, 60, 8, 4, '#1a1a1a');
+  fill(ctx, 18, 44, 8, 16, p.pants);
+  fill(ctx, 18, 60, 8, 4, '#1a1a1a');
 }
 
 // ── Sprite generation ───────────────────────────────────────────────────
@@ -167,8 +147,8 @@ function drawWalkDown(p: CharacterPalette, frame: number): HTMLCanvasElement {
   const { canvas, ctx } = createSpriteCanvas();
   drawHead(ctx, p);
   drawBody(ctx, p);
-  if (frame === 0) drawLegsWalkFrame1(ctx, p);
-  else drawLegsWalkFrame2(ctx, p);
+  if (frame === 0) drawLegsWalk1(ctx, p);
+  else drawLegsWalk2(ctx, p);
   return canvas;
 }
 
@@ -176,8 +156,8 @@ function drawWalkUp(p: CharacterPalette, frame: number): HTMLCanvasElement {
   const { canvas, ctx } = createSpriteCanvas();
   drawHeadUp(ctx, p);
   drawBody(ctx, p);
-  if (frame === 0) drawLegsWalkFrame1(ctx, p);
-  else drawLegsWalkFrame2(ctx, p);
+  if (frame === 0) drawLegsWalk1(ctx, p);
+  else drawLegsWalk2(ctx, p);
   return canvas;
 }
 
@@ -185,15 +165,14 @@ function drawWalkRight(p: CharacterPalette, frame: number): HTMLCanvasElement {
   const { canvas, ctx } = createSpriteCanvas();
   drawHeadRight(ctx, p);
   drawBody(ctx, p);
-  if (frame === 0) drawLegsWalkFrame1(ctx, p);
-  else drawLegsWalkFrame2(ctx, p);
+  if (frame === 0) drawLegsWalk1(ctx, p);
+  else drawLegsWalk2(ctx, p);
   return canvas;
 }
 
 function drawTyping(p: CharacterPalette, frame: number): HTMLCanvasElement {
   const { canvas, ctx } = createSpriteCanvas();
   drawHead(ctx, p);
-  // Arms alternate: one up, one slightly different
   if (frame === 0) {
     drawBodyWithArms(ctx, p, false, true);
   } else {
@@ -206,19 +185,61 @@ function drawTyping(p: CharacterPalette, frame: number): HTMLCanvasElement {
 function drawReading(p: CharacterPalette, frame: number): HTMLCanvasElement {
   const { canvas, ctx } = createSpriteCanvas();
   drawHead(ctx, p);
-  // Both arms up holding book
   drawBodyWithArms(ctx, p, false, false);
-  // Book shape between hands
-  const bookY = frame === 0 ? 15 : 16;
-  fillRect(ctx, 4, bookY, 8, 4, '#8B4513');
-  fillRect(ctx, 5, bookY + 1, 6, 2, '#F5F5DC');
+  const bookY = frame === 0 ? 30 : 32;
+  fill(ctx, 8, bookY, 16, 8, '#8B4513');
+  fill(ctx, 10, bookY + 2, 12, 4, '#F5F5DC');
   drawLegsStanding(ctx, p);
   return canvas;
+}
+
+// ── Sub-agent sprite generation (75% scale) ─────────────────────────────
+
+const SUB_W = Math.round(CHAR_WIDTH * 0.75);
+const SUB_H = Math.round(CHAR_HEIGHT * 0.75);
+
+function createSubAgentSprite(fullSprite: HTMLCanvasElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = SUB_W;
+  canvas.height = SUB_H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(fullSprite, 0, 0, SUB_W, SUB_H);
+  return canvas;
+}
+
+export interface SubAgentSpriteSet {
+  idle: DirectionalFrames;
+  walk: { down: HTMLCanvasElement[]; up: HTMLCanvasElement[]; right: HTMLCanvasElement[] };
+  type: HTMLCanvasElement[];
+  read: HTMLCanvasElement[];
+  width: number;
+  height: number;
+}
+
+function generateSubAgentSpriteSet(full: SpriteSet): SubAgentSpriteSet {
+  return {
+    idle: {
+      down: createSubAgentSprite(full.idle.down),
+      up: createSubAgentSprite(full.idle.up),
+      right: createSubAgentSprite(full.idle.right),
+    },
+    walk: {
+      down: full.walk.down.map(createSubAgentSprite),
+      up: full.walk.up.map(createSubAgentSprite),
+      right: full.walk.right.map(createSubAgentSprite),
+    },
+    type: full.type.map(createSubAgentSprite),
+    read: full.read.map(createSubAgentSprite),
+    width: SUB_W,
+    height: SUB_H,
+  };
 }
 
 // ── Public API ──────────────────────────────────────────────────────────
 
 const spriteCache = new Map<number, SpriteSet>();
+const subSpriteCache = new Map<number, SubAgentSpriteSet>();
 
 export function generateSpriteSet(paletteIndex: number): SpriteSet {
   const cached = spriteCache.get(paletteIndex);
@@ -244,3 +265,15 @@ export function generateSpriteSet(paletteIndex: number): SpriteSet {
   spriteCache.set(paletteIndex, set);
   return set;
 }
+
+export function generateSubAgentSprites(paletteIndex: number): SubAgentSpriteSet {
+  const cached = subSpriteCache.get(paletteIndex);
+  if (cached) return cached;
+
+  const full = generateSpriteSet(paletteIndex);
+  const sub = generateSubAgentSpriteSet(full);
+  subSpriteCache.set(paletteIndex, sub);
+  return sub;
+}
+
+export { SUB_W as SUB_AGENT_WIDTH, SUB_H as SUB_AGENT_HEIGHT };

@@ -40,18 +40,18 @@ export function EventStream({ events, agents }: EventStreamProps) {
 
   return (
     <div
-      className="flex flex-col border rounded-lg overflow-hidden"
+      className="flex flex-col border rounded-lg overflow-hidden flex-1 min-h-0"
       style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
     >
       <div
-        className="px-5 py-3 text-sm font-medium border-b"
+        className="px-5 py-3.5 text-xs font-medium border-b shrink-0"
         style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}
       >
         {t('eventStream.title')} ({events.length})
       </div>
-      <div className="overflow-y-auto max-h-[480px] p-3 space-y-1">
+      <div className="overflow-y-auto flex-1 p-3 space-y-1">
         {events.length === 0 && (
-          <div className="text-center py-8 text-base" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-center py-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
             {t('eventStream.waiting')}
           </div>
         )}
@@ -70,7 +70,7 @@ export function EventStream({ events, agents }: EventStreamProps) {
           return (
             <div
               key={entry.id}
-              className="flex items-center gap-3 px-3 py-1.5 rounded text-sm hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 px-3 py-2 rounded text-[11px] hover:bg-white/5 transition-colors"
             >
               <span className="shrink-0 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
                 {time}

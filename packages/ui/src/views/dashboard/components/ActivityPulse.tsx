@@ -83,7 +83,7 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
       style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
     >
       <div
-        className="px-5 py-3 text-sm font-medium border-b flex items-center justify-between"
+        className="px-5 py-3.5 text-xs font-medium border-b flex items-center justify-between"
         style={{
           color: 'var(--text-secondary)',
           borderColor: 'var(--border-color)',
@@ -91,26 +91,26 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
         }}
       >
         <span>{t('activity.title')}</span>
-        <div className="flex items-center gap-4 text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.tool }} />
+        <div className="flex items-center gap-2 text-[10px]">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.tool }} />
             {t('activity.tools')}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.prompt }} />
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.prompt }} />
             {t('activity.prompts')}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.permission }} />
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.permission }} />
             {t('activity.permissions')}
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.system }} />
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.system }} />
             {t('activity.system')}
           </span>
         </div>
       </div>
-      <div className="px-4 py-4 flex items-end gap-px" style={{ height: MAX_HEIGHT + 32 }}>
+      <div className="px-4 py-4 flex items-end gap-px" style={{ height: MAX_HEIGHT + 28 }}>
         {bars.map((bar, i) => (
           <div
             key={i}

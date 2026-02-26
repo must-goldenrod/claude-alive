@@ -12,9 +12,10 @@ interface PixelCanvasProps {
   tileMap: TileMap;
   entities: React.MutableRefObject<Entity[]>;
   onTileClick?: (col: number, row: number) => void;
+  onWorldClick?: (worldX: number, worldY: number) => void;
 }
 
-export default function PixelCanvas({ camera, tileMap, entities, onTileClick }: PixelCanvasProps) {
+export default function PixelCanvas({ camera, tileMap, entities, onTileClick, onWorldClick }: PixelCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isPanning = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
@@ -114,8 +115,6 @@ export default function PixelCanvas({ camera, tileMap, entities, onTileClick }: 
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!onTileClick) return;
-      // Don't fire click after panning
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -127,11 +126,17 @@ export default function PixelCanvas({ camera, tileMap, entities, onTileClick }: 
       const cssH = canvas.height / dpr;
 
       const world = screenToWorld(camera.current, screenX, screenY, cssW, cssH);
-      const col = Math.floor(world.x / TILE_SIZE);
-      const row = Math.floor(world.y / TILE_SIZE);
-      onTileClick(col, row);
+
+      if (onWorldClick) {
+        onWorldClick(world.x, world.y);
+      }
+      if (onTileClick) {
+        const col = Math.floor(world.x / TILE_SIZE);
+        const row = Math.floor(world.y / TILE_SIZE);
+        onTileClick(col, row);
+      }
     },
-    [camera, onTileClick],
+    [camera, onTileClick, onWorldClick],
   );
 
   return (

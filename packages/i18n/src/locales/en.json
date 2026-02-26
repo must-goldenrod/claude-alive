@@ -89,7 +89,8 @@
   "styles": {
     "dashboard": "Dashboard",
     "threeDField": "3D Field",
-    "pixel": "Pixel Office"
+    "pixel": "Pixel Office",
+    "bishoujo": "Bishoujo"
   },
   "hud": {
     "connected": "Connected",
@@ -98,5 +99,6 @@
     "agent": "Agent",
     "tool": "Tool:"
   },
-  "loading": "Loading 3D scene..."
+  "loading": "Loading 3D scene...",
+  "loadingBishoujo": "Loading Live2D scene..."
 }

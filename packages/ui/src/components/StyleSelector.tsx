@@ -1,15 +1,15 @@
 import { useTranslation } from 'react-i18next';
-import type { UIStyle } from '../App.tsx';
+import type { ViewMode } from '../views/unified/UnifiedView.tsx';
 
 interface StyleSelectorProps {
-  current: UIStyle;
-  onChange: (style: UIStyle) => void;
+  current: ViewMode;
+  onChange: (mode: ViewMode) => void;
 }
 
-const STYLE_KEYS: { key: UIStyle; labelKey: string }[] = [
-  { key: 'dashboard', labelKey: 'styles.dashboard' },
+const MODE_KEYS: { key: ViewMode; labelKey: string }[] = [
   { key: 'three-d', labelKey: 'styles.threeDField' },
   { key: 'pixel', labelKey: 'styles.pixel' },
+  { key: 'bishoujo', labelKey: 'styles.bishoujo' },
 ];
 
 export function StyleSelector({ current, onChange }: StyleSelectorProps) {
@@ -27,41 +27,41 @@ export function StyleSelector({ current, onChange }: StyleSelectorProps) {
         top: 0,
         left: 0,
         right: 0,
-        height: 40,
+        height: 44,
         zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
-        padding: '0 12px',
+        gap: 4,
+        padding: '0 20px',
         background: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border-color)',
       }}
     >
       <span
         style={{
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 700,
           color: 'var(--text-primary)',
-          marginRight: 12,
+          marginRight: 20,
           letterSpacing: '-0.02em',
         }}
       >
         claude-alive
       </span>
 
-      {STYLE_KEYS.map(({ key, labelKey }) => {
+      {MODE_KEYS.map(({ key, labelKey }) => {
         const active = key === current;
         return (
           <button
             key={key}
             onClick={() => onChange(key)}
             style={{
-              height: 28,
-              padding: '0 10px',
+              height: 30,
+              padding: '0 14px',
               border: 'none',
-              borderRadius: 4,
+              borderRadius: 6,
               cursor: 'pointer',
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: active ? 600 : 400,
               fontFamily: 'inherit',
               color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -74,25 +74,26 @@ export function StyleSelector({ current, onChange }: StyleSelectorProps) {
         );
       })}
 
-      <button
-        onClick={toggleLang}
-        style={{
-          marginLeft: 'auto',
-          height: 28,
-          padding: '0 10px',
-          border: '1px solid var(--border-color)',
-          borderRadius: 4,
-          cursor: 'pointer',
-          fontSize: 11,
-          fontWeight: 600,
-          fontFamily: 'inherit',
-          color: 'var(--text-secondary)',
-          background: 'transparent',
-          transition: 'background 0.15s',
-        }}
-      >
-        {isKo ? 'EN' : '한'}
-      </button>
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button
+          onClick={toggleLang}
+          style={{
+            height: 28,
+            padding: '0 10px',
+            border: '1px solid var(--border-color)',
+            borderRadius: 4,
+            cursor: 'pointer',
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: 'inherit',
+            color: 'var(--text-secondary)',
+            background: 'transparent',
+            transition: 'background 0.15s',
+          }}
+        >
+          {isKo ? 'EN' : '한'}
+        </button>
+      </div>
     </div>
   );
 }
