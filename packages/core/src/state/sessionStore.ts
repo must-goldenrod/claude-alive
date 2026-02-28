@@ -2,6 +2,11 @@ import type { AgentInfo, AgentState, CompletedSession, HookEventPayload } from '
 import { transition } from './agentFSM.js';
 import { extractToolDisplayName } from '../events/toolMapper.js';
 
+/** Cross-platform basename — handles both / and \ separators */
+function pathBasename(p: string): string {
+  return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
+}
+
 export interface EventLogEntry {
   id: number;
   timestamp: number;
@@ -100,7 +105,7 @@ export class SessionStore {
     // Update cwd if it changed
     if (data.cwd && data.cwd !== agent.cwd) {
       agent.cwd = data.cwd;
-      agent.projectName = data.cwd.split('/').filter(Boolean).pop() ?? data.cwd;
+      agent.projectName = pathBasename(data.cwd);
     }
 
     if (event === 'Stop') {
@@ -120,7 +125,7 @@ export class SessionStore {
   }
 
   private createAgent(sessionId: string, cwd: string, parentId?: string): AgentInfo {
-    const projectName = cwd.split('/').filter(Boolean).pop() ?? cwd;
+    const projectName = pathBasename(cwd);
     const agent: AgentInfo = {
       id: sessionId,
       sessionId,

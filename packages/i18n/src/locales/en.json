@@ -1,17 +1,8 @@
 {
   "header": {
     "title": "claude-alive",
-    "dashboard": "dashboard",
-    "connected": "connected",
-    "disconnected": "disconnected",
     "agentCount_one": "{{count}} agent",
     "agentCount_other": "{{count}} agents"
-  },
-  "stats": {
-    "events": "Events",
-    "eventsPerMin": "Events/min",
-    "active": "Active",
-    "topTool": "Top tool"
   },
   "agents": {
     "noAgentsYet": "No agents yet",
@@ -86,24 +77,23 @@
     "minutesAgo": "{{count}}m ago",
     "hoursAgo": "{{count}}h ago"
   },
-  "styles": {
-    "dashboard": "Dashboard",
-    "threeDField": "3D Field",
-    "pixel": "Pixel Office",
-    "bishoujo": "Bishoujo"
-  },
-  "hud": {
-    "connected": "Connected",
-    "disconnected": "Disconnected",
-    "agents": "Agents:",
-    "agent": "Agent",
-    "tool": "Tool:"
-  },
   "completionLog": {
     "title": "Completed Sessions",
     "empty": "No completed sessions yet",
     "sessionCompleted": "Session completed"
   },
-  "loading": "Loading 3D scene...",
+  "bubble": {
+    "readingTool": "Reading {{tool}}...",
+    "reading": "Reading...",
+    "searching": "Searching files...",
+    "runningBash": "Running command...",
+    "runningTest": "Running tests...",
+    "thinking": "Hmm, thinking...",
+    "typing": "Writing code...",
+    "waiting": "Waiting for permission...",
+    "error": "Something went wrong...!",
+    "listening": "Listening!",
+    "done": "Done! Good work~"
+  },
   "loadingBishoujo": "Loading Live2D scene..."
 }

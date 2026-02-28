@@ -1,19 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import type { ViewMode } from '../views/unified/UnifiedView.tsx';
 
-interface StyleSelectorProps {
-  current: ViewMode;
-  onChange: (mode: ViewMode) => void;
-}
-
-const MODE_KEYS: { key: ViewMode; labelKey: string }[] = [
-  // { key: 'three-d', labelKey: 'styles.threeDField' }, // TODO: 3D 뷰 추후 복원
-  { key: 'pixel', labelKey: 'styles.pixel' },
-  { key: 'bishoujo', labelKey: 'styles.bishoujo' },
-];
-
-export function StyleSelector({ current, onChange }: StyleSelectorProps) {
-  const { t, i18n } = useTranslation();
+export function HeaderBar() {
+  const { i18n } = useTranslation();
   const isKo = i18n.language?.startsWith('ko');
 
   const toggleLang = () => {
@@ -42,37 +30,11 @@ export function StyleSelector({ current, onChange }: StyleSelectorProps) {
           fontSize: 13,
           fontWeight: 700,
           color: 'var(--text-primary)',
-          marginRight: 20,
           letterSpacing: '-0.02em',
         }}
       >
         claude-alive
       </span>
-
-      {MODE_KEYS.map(({ key, labelKey }) => {
-        const active = key === current;
-        return (
-          <button
-            key={key}
-            onClick={() => onChange(key)}
-            style={{
-              height: 30,
-              padding: '0 14px',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: active ? 600 : 400,
-              fontFamily: 'inherit',
-              color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-              background: active ? 'var(--bg-card)' : 'transparent',
-              transition: 'background 0.15s, color 0.15s',
-            }}
-          >
-            {t(labelKey)}
-          </button>
-        );
-      })}
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
         <button

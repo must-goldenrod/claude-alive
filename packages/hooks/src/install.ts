@@ -39,7 +39,9 @@ export function installHooks(): { installed: boolean; settingsPath: string; hook
   const srcScript = join(currentDir, '..', 'scripts', 'stream-event.sh');
   const destScript = join(aliveDir, 'stream-event.sh');
   copyFileSync(srcScript, destScript);
-  chmodSync(destScript, 0o755);
+  if (process.platform !== 'win32') {
+    chmodSync(destScript, 0o755);
+  }
 
   // 2. Read or create settings.json
   let settings: SettingsJson = {};

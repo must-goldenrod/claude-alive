@@ -33,19 +33,42 @@ export interface HttpRouterOptions {
   uiDistPath?: string;
 }
 
+const MAX_BODY_BYTES = 1_048_576; // 1 MB
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    let totalLen = 0;
+    req.on('data', (chunk: Buffer) => {
+      totalLen += chunk.length;
+      if (totalLen > MAX_BODY_BYTES) {
+        req.destroy();
+        reject(new Error('Body too large'));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on('end', () => resolve(Buffer.concat(chunks).toString()));
     req.on('error', reject);
   });
 }
 
-function sendJson(res: ServerResponse, status: number, data: unknown): void {
+function isLocalOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  try {
+    const url = new URL(origin);
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function sendJson(res: ServerResponse, status: number, data: unknown, req?: IncomingMessage): void {
+  const origin = req?.headers.origin;
+  const allowedOrigin = isLocalOrigin(origin) ? (origin ?? 'http://localhost') : '';
   res.writeHead(status, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
@@ -58,7 +81,7 @@ export function createHttpServer(options: HttpRouterOptions) {
 
   const server = createServer(async (req, res) => {
     if (req.method === 'OPTIONS') {
-      sendJson(res, 204, null);
+      sendJson(res, 204, null, req);
       return;
     }
 
@@ -70,9 +93,9 @@ export function createHttpServer(options: HttpRouterOptions) {
         const raw = JSON.parse(body) as Record<string, unknown>;
         const payload = normalizePayload(raw);
         onEvent(payload);
-        sendJson(res, 200, { ok: true });
+        sendJson(res, 200, { ok: true }, req);
       } catch {
-        sendJson(res, 400, { error: 'Invalid JSON' });
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
       }
       return;
     }
@@ -83,13 +106,13 @@ export function createHttpServer(options: HttpRouterOptions) {
         version: '0.1.0',
         uptime: process.uptime(),
         ...getSnapshot(),
-      });
+      }, req);
       return;
     }
 
     if (req.method === 'GET' && url.pathname === '/api/agents') {
       const snapshot = getSnapshot() as { agents?: unknown };
-      sendJson(res, 200, snapshot.agents ?? []);
+      sendJson(res, 200, snapshot.agents ?? [], req);
       return;
     }
 
@@ -100,9 +123,9 @@ export function createHttpServer(options: HttpRouterOptions) {
         const body = await readBody(req);
         const { name } = JSON.parse(body) as { name: string | null };
         const ok = renameAgent(renameMatch[1]!, name);
-        sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' });
+        sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
       } catch {
-        sendJson(res, 400, { error: 'Invalid JSON' });
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
       }
       return;
     }
@@ -111,18 +134,18 @@ export function createHttpServer(options: HttpRouterOptions) {
     const deleteMatch = url.pathname.match(/^\/api\/agents\/([^/]+)$/);
     if (req.method === 'DELETE' && deleteMatch) {
       const ok = removeAgent(deleteMatch[1]!);
-      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' });
+      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
       return;
     }
 
     if (req.method === 'GET' && url.pathname === '/api/events') {
       const snapshot = getSnapshot() as { recentEvents?: unknown };
-      sendJson(res, 200, snapshot.recentEvents ?? []);
+      sendJson(res, 200, snapshot.recentEvents ?? [], req);
       return;
     }
 
     if (req.method === 'GET' && url.pathname === '/health') {
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true }, req);
       return;
     }
 
@@ -132,7 +155,7 @@ export function createHttpServer(options: HttpRouterOptions) {
       if (served) return;
     }
 
-    sendJson(res, 404, { error: 'Not found' });
+    sendJson(res, 404, { error: 'Not found' }, req);
   });
 
   return server;

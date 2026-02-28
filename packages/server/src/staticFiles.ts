@@ -24,9 +24,8 @@ export function createStaticHandler(uiDistPath?: string) {
   const distDir = uiDistPath ?? DEFAULT_UI_DIST;
 
   return async function serveStatic(pathname: string, res: ServerResponse): Promise<boolean> {
-    // Prevent directory traversal
-    const safePath = pathname.replace(/\.\./g, '');
-    const filePath = join(distDir, safePath === '/' ? 'index.html' : safePath);
+    const filePath = resolve(distDir, pathname === '/' ? 'index.html' : '.' + pathname);
+    if (!filePath.startsWith(distDir)) return false; // directory traversal blocked
 
     try {
       const data = await readFile(filePath);
@@ -37,7 +36,7 @@ export function createStaticHandler(uiDistPath?: string) {
       return true;
     } catch {
       // File not found — try SPA fallback (serve index.html)
-      if (safePath !== '/' && safePath !== '/index.html') {
+      if (pathname !== '/' && pathname !== '/index.html') {
         try {
           const indexData = await readFile(join(distDir, 'index.html'));
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

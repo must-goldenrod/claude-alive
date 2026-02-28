@@ -1,16 +1,7 @@
-import { useState, Component } from 'react';
+import { Component } from 'react';
 import type { ReactNode } from 'react';
-import { StyleSelector } from './components/StyleSelector.tsx';
+import { HeaderBar } from './components/HeaderBar.tsx';
 import { UnifiedView } from './views/unified/UnifiedView.tsx';
-import type { ViewMode } from './views/unified/UnifiedView.tsx';
-
-const VALID_MODES: ViewMode[] = ['pixel', 'bishoujo'];
-// TODO: 3D 뷰 추후 복원 시 'three-d' 추가
-
-function getInitialMode(): ViewMode {
-  const stored = localStorage.getItem('claude-alive-style');
-  return VALID_MODES.includes(stored as ViewMode) ? (stored as ViewMode) : 'pixel';
-}
 
 class SilentErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -19,19 +10,12 @@ class SilentErrorBoundary extends Component<{ children: ReactNode }, { hasError:
 }
 
 export default function App() {
-  const [mode, setMode] = useState<ViewMode>(getInitialMode);
-
-  const handleModeChange = (newMode: ViewMode) => {
-    setMode(newMode);
-    localStorage.setItem('claude-alive-style', newMode);
-  };
-
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <StyleSelector current={mode} onChange={handleModeChange} />
+      <HeaderBar />
       <div style={{ paddingTop: 44, height: '100%', boxSizing: 'border-box' }}>
         <SilentErrorBoundary>
-          <UnifiedView viewMode={mode} />
+          <UnifiedView />
         </SilentErrorBoundary>
       </div>
     </div>

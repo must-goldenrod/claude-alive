@@ -3,7 +3,7 @@ import type { AgentInfo } from '@claude-alive/core';
 import { extractToolDisplayName } from '@claude-alive/core';
 import type { CharacterSlot } from '../engine/sceneLayout.ts';
 import { slotToPixel } from '../engine/sceneLayout.ts';
-import { getAnthropomorphicText } from '../../pixel/engine/character.ts';
+import { getAnthropomorphicText } from '../../../utils/bubbleText.ts';
 
 // Approximate internal height of Live2D models (pixels).
 // Used to estimate where the character's head is for label placement.
@@ -55,7 +55,7 @@ export function UIOverlay({ agents, slotMap, canvasWidth, canvasHeight, onCharac
         // Place label above the head with a small gap
         const labelY = headY - 8;
 
-        // Speech bubble text (from pixel engine's anthropomorphic system)
+        // Speech bubble text
         const speechText = getAnthropomorphicText(
           agent.state,
           agent.currentTool,
