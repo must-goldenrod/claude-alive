@@ -27,7 +27,7 @@ switch (command) {
   case 'start': {
     console.log('Starting claude-alive server...');
     const bundleDir = dirname(fileURLToPath(import.meta.url));
-    const serverEntry = resolve(bundleDir, 'server.mjs');
+    const serverEntry = resolve(bundleDir, 'server.js');
     const child = spawn('node', [serverEntry], { stdio: 'inherit' });
     child.on('close', (code) => process.exit(code ?? 0));
     break;

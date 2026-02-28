@@ -16,13 +16,13 @@ mkdir -p "$OUT/dist" "$OUT/scripts" "$OUT/ui"
 echo "[3/5] Bundling CLI..."
 npx esbuild "$ROOT/npm/cli-entry.ts" \
   --bundle --platform=node --format=esm \
-  --target=node20 --outfile="$OUT/dist/cli.mjs" \
+  --target=node20 --outfile="$OUT/dist/cli.js" \
   --external:ws
 
 echo "[4/5] Bundling server..."
 npx esbuild "$ROOT/npm/server-entry.ts" \
   --bundle --platform=node --format=esm \
-  --target=node20 --outfile="$OUT/dist/server.mjs" \
+  --target=node20 --outfile="$OUT/dist/server.js" \
   --external:ws
 
 echo "[5/5] Copying assets..."
@@ -35,15 +35,16 @@ cp "$ROOT/README.md" "$OUT/"
 # Create package.json for npm
 cat > "$OUT/package.json" << 'PKGJSON'
 {
-  "name": "claude-alive",
-  "version": "0.1.0",
+  "name": "@hoyoungyang0526/claude-alive",
+  "version": "0.1.2",
   "description": "Real-time animated UI for Claude Code sessions, powered by hooks",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "claude-alive": "./dist/cli.mjs"
+    "claude-alive": "./cli.js"
   },
   "files": [
+    "cli.js",
     "dist/",
     "scripts/",
     "ui/",
@@ -61,6 +62,9 @@ cat > "$OUT/package.json" << 'PKGJSON'
     "url": "https://github.com/hoyoungyang0526/claude-alive.git"
   },
   "homepage": "https://github.com/hoyoungyang0526/claude-alive",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "keywords": [
     "claude",
     "claude-code",
@@ -75,7 +79,12 @@ cat > "$OUT/package.json" << 'PKGJSON'
 }
 PKGJSON
 
-chmod +x "$OUT/dist/cli.mjs"
+# Create top-level bin wrapper (npm 11 rejects paths with '/')
+cat > "$OUT/cli.js" << 'CLIWRAP'
+#!/usr/bin/env node
+import './dist/cli.js';
+CLIWRAP
+chmod +x "$OUT/cli.js"
 
 echo ""
 echo "Done! Package ready at: $OUT"
