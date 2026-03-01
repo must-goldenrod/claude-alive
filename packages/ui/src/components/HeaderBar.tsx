@@ -1,34 +1,18 @@
 import { useTranslation } from 'react-i18next';
-
-type Page = 'dashboard' | 'gallery';
+import type { Page } from '../App.tsx';
 
 interface HeaderBarProps {
-  currentPage: Page;
-  onNavigate: (page: Page) => void;
+  page: Page;
+  onNavigate: (p: Page) => void;
 }
 
-export function HeaderBar({ currentPage, onNavigate }: HeaderBarProps) {
+export function HeaderBar({ page, onNavigate }: HeaderBarProps) {
   const { t, i18n } = useTranslation();
   const isKo = i18n.language?.startsWith('ko');
 
   const toggleLang = () => {
     i18n.changeLanguage(isKo ? 'en' : 'ko');
   };
-
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    height: 28,
-    padding: '0 12px',
-    border: 'none',
-    borderBottom: active ? '2px solid var(--accent-purple)' : '2px solid transparent',
-    borderRadius: 0,
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: active ? 700 : 500,
-    fontFamily: 'inherit',
-    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-    background: 'transparent',
-    transition: 'color 0.15s, border-color 0.15s',
-  });
 
   const btnStyle: React.CSSProperties = {
     height: 28,
@@ -43,6 +27,13 @@ export function HeaderBar({ currentPage, onNavigate }: HeaderBarProps) {
     background: 'transparent',
     transition: 'background 0.15s',
   };
+
+  const tabStyle = (active: boolean): React.CSSProperties => ({
+    ...btnStyle,
+    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+    borderColor: active ? 'var(--text-primary)' : 'var(--border-color)',
+    background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
+  });
 
   return (
     <div
@@ -73,18 +64,16 @@ export function HeaderBar({ currentPage, onNavigate }: HeaderBarProps) {
         claude-alive
       </span>
 
-      <nav style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <button onClick={() => onNavigate('dashboard')} style={tabStyle(currentPage === 'dashboard')}>
-          {t('header.title')}
-        </button>
-        <button onClick={() => onNavigate('gallery')} style={tabStyle(currentPage === 'gallery')}>
-          {t('gallery.title')}
-        </button>
-      </nav>
+      <button onClick={() => onNavigate('dashboard')} style={tabStyle(page === 'dashboard')}>
+        Dashboard
+      </button>
+      <button onClick={() => onNavigate('pixel')} style={tabStyle(page === 'pixel')}>
+        {t('pixelOffice.title')}
+      </button>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={toggleLang} style={btnStyle}>
-          {isKo ? 'EN' : '\ud55c'}
+          {isKo ? 'EN' : '한'}
         </button>
       </div>
     </div>

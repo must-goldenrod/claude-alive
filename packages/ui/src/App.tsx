@@ -3,28 +3,29 @@ import type { ReactNode } from 'react';
 import { HeaderBar } from './components/HeaderBar.tsx';
 import { UnifiedView } from './views/unified/UnifiedView.tsx';
 
-const LazyGalleryPage = lazy(() =>
-  import('./views/gallery/GalleryPage.tsx').then(m => ({ default: m.GalleryPage }))
+const PixelOfficePage = lazy(() =>
+  import('./views/pixel/PixelOfficePage.tsx').then(m => ({ default: m.PixelOfficePage })),
 );
 
-type Page = 'dashboard' | 'gallery';
+export type Page = 'dashboard' | 'pixel';
 
 function useHashRoute(): [Page, (p: Page) => void] {
   const read = (): Page => {
-    const h = window.location.hash.slice(1);
-    return h === 'gallery' ? 'gallery' : 'dashboard';
+    const h = window.location.hash.replace('#', '');
+    return h === 'pixel' ? 'pixel' : 'dashboard';
   };
 
   const [page, setPage] = useState<Page>(read);
 
   useEffect(() => {
-    const handler = () => setPage(read());
-    window.addEventListener('hashchange', handler);
-    return () => window.removeEventListener('hashchange', handler);
+    const onHash = () => setPage(read());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
   const navigate = useCallback((p: Page) => {
     window.location.hash = p === 'dashboard' ? '' : p;
+    setPage(p);
   }, []);
 
   return [page, navigate];
@@ -41,18 +42,16 @@ export default function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
-      <HeaderBar currentPage={page} onNavigate={navigate} />
+      <HeaderBar page={page} onNavigate={navigate} />
       <div style={{ paddingTop: 44, height: '100%', boxSizing: 'border-box' }}>
-        {page === 'dashboard' && (
-          <SilentErrorBoundary>
-            <UnifiedView />
-          </SilentErrorBoundary>
-        )}
-        {page === 'gallery' && (
-          <Suspense fallback={null}>
-            <LazyGalleryPage />
-          </Suspense>
-        )}
+        <SilentErrorBoundary>
+          {page === 'dashboard' && <UnifiedView />}
+          {page === 'pixel' && (
+            <Suspense fallback={null}>
+              <PixelOfficePage />
+            </Suspense>
+          )}
+        </SilentErrorBoundary>
       </div>
     </div>
   );

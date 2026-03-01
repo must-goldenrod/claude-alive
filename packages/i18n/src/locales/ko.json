@@ -82,6 +82,9 @@
     "empty": "아직 완료된 세션이 없습니다",
     "sessionCompleted": "세션 완료"
   },
+  "pixelOffice": {
+    "title": "픽셀 오피스"
+  },
   "bubble": {
     "readingTool": "{{tool}} 읽는 중...",
     "reading": "읽는 중...",
@@ -94,12 +97,5 @@
     "error": "뭔가 잘못됐다...!",
     "listening": "듣고 있어요!",
     "done": "작업 끝! 수고하셨습니다~"
-  },
-  "loadingBishoujo": "Live2D 씬 로딩 중...",
-  "gallery": {
-    "button": "캐릭터",
-    "title": "캐릭터 갤러리",
-    "count": "{{count}}개 모델",
-    "close": "닫기"
   }
 }

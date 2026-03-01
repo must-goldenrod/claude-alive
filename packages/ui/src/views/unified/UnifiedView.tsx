@@ -1,13 +1,9 @@
-import { useCallback, lazy, Suspense } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWebSocket } from '../dashboard/hooks/useWebSocket.ts';
 import { ProjectSidebar } from './ProjectSidebar.tsx';
 import { RightPanel } from './RightPanel.tsx';
 import { NotificationBanner } from '../dashboard/components/NotificationBanner.tsx';
-
-const LazyBishoujoCanvas = lazy(() =>
-  import('../bishoujo/components/BishoujoCanvas.tsx').then(m => ({ default: m.BishoujoCanvas }))
-);
 
 const WS_URL = `ws://${window.location.hostname}:${window.location.port || '3141'}/ws`;
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
@@ -31,25 +27,21 @@ export function UnifiedView() {
       <ProjectSidebar agents={agentList} onRename={handleRename} />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
-        <Suspense
-          fallback={
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--text-secondary)',
-                fontSize: 12,
-              }}
-            >
-              {t('loadingBishoujo')}
-            </div>
-          }
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)',
+            fontSize: 13,
+          }}
         >
-          <LazyBishoujoCanvas agents={agentList} />
-        </Suspense>
+          {agentList.length === 0
+            ? t('agents.noAgentsYet')
+            : t('header.agentCount', { count: agentList.length })}
+        </div>
 
         <div
           style={{

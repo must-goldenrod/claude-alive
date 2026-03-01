@@ -82,6 +82,9 @@
     "empty": "No completed sessions yet",
     "sessionCompleted": "Session completed"
   },
+  "pixelOffice": {
+    "title": "Pixel Office"
+  },
   "bubble": {
     "readingTool": "Reading {{tool}}...",
     "reading": "Reading...",
@@ -94,12 +97,5 @@
     "error": "Something went wrong...!",
     "listening": "Listening!",
     "done": "Done! Good work~"
-  },
-  "loadingBishoujo": "Loading Live2D scene...",
-  "gallery": {
-    "button": "Models",
-    "title": "Character Gallery",
-    "count": "{{count}} models",
-    "close": "Close"
   }
 }

@@ -35,8 +35,8 @@ cp "$ROOT/README.md" "$OUT/"
 # Create package.json for npm
 cat > "$OUT/package.json" << 'PKGJSON'
 {
-  "name": "@hoyoungyang0526/claude-alive",
-  "version": "0.1.2",
+  "name": "claude-alive",
+  "version": "0.2.0",
   "description": "Real-time animated UI for Claude Code sessions, powered by hooks",
   "license": "MIT",
   "type": "module",
@@ -59,11 +59,11 @@ cat > "$OUT/package.json" << 'PKGJSON'
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hoyoungyang0526/claude-alive.git"
+    "url": "git+https://github.com/hoyoungyang0526/claude-alive.git"
   },
   "homepage": "https://github.com/hoyoungyang0526/claude-alive",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "keywords": [
     "claude",

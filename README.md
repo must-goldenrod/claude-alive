@@ -1,18 +1,17 @@
 <p align="center">
   <h1 align="center">claude-alive</h1>
   <p align="center">
-    Real-time animated Live2D dashboard for Claude Code sessions<br/>
-    Claude Code 세션을 실시간 Live2D 캐릭터로 시각화하는 대시보드
+    Real-time pixel office dashboard for Claude Code sessions<br/>
+    Claude Code 세션을 실시간 픽셀 오피스로 시각화하는 대시보드
   </p>
 </p>
 
 <p align="center">
-  <a href="#install--설치">Install</a> •
+  <a href="#quick-start--빠른-시작">Quick Start</a> •
   <a href="#how-it-works--작동-원리">How It Works</a> •
   <a href="#features--주요-기능">Features</a> •
   <a href="#architecture--아키텍처">Architecture</a> •
   <a href="#development--개발">Development</a> •
-  <a href="#contributing--기여">Contributing</a> •
   <a href="#license--라이선스">License</a>
 </p>
 
@@ -20,59 +19,94 @@
 
 ## What is claude-alive? / claude-alive란?
 
-**English**
+**EN**
 
-claude-alive is an open-source monitoring dashboard that brings your Claude Code sessions to life. When Claude Code runs — writing code, reading files, running tests, spawning sub-agents — you normally only see text scrolling in a terminal. claude-alive captures every one of those lifecycle events through [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) and transforms them into an animated Live2D character display.
+claude-alive is an open-source monitoring dashboard that brings your Claude Code sessions to life as a pixel art office. When Claude Code runs — writing code, reading files, running tests, spawning sub-agents — you normally only see text scrolling in a terminal. claude-alive captures every one of those lifecycle events through [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks) and transforms them into animated pixel characters in a virtual office.
 
-Each Claude Code agent is represented by a Live2D (anime-style) character on screen. The character's expression, pose, and animation reflect what the agent is currently doing: typing when writing code, looking around when searching files, showing concern when encountering errors, and celebrating when tasks complete. Speech bubbles show the current tool being used. Multiple agents (including sub-agents) appear simultaneously, so you can watch an entire multi-agent session unfold visually.
+Each agent gets a pixel character that walks around, sits at desks, types on keyboards, and shows speech bubbles with the current tool being used. Sub-agents appear as smaller characters. An org chart overlay lets you see the full agent hierarchy at a glance.
 
-Everything is local — no data leaves your machine. The server runs on `localhost:3141` and only accepts connections from localhost.
+Everything runs locally — no data leaves your machine.
 
-**한국어**
+**KO**
 
-claude-alive는 Claude Code 세션을 실시간으로 시각화하는 오픈소스 모니터링 대시보드입니다. Claude Code가 코드를 작성하고, 파일을 읽고, 테스트를 실행하고, 서브에이전트를 생성할 때 — 터미널에서는 텍스트만 보이지만, claude-alive는 [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks)를 통해 모든 라이프사이클 이벤트를 캡처하고 이를 애니메이션 Live2D 캐릭터로 변환합니다.
+claude-alive는 Claude Code 세션을 픽셀아트 오피스로 실시간 시각화하는 오픈소스 모니터링 대시보드입니다. Claude Code가 코드를 작성하고, 파일을 읽고, 테스트를 실행하고, 서브에이전트를 생성할 때 — [Claude Code hooks](https://docs.anthropic.com/en/docs/claude-code/hooks)를 통해 모든 라이프사이클 이벤트를 캡처하고 이를 가상 오피스의 픽셀 캐릭터 애니메이션으로 변환합니다.
 
-각 Claude Code 에이전트는 화면에 Live2D(일본 애니메이션 스타일) 캐릭터로 나타납니다. 캐릭터의 표정, 자세, 애니메이션은 에이전트의 현재 작업을 반영합니다: 코드를 작성할 때는 타이핑, 파일을 검색할 때는 두리번거리기, 에러가 발생하면 걱정스러운 표정, 작업 완료 시에는 기쁜 표정. 말풍선은 현재 사용 중인 도구를 표시합니다. 서브에이전트를 포함한 여러 에이전트가 동시에 화면에 나타나서, 멀티에이전트 세션의 전체 흐름을 시각적으로 관찰할 수 있습니다.
+각 에이전트는 픽셀 캐릭터로 표현되어 오피스를 돌아다니고, 책상에 앉아 타이핑하고, 말풍선으로 현재 사용 중인 도구를 표시합니다. 서브에이전트는 작은 크기의 캐릭터로 나타납니다. 조직도 오버레이로 에이전트 계층을 한눈에 볼 수 있습니다.
 
-모든 데이터는 로컬에서만 처리됩니다. 서버는 `localhost:3141`에서 실행되며, localhost 연결만 허용합니다.
+모든 데이터는 로컬에서만 처리됩니다.
 
 ---
 
-## Install / 설치
+## Quick Start / 빠른 시작
 
-### npm (recommended / 권장)
+### Prerequisites / 필수 조건
+
+- **Node.js** ≥ 20
+- **pnpm** (install: `npm install -g pnpm`)
+- **Claude Code** installed and working
+
+### Option A: npm install (recommended / 권장)
 
 ```bash
-npm install -g @hoyoungyang0526/claude-alive --registry=https://npm.pkg.github.com
+# Install globally / 전역 설치
+npm install -g claude-alive
 
-# Register hooks with Claude Code / Claude Code에 훅 등록
+# Register hooks with Claude Code / 훅 등록
 claude-alive install
 
 # Start the dashboard / 대시보드 시작
 claude-alive start
 ```
 
-Open http://localhost:3141 — any running Claude Code session will appear automatically.
+Open **http://localhost:3141** — any running Claude Code session will appear automatically.
 
 http://localhost:3141 을 열면 실행 중인 Claude Code 세션이 자동으로 나타납니다.
 
-### From source / 소스에서 빌드
+### Option B: From source / 소스에서 빌드
 
 ```bash
+# 1. Clone / 클론
 git clone https://github.com/hoyoungyang0526/claude-alive.git
 cd claude-alive
 
+# 2. Install dependencies / 의존성 설치
 pnpm install
+
+# 3. Build all packages / 전체 빌드
 pnpm build
 
-# Download Live2D models / Live2D 모델 다운로드
-bash scripts/setup-live2d.sh
-
-# Register hooks / 훅 등록
+# 4. Register hooks / 훅 등록
 node packages/cli/dist/index.js install
 
-# Start / 서버 시작
+# 5. Start the server / 서버 시작
 node packages/server/dist/index.js
+```
+
+Open **http://localhost:3141** and navigate to the **Pixel Office** tab (`#pixel`).
+
+http://localhost:3141 을 열고 **Pixel Office** 탭 (`#pixel`)으로 이동하세요.
+
+### Verify it works / 동작 확인
+
+```bash
+# In another terminal, check server status / 다른 터미널에서 서버 상태 확인
+claude-alive status
+# → {"agents":[],"uptime":...}
+
+# Start a Claude Code session anywhere / 아무 데서나 Claude Code 시작
+claude
+# → The pixel office should show a new character spawning
+# → 픽셀 오피스에 새 캐릭터가 나타나야 합니다
+```
+
+### Uninstall / 제거
+
+```bash
+# Remove hooks from Claude Code settings / 훅 제거
+claude-alive uninstall
+
+# Uninstall globally / 전역 제거
+npm uninstall -g claude-alive
 ```
 
 ### CLI Commands / CLI 명령어
@@ -80,65 +114,15 @@ node packages/server/dist/index.js
 | Command | Description | 설명 |
 |---------|-------------|------|
 | `claude-alive install` | Register hooks in `~/.claude/settings.json` | 훅을 Claude Code 설정에 등록 |
-| `claude-alive uninstall` | Remove hooks | 훅 제거 |
+| `claude-alive uninstall` | Remove hooks from settings | 훅 제거 |
 | `claude-alive start` | Start the server on port 3141 | 서버 시작 (포트 3141) |
 | `claude-alive status` | Check if server is running | 서버 상태 확인 |
 
----
+**Environment variables / 환경 변수:**
 
-## Features / 주요 기능
-
-### Live2D Character Visualization / Live2D 캐릭터 시각화
-
-**EN:** Each Claude Code agent maps to a Live2D character. The system supports 5 model types (Haru, Hiyori, Mark, Natori, Rice) and automatically assigns characters to agents. Characters are arranged in a 3-row depth layout (back, mid, front) that scales dynamically based on the number of active agents.
-
-**KO:** 각 Claude Code 에이전트가 하나의 Live2D 캐릭터에 매핑됩니다. 5종의 모델(Haru, Hiyori, Mark, Natori, Rice)을 지원하며, 에이전트에 자동으로 캐릭터가 배정됩니다. 3행 깊이 레이아웃(뒤/중간/앞)으로 배치되며 활성 에이전트 수에 따라 동적으로 스케일링됩니다.
-
-### Real-time State Mapping / 실시간 상태 매핑
-
-**EN:** Agent states are reflected through character animations and expressions:
-
-| Agent State | Animation | Character Behavior |
-|-------------|-----------|-------------------|
-| Writing code | Typing | Fast hand movements |
-| Reading files | Reading | Looking down, focused |
-| Searching | Searching | Looking around |
-| Running Bash | Running | Energetic movement |
-| Waiting for permission | Waiting | Looking at user expectantly |
-| Error encountered | Error | Worried expression |
-| Idle / Listening | Idle | Relaxed, gentle breathing |
-| Task complete | Done | Happy expression |
-
-**KO:** 에이전트 상태가 캐릭터 애니메이션과 표정에 실시간으로 반영됩니다:
-
-| 에이전트 상태 | 애니메이션 | 캐릭터 반응 |
-|-------------|-----------|-----------|
-| 코드 작성 중 | 타이핑 | 빠른 손 움직임 |
-| 파일 읽는 중 | 읽기 | 아래를 보며 집중 |
-| 검색 중 | 검색 | 주위를 두리번거림 |
-| Bash 실행 중 | 실행 | 활기찬 움직임 |
-| 권한 대기 중 | 대기 | 사용자를 기대하며 바라봄 |
-| 에러 발생 | 에러 | 걱정스러운 표정 |
-| 대기 / 수신 중 | 유휴 | 편안한 자세, 호흡 |
-| 작업 완료 | 완료 | 기쁜 표정 |
-
-### Multi-Agent Support / 멀티에이전트 지원
-
-**EN:** When Claude Code spawns sub-agents (via the Task tool), each sub-agent appears as a new character on screen. Parent-child relationships are tracked, and when a sub-agent completes its work, the character gracefully exits. You can monitor complex multi-agent workflows where Claude delegates tasks to specialized sub-agents.
-
-**KO:** Claude Code가 서브에이전트를 생성하면(Task 도구 사용), 각 서브에이전트가 새로운 캐릭터로 화면에 나타납니다. 부모-자식 관계가 추적되며, 서브에이전트의 작업이 끝나면 캐릭터가 자연스럽게 퇴장합니다. Claude가 전문 서브에이전트에게 작업을 위임하는 복잡한 멀티에이전트 워크플로우를 시각적으로 모니터링할 수 있습니다.
-
-### Project Sidebar / 프로젝트 사이드바
-
-**EN:** The left sidebar groups agents by their working directory (project). Each project shows its active agents, their current state, and the tool they're using. This gives a clear overview when Claude Code is working across multiple projects simultaneously.
-
-**KO:** 왼쪽 사이드바는 에이전트를 작업 디렉토리(프로젝트)별로 그룹화합니다. 각 프로젝트에 활성 에이전트, 현재 상태, 사용 중인 도구가 표시됩니다. Claude Code가 여러 프로젝트에서 동시에 작업할 때 전체 상황을 한눈에 파악할 수 있습니다.
-
-### Event Stream / 이벤트 스트림
-
-**EN:** The right panel shows a chronological stream of all hook events as they happen — tool calls, permission requests, agent spawns/despawns, errors. Useful for debugging and understanding exactly what Claude Code is doing.
-
-**KO:** 오른쪽 패널에 모든 훅 이벤트가 시간순으로 표시됩니다 — 도구 호출, 권한 요청, 에이전트 생성/종료, 에러 등. Claude Code가 정확히 무엇을 하고 있는지 이해하고 디버깅하는 데 유용합니다.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLAUDE_ALIVE_PORT` | `3141` | Server port / 서버 포트 |
 
 ---
 
@@ -153,28 +137,32 @@ localhost:3141/api/event
   ↓ SessionStore + FSM
 WebSocket broadcast
   ↓
-React UI (Live2D view)
+React UI (Pixel Office / Dashboard)
 ```
 
-### EN
+**EN**
 
-1. **Hooks** — `claude-alive install` registers shell scripts in `~/.claude/settings.json`. Claude Code calls these scripts on every lifecycle event (`SessionStart`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `Stop`, `SubagentStart`, etc.), passing event data as JSON on stdin.
+1. **Hooks** — `claude-alive install` copies `stream-event.sh` to `~/.claude-alive/hooks/` and registers it in `~/.claude/settings.json` for all lifecycle events. Claude Code calls this script on every event, passing JSON on stdin.
 
-2. **stream-event.sh** — The hook script reads the JSON from stdin and sends it as an HTTP POST to `localhost:3141/api/event`. It runs asynchronously with a 5-second timeout, so it never blocks Claude Code.
+2. **stream-event.sh** — Reads JSON from stdin and POSTs it to `localhost:3141/api/event`. Runs async with a 5-second timeout so it never blocks Claude Code.
 
-3. **Server** — A lightweight Node.js HTTP server receives events, updates the session store (which tracks all active agents and their states), and broadcasts state changes to all connected WebSocket clients.
+3. **Server** — A lightweight Node.js HTTP + WebSocket server receives events, updates the session store (tracking all agents and states via an FSM), and broadcasts changes to all connected clients.
 
-4. **UI** — A React app connects via WebSocket, receives agent state snapshots and updates, and renders Live2D characters using PixiJS. The state machine determines each character's animation, expression, and speech bubble.
+4. **UI** — A React app connects via WebSocket and renders two views:
+   - **Dashboard** — 3-column layout with project sidebar, activity pulse, and event stream
+   - **Pixel Office** — Canvas 2D pixel art office where agents are animated characters
 
-### KO
+**KO**
 
-1. **훅** — `claude-alive install`이 `~/.claude/settings.json`에 쉘 스크립트를 등록합니다. Claude Code는 모든 라이프사이클 이벤트(`SessionStart`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `Stop`, `SubagentStart` 등)에서 이 스크립트를 호출하며, stdin으로 JSON 이벤트 데이터를 전달합니다.
+1. **훅** — `claude-alive install`이 `stream-event.sh`를 `~/.claude-alive/hooks/`에 복사하고 `~/.claude/settings.json`에 등록합니다. Claude Code는 모든 라이프사이클 이벤트마다 이 스크립트를 호출하며 stdin으로 JSON을 전달합니다.
 
-2. **stream-event.sh** — 훅 스크립트가 stdin에서 JSON을 읽어 `localhost:3141/api/event`로 HTTP POST 요청을 보냅니다. 비동기로 실행되고 5초 타임아웃이 설정되어 있어 Claude Code를 절대 차단하지 않습니다.
+2. **stream-event.sh** — stdin에서 JSON을 읽어 `localhost:3141/api/event`로 POST합니다. 비동기 실행, 5초 타임아웃으로 Claude Code를 차단하지 않습니다.
 
-3. **서버** — 경량 Node.js HTTP 서버가 이벤트를 수신하고, 세션 스토어(모든 활성 에이전트와 상태를 추적)를 업데이트하고, 연결된 모든 WebSocket 클라이언트에 상태 변경을 브로드캐스트합니다.
+3. **서버** — Node.js HTTP + WebSocket 서버가 이벤트를 수신하고, 세션 스토어(FSM으로 에이전트 상태 추적)를 업데이트하고, 모든 클라이언트에 브로드캐스트합니다.
 
-4. **UI** — React 앱이 WebSocket으로 연결되어 에이전트 상태 스냅샷과 업데이트를 수신하고, PixiJS를 사용해 Live2D 캐릭터를 렌더링합니다. 상태 머신이 각 캐릭터의 애니메이션, 표정, 말풍선을 결정합니다.
+4. **UI** — React 앱이 WebSocket으로 연결되어 두 가지 뷰를 렌더링합니다:
+   - **Dashboard** — 프로젝트 사이드바, 활동 펄스, 이벤트 스트림의 3컬럼 레이아웃
+   - **Pixel Office** — Canvas 2D 픽셀아트 오피스에서 에이전트가 캐릭터로 움직임
 
 ### Agent State Machine / 에이전트 상태 머신
 
@@ -186,50 +174,71 @@ spawning → listening → active → idle
               done → despawning → removed
 ```
 
-**EN:** State transitions are driven by hook events. `PreToolUse` triggers `active`, `PermissionRequest` triggers `waiting`, `Stop` triggers `idle`, and `SessionEnd` triggers `despawning`. The FSM prevents invalid transitions and ensures characters animate smoothly between states.
-
-**KO:** 상태 전환은 훅 이벤트에 의해 구동됩니다. `PreToolUse`는 `active`, `PermissionRequest`는 `waiting`, `Stop`은 `idle`, `SessionEnd`는 `despawning`을 트리거합니다. FSM은 잘못된 전환을 방지하고 캐릭터가 상태 간 부드럽게 애니메이션되도록 합니다.
-
 ### Supported Hook Events / 지원하는 훅 이벤트
 
-| Event | Description | 설명 |
-|-------|-------------|------|
-| `SessionStart` | New Claude Code session begins | 새 Claude Code 세션 시작 |
-| `SessionEnd` | Session ends | 세션 종료 |
-| `UserPromptSubmit` | User sends a prompt | 사용자가 프롬프트 전송 |
-| `PreToolUse` | Before a tool is called | 도구 호출 전 |
-| `PostToolUse` | After a tool completes | 도구 호출 완료 후 |
-| `PostToolUseFailure` | Tool call failed | 도구 호출 실패 |
-| `PermissionRequest` | Waiting for user permission | 사용자 권한 대기 |
-| `Stop` | Agent stops processing | 에이전트 처리 중단 |
-| `Notification` | System notification | 시스템 알림 |
-| `SubagentStart` | Sub-agent spawned | 서브에이전트 생성 |
-| `SubagentStop` | Sub-agent completed | 서브에이전트 완료 |
-| `TaskCompleted` | Task finished | 작업 완료 |
-| `PreCompact` | Before context compaction | 컨텍스트 압축 전 |
+| Event | Triggers |
+|-------|----------|
+| `SessionStart` / `SessionEnd` | Agent spawn / despawn |
+| `PreToolUse` / `PostToolUse` | Active state + tool animation |
+| `PostToolUseFailure` | Error state |
+| `PermissionRequest` | Waiting state |
+| `SubagentStart` / `SubagentStop` | Sub-agent spawn / despawn |
+| `UserPromptSubmit` | Character faces user |
+| `Stop` | Return to idle |
+| `Notification`, `TaskCompleted`, `PreCompact` | Event log |
 
 ---
 
-## Live2D Setup / Live2D 설정
+## Features / 주요 기능
 
-**EN:** Live2D Cubism SDK Core and sample models are **proprietary** and cannot be bundled with this open-source project. You must download them separately:
+### Pixel Office / 픽셀 오피스
 
-**KO:** Live2D Cubism SDK Core와 샘플 모델은 **독점 소프트웨어**이므로 이 오픈소스 프로젝트에 포함할 수 없습니다. 별도로 다운로드해야 합니다:
+**EN:** A 40×24 tile pixel art office with 4 zones (3 work areas + 1 break room). Each agent is a pixel character with 6 color palettes. Characters walk via BFS pathfinding, sit at desks, and show typing/reading animations based on the current tool.
 
-```bash
-bash scripts/setup-live2d.sh
-```
+**KO:** 40×24 타일의 픽셀아트 오피스, 4개 존(작업 영역 3개 + 휴게실 1개). 6가지 색상 팔레트의 픽셀 캐릭터. BFS 길찾기로 이동하고, 책상에 앉아 현재 도구에 따라 타이핑/읽기 애니메이션을 표시합니다.
 
-**EN:** By running this script you agree to the [Live2D Proprietary Software License](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html) and the [Live2D Free Material License](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html). The script downloads:
+**Office features / 오피스 기능:**
+- Desks with monitors, chairs, bookshelves, plants
+- Break room with sofa, coffee machine, snack machine, meeting table
+- Whiteboards, posters, wall clocks
+- Corridors with doors connecting zones
 
-**KO:** 이 스크립트를 실행하면 [Live2D 독점 소프트웨어 라이선스](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html)와 [Live2D 무료 소재 라이선스](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html)에 동의하는 것입니다. 다운로드 항목:
+### Agent Hierarchy / 에이전트 계층
 
-- **Cubism Core SDK** — `live2dcubismcore.min.js` (rendering engine / 렌더링 엔진)
-- **Sample models / 샘플 모델** — Haru, Hiyori, Mark, Natori, Rice
+**EN:** Toggleable org chart overlay shows parent↔child agent relationships as a tree. Click any node to pan the camera to that character. Nodes show mini character sprites, name, and live status.
 
-Files are placed in `packages/ui/public/live2d/` and excluded from git.
+**KO:** 토글 가능한 조직도 오버레이가 부모↔자식 에이전트 관계를 트리로 표시합니다. 노드를 클릭하면 해당 캐릭터로 카메라가 이동합니다. 미니 스프라이트, 이름, 실시간 상태를 표시합니다.
 
-파일은 `packages/ui/public/live2d/`에 배치되며 git에서 제외됩니다.
+### Real-time State Mapping / 실시간 상태 매핑
+
+| Agent State | Character Behavior | 캐릭터 반응 |
+|-------------|-------------------|-----------|
+| Writing code | Typing animation at desk | 책상에서 타이핑 |
+| Reading files | Reading animation | 읽기 애니메이션 |
+| Waiting for permission | Yellow bubble "..." | 노란 말풍선 "..." |
+| Error | Red bubble "!" | 빨간 말풍선 "!" |
+| Idle | Wanders around office | 오피스 돌아다님 |
+| Sub-agent spawned | Smaller character appears with matrix effect | 작은 캐릭터 + 매트릭스 이펙트 |
+
+### Multi-Agent & Sub-Agent / 멀티에이전트
+
+**EN:** Sub-agents appear as 75% scale characters. Each gets assigned to the same zone as their parent project. Speech bubbles show the current tool name (e.g., "Read", "Bash", "Edit").
+
+**KO:** 서브에이전트는 75% 크기 캐릭터로 표시. 부모 프로젝트와 같은 존에 배정. 말풍선에 현재 도구명 표시 (예: "Read", "Bash", "Edit").
+
+### Dashboard View / 대시보드 뷰
+
+**EN:** Traditional monitoring view with project sidebar (groups agents by working directory), activity pulse, and chronological event stream.
+
+**KO:** 프로젝트 사이드바(작업 디렉토리별 에이전트 그룹), 활동 펄스, 시간순 이벤트 스트림의 전통적 모니터링 뷰.
+
+### Camera Controls / 카메라 조작
+
+| Action | Control |
+|--------|---------|
+| Pan | Left-click drag |
+| Zoom | Mouse wheel (0.25 step, range 0.5–8x) |
+| Click character | Show tooltip |
 
 ---
 
@@ -240,122 +249,135 @@ Files are placed in `packages/ui/public/live2d/` and excluded from git.
 ```
 claude-alive/
 ├── packages/
-│   ├── core        # Agent types, FSM, session store, WS protocol
-│   │               # 에이전트 타입, 상태머신, 세션 스토어, WS 프로토콜
-│   ├── server      # HTTP + WebSocket server, static file serving
-│   │               # HTTP + WebSocket 서버, 정적 파일 서빙
-│   ├── hooks       # Hook installer for ~/.claude/settings.json
-│   │               # 훅 설치기 (settings.json에 훅 등록)
-│   ├── cli         # CLI: install / uninstall / start / status
-│   │               # CLI 명령어
-│   ├── i18n        # EN/KO translations (i18next)
-│   │               # 영어/한국어 번역 (i18next)
-│   └── ui          # React + PixiJS + Live2D web app
-│                   # React + PixiJS + Live2D 웹 앱
+│   ├── core/       # Agent types, FSM, session store, WS protocol
+│   ├── server/     # HTTP + WebSocket server (port 3141)
+│   ├── hooks/      # Hook installer + stream-event.sh
+│   ├── cli/        # CLI: install / uninstall / start / status
+│   ├── i18n/       # EN/KO translations (i18next)
+│   └── ui/         # React + Canvas 2D pixel office
+│       └── src/views/
+│           ├── pixel/          # Pixel Office view
+│           │   ├── engine/     # Tilemap, renderer, camera, characters, pathfinding
+│           │   ├── components/ # PixelCanvas, OrgChart overlay
+│           │   └── utils/      # Agent tree builder, sprite caching
+│           ├── dashboard/      # Dashboard components + hooks
+│           └── unified/        # Shared sidebar, right panel
 ├── npm/            # esbuild entry points for npm package
-│                   # npm 패키지용 esbuild 엔트리 포인트
 └── scripts/        # Build & setup scripts
-                    # 빌드 및 설정 스크립트
 ```
-
-### UI Layout / UI 레이아웃
-
-```
-┌──────────────┬──────────────────────┬───────────────┐
-│              │                      │               │
-│  Project     │    Live2D Canvas     │  Activity     │
-│  Sidebar     │                      │  Pulse        │
-│  (280px)     │   ┌──┐  ┌──┐  ┌──┐  │               │
-│              │   │  │  │  │  │  │  │  Event        │
-│  - Project A │   └──┘  └──┘  └──┘  │  Stream       │
-│    - Agent 1 │      ┌──┐  ┌──┐     │               │
-│    - Agent 2 │      │  │  │  │     │  - ToolUse    │
-│  - Project B │      └──┘  └──┘     │  - Permission │
-│    - Agent 3 │        ┌────┐       │  - Error      │
-│              │        │    │       │  - ...        │
-│              │        └────┘       │               │
-│              │                      │               │
-└──────────────┴──────────────────────┴───────────────┘
-```
-
-**EN:** The UI is a 3-column layout. The left sidebar shows projects and their agents. The center canvas renders Live2D characters arranged in a 3-row depth layout (back row at smaller scale, front row at larger scale, creating a sense of depth). The right panel shows real-time activity pulses and an event stream.
-
-**KO:** UI는 3컬럼 레이아웃입니다. 왼쪽 사이드바에 프로젝트와 에이전트가 표시됩니다. 중앙 캔버스에 Live2D 캐릭터가 3행 깊이 레이아웃(뒤쪽 행은 작은 스케일, 앞쪽 행은 큰 스케일)으로 배치되어 원근감을 줍니다. 오른쪽 패널에 실시간 활동 펄스와 이벤트 스트림이 표시됩니다.
 
 ### Tech Stack / 기술 스택
 
 | Layer | Technology |
 |-------|-----------|
 | Monorepo | pnpm workspaces + Turborepo |
-| Backend | Node.js (no frameworks), `ws` WebSocket library |
+| Backend | Node.js, `ws` WebSocket library |
 | Frontend | React 19, Vite 6, Tailwind CSS 4 |
-| Live2D | PixiJS v8 + pixi-live2d-display |
+| Pixel Engine | Canvas 2D API (no external game libs) |
 | i18n | i18next + react-i18next (EN/KO) |
-| Bundling | esbuild (for npm package), Vite (for UI) |
+| Bundling | esbuild (npm package), Vite (UI dev) |
+
+### UI Layout / UI 레이아웃
+
+**Pixel Office:**
+
+```
+┌──────────────┬──────────────────────────┬───────────────┐
+│              │  [⊞] Org Chart Toggle    │               │
+│  Project     │                          │  Activity     │
+│  Sidebar     │    Pixel Office Canvas   │  Pulse        │
+│  (280px)     │                          │               │
+│              │  ┌─Zone A──┬─Zone B──┐   │  Event        │
+│  - Project A │  │ 🧑‍💻 🧑‍💻  │ 🧑‍💻 🧑‍💻  │   │  Stream       │
+│    - agent1  │  ├─Zone C──┼─Break───┤   │               │
+│  - Project B │  │ 🧑‍💻 🧑‍💻  │ ☕ 🛋   │   │  - ToolUse    │
+│    - agent2  │  └─────────┴─────────┘   │  - Spawn      │
+│              │                          │  - Error      │
+└──────────────┴──────────────────────────┴───────────────┘
+```
 
 ### Security / 보안
 
-**EN:**
-- All HTTP endpoints only accept requests from `localhost` origins (CORS restricted)
+- All HTTP endpoints only accept `localhost` requests (CORS restricted)
 - Path traversal protection on static file serving
 - Request body size limited to 1MB
 - No external network calls — everything runs locally
-
-**KO:**
-- 모든 HTTP 엔드포인트는 `localhost` 출처의 요청만 허용 (CORS 제한)
-- 정적 파일 서빙에 경로 탐색(path traversal) 방어 적용
-- 요청 본문 크기 1MB 제한
-- 외부 네트워크 호출 없음 — 모든 것이 로컬에서 실행
 
 ---
 
 ## Development / 개발
 
-### Prerequisites / 필수 조건
+### Setup / 설정
 
-- Node.js ≥ 20
-- pnpm
+```bash
+git clone https://github.com/hoyoungyang0526/claude-alive.git
+cd claude-alive
+pnpm install
+```
 
 ### Commands / 명령어
 
 ```bash
-pnpm install          # Install dependencies / 의존성 설치
-pnpm build            # Build all packages / 전체 빌드
-pnpm dev              # Dev mode with hot reload / 핫 리로드 개발 모드
+# Build all packages (respects dependency order via Turborepo)
+pnpm build
 
-# Type check / 타입 체크
+# Dev mode with hot reload (builds first, then watches)
+pnpm dev
+
+# Type check UI package
 pnpm --filter=@claude-alive/ui exec tsc --noEmit
 
-# Build npm package / npm 패키지 빌드
+# Build npm distributable
 bash scripts/build-npm.sh
+```
+
+### Package Dependency Graph / 패키지 의존 관계
+
+```
+core ← server ← cli
+  ↑       ↑
+  └── ui ──┘
+       ↑
+      i18n
+hooks (standalone, no runtime deps)
+```
+
+- `core` — shared types, FSM, session store, WS protocol
+- `server` — depends on `core`, serves `ui` build output as static files
+- `cli` — depends on `hooks`, spawns `server` process
+- `ui` — depends on `core` and `i18n`
+- `hooks` — standalone, generates `stream-event.sh`
+
+### Running from source (dev mode) / 소스에서 개발 모드 실행
+
+```bash
+# Terminal 1: Build and start the server
+pnpm build
+node packages/server/dist/index.js
+
+# Terminal 2: Start the UI dev server (hot reload)
+pnpm --filter=@claude-alive/ui dev
+# → Opens at http://localhost:5173 (Vite dev server)
+# → The dev server proxies WebSocket to localhost:3141
+
+# Terminal 3: Register hooks and start a Claude Code session
+node packages/cli/dist/index.js install
+claude   # Start any Claude Code session
 ```
 
 ---
 
 ## Contributing / 기여
 
-**EN:**
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feat/my-feature`)
 3. Commit your changes
 4. Push and open a Pull Request
 
-Please keep PRs focused — one feature or fix per PR.
-
-**KO:**
-1. 리포지토리를 포크합니다
-2. 피처 브랜치를 생성합니다 (`git checkout -b feat/my-feature`)
-3. 변경사항을 커밋합니다
-4. 푸시하고 Pull Request를 엽니다
-
-PR은 하나의 기능 또는 수정에 집중해 주세요.
+PRs should focus on one feature or fix.
 
 ---
 
 ## License / 라이선스
 
 [MIT](LICENSE)
-
-**EN:** Live2D SDK and models are licensed separately under [Live2D proprietary licenses](https://www.live2d.com/en/sdk/about/) and are **not included** in this repository.
-
-**KO:** Live2D SDK와 모델은 [Live2D 독점 라이선스](https://www.live2d.com/en/sdk/about/) 하에 별도로 라이선스되며, 이 리포지토리에 **포함되지 않습니다**.
