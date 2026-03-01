@@ -141,26 +141,29 @@ export default function PixelCanvas({ camera, tileMap, entities, onTileClick, on
     [camera, onTileClick, onWorldClick],
   );
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<HTMLCanvasElement>) => {
+  // Native wheel listener with { passive: false } to allow preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
       const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.current.zoom + delta));
       camera.current = { ...camera.current, zoom: newZoom };
-    },
-    [camera],
-  );
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [camera]);
 
   return (
     <canvas
       ref={canvasRef}
       className="pixel-canvas"
-      style={{ cursor: 'grab' }}
+      style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
       onContextMenu={(e) => e.preventDefault()}
     />
   );
