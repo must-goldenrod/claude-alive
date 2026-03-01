@@ -31,38 +31,38 @@ export function CompletionLog({ completedSessions }: CompletionLogProps) {
 
   return (
     <div
-      className="flex flex-col border rounded-lg overflow-hidden"
-      style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)', maxHeight: 200 }}
+      className="flex flex-col border rounded-xl overflow-hidden"
+      style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)', maxHeight: 220 }}
     >
       <div
-        className="px-5 py-3 text-xs font-medium border-b shrink-0 flex items-center justify-between"
+        className="px-5 py-4 text-[13px] font-semibold border-b shrink-0 flex items-center justify-between"
         style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}
       >
         <span>{t('completionLog.title')}</span>
         {completedSessions.length > 0 && (
           <span
-            className="px-2 py-0.5 rounded text-[11px]"
+            className="px-2.5 py-0.5 rounded-md text-[11px] font-medium"
             style={{ background: 'var(--accent-green)20', color: 'var(--accent-green)' }}
           >
             {completedSessions.length}
           </span>
         )}
       </div>
-      <div className="overflow-y-auto p-2 space-y-1">
+      <div className="overflow-y-auto p-3 space-y-0.5">
         {sorted.length === 0 ? (
-          <div className="text-center py-4 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-center py-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
             {t('completionLog.empty')}
           </div>
         ) : (
           sorted.map((session, i) => (
             <div
               key={`${session.sessionId}-${i}`}
-              className="flex items-center gap-2.5 px-3 py-2 rounded text-[11px] hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs hover:bg-white/5 transition-colors"
             >
               <span className="shrink-0" style={{ color: 'var(--accent-green)' }}>●</span>
               <span
                 className="font-medium truncate"
-                style={{ color: 'var(--text-primary)', maxWidth: 100 }}
+                style={{ color: 'var(--text-primary)', maxWidth: 110 }}
                 title={session.cwd}
               >
                 {session.projectName}
@@ -70,7 +70,7 @@ export function CompletionLog({ completedSessions }: CompletionLogProps) {
               <span className="truncate flex-1" style={{ color: 'var(--text-secondary)' }}>
                 {session.displayName || session.sessionId.slice(0, 8)}
               </span>
-              <span className="shrink-0 text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+              <span className="shrink-0 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                 {formatTimeSince(now, session.completedAt, t)}
               </span>
             </div>

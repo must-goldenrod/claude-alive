@@ -40,18 +40,19 @@ export function EventStream({ events, agents }: EventStreamProps) {
 
   return (
     <div
-      className="flex flex-col border rounded-lg overflow-hidden flex-1 min-h-0"
+      className="flex flex-col border rounded-xl overflow-hidden flex-1 min-h-0"
       style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
     >
       <div
-        className="px-5 py-3.5 text-xs font-medium border-b shrink-0"
+        className="px-5 py-4 text-[13px] font-semibold border-b shrink-0 flex items-center justify-between"
         style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}
       >
-        {t('eventStream.title')} ({events.length})
+        <span>{t('eventStream.title')}</span>
+        <span className="text-xs font-normal" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>{events.length}</span>
       </div>
-      <div className="overflow-y-auto flex-1 p-3 space-y-1">
+      <div className="overflow-y-auto flex-1 p-3 space-y-0.5">
         {events.length === 0 && (
-          <div className="text-center py-6 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-center py-8 text-sm" style={{ color: 'var(--text-secondary)' }}>
             {t('eventStream.waiting')}
           </div>
         )}
@@ -70,23 +71,23 @@ export function EventStream({ events, agents }: EventStreamProps) {
           return (
             <div
               key={entry.id}
-              className="flex items-center gap-3 px-3 py-2 rounded text-[11px] hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs hover:bg-white/5 transition-colors"
             >
-              <span className="shrink-0 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <span className="shrink-0 text-xs" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                 {time}
               </span>
               <span
-                className="shrink-0 truncate font-medium text-xs px-1.5 py-0.5 rounded"
-                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', maxWidth: 120 }}
+                className="shrink-0 truncate font-medium text-xs px-2 py-1 rounded-md"
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', maxWidth: 130 }}
                 title={entry.sessionId}
               >
                 {agentName}
               </span>
-              <span className="truncate" style={{ color }}>
+              <span className="truncate text-xs" style={{ color }}>
                 {description}
               </span>
               <span
-                className="ml-auto shrink-0 px-2 py-0.5 rounded text-xs"
+                className="ml-auto shrink-0 px-2.5 py-1 rounded-md text-[11px] font-medium"
                 style={{ background: `${color}15`, color }}
               >
                 {stateLabel}

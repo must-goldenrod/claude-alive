@@ -25,23 +25,24 @@ export function NotificationBanner({ agents }: NotificationBannerProps) {
         return (
           <div
             key={agent.sessionId}
-            className="flex items-center gap-4 px-5 py-4 rounded-lg border"
+            className="flex items-center gap-5 px-6 py-5 rounded-xl border"
             style={{
               borderColor: config.color,
               background: `${config.color}10`,
+              backdropFilter: 'blur(12px)',
             }}
           >
-            <span className="text-lg shrink-0">{config.icon}</span>
+            <span className="text-xl shrink-0">{config.icon}</span>
             <div className="flex-1 min-w-0">
-              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              <span className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {label}
               </span>
-              <span className="text-sm mx-2" style={{ color: 'var(--text-secondary)' }}>—</span>
-              <span className="text-sm" style={{ color: config.color }}>
+              <span className="text-[15px] mx-2" style={{ color: 'var(--text-secondary)' }}>—</span>
+              <span className="text-[15px]" style={{ color: config.color }}>
                 {t(config.messageKey)}
               </span>
             </div>
-            <span className="text-xs font-mono shrink-0" style={{ color: 'var(--text-secondary)' }}>
+            <span className="text-xs shrink-0" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
               {agent.sessionId.slice(0, 8)}
             </span>
           </div>

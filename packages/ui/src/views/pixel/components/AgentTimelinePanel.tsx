@@ -15,14 +15,14 @@ interface AgentTimelinePanelProps {
 }
 
 const STATE_COLORS: Record<string, string> = {
-  spawning: '#a78bfa',
-  idle: '#8888a0',
-  listening: '#60a5fa',
-  active: '#4ade80',
-  waiting: '#fbbf24',
-  error: '#f87171',
-  done: '#4ade80',
-  despawning: '#f87171',
+  spawning: 'var(--accent-purple)',
+  idle: 'var(--text-secondary)',
+  listening: 'var(--accent-blue)',
+  active: 'var(--accent-green)',
+  waiting: 'var(--accent-amber)',
+  error: 'var(--accent-red)',
+  done: 'var(--accent-green)',
+  despawning: 'var(--accent-red)',
 };
 
 const TOOL_ICONS: Record<string, string> = {
@@ -128,40 +128,42 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
       minHeight: 200,
       maxHeight: 400,
       zIndex: 15,
-      background: 'rgba(10, 10, 20, 0.95)',
-      borderTop: '1px solid #333348',
+      background: 'rgba(13, 17, 23, 0.96)',
+      borderTop: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
+      backdropFilter: 'blur(12px)',
     }}>
       {/* Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '10px 16px',
-        borderBottom: '1px solid #2a2a3a',
+        gap: 12,
+        padding: '14px 20px',
+        borderBottom: '1px solid var(--border-color)',
         flexShrink: 0,
       }}>
         <div style={{
-          width: 8,
-          height: 8,
+          width: 10,
+          height: 10,
           borderRadius: '50%',
           background: stateColor,
-          boxShadow: agent.state === 'active' ? `0 0 6px ${stateColor}` : 'none',
+          boxShadow: agent.state === 'active' ? `0 0 8px ${stateColor}` : 'none',
         }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#e0e0e8' }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
           {displayName}
         </span>
-        <span style={{ fontSize: 11, color: '#8888a0' }}>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
           {agent.state}
         </span>
         {agent.currentTool && (
           <span style={{
-            fontSize: 11,
-            padding: '1px 8px',
-            borderRadius: 3,
+            fontSize: 12,
+            padding: '3px 10px',
+            borderRadius: 8,
             background: `${stateColor}20`,
             color: stateColor,
+            fontFamily: 'var(--font-mono)',
           }}>
             {agent.currentTool}
           </span>
@@ -172,9 +174,9 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
             marginLeft: 'auto',
             background: 'none',
             border: 'none',
-            color: '#8888a0',
+            color: 'var(--text-secondary)',
             cursor: 'pointer',
-            fontSize: 16,
+            fontSize: 18,
             padding: '0 4px',
           }}
         >
@@ -186,10 +188,10 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
       <div ref={scrollRef} style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '8px 16px',
+        padding: '12px 20px',
       }}>
         {timeline.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#555570', fontSize: 12, paddingTop: 32 }}>
+          <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 14, paddingTop: 36 }}>
             No events yet
           </div>
         ) : (
@@ -199,19 +201,19 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
                 <div key={`p-${i}`} style={{
                   display: 'flex',
                   justifyContent: 'flex-end',
-                  marginBottom: 8,
+                  marginBottom: 10,
                 }}>
                   <div style={{
                     maxWidth: '80%',
-                    padding: '8px 12px',
-                    borderRadius: '12px 12px 2px 12px',
-                    background: '#1a3a5c',
-                    border: '1px solid #2a4a6c',
+                    padding: '10px 14px',
+                    borderRadius: '14px 14px 4px 14px',
+                    background: 'rgba(88, 166, 255, 0.12)',
+                    border: '1px solid rgba(88, 166, 255, 0.2)',
                   }}>
-                    <div style={{ fontSize: 12, color: '#e0e0e8', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {item.text}
                     </div>
-                    <div style={{ fontSize: 10, color: '#6688aa', marginTop: 4, textAlign: 'right' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 6, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
                       {formatTime(item.timestamp)}
                     </div>
                   </div>
@@ -231,15 +233,15 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
               return (
                 <div key={`e-${entry.id}`} style={{
                   textAlign: 'center',
-                  marginBottom: 6,
-                  marginTop: 6,
+                  marginBottom: 8,
+                  marginTop: 8,
                 }}>
                   <span style={{
-                    fontSize: 10,
-                    color: '#555570',
-                    padding: '2px 10px',
-                    background: '#1a1a28',
-                    borderRadius: 10,
+                    fontSize: 11,
+                    color: 'var(--text-secondary)',
+                    padding: '4px 12px',
+                    background: 'var(--bg-card)',
+                    borderRadius: 12,
                   }}>
                     {summary} &middot; {formatTime(entry.timestamp)}
                   </span>
@@ -251,20 +253,20 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
               <div key={`e-${entry.id}`} style={{
                 display: 'flex',
                 justifyContent: 'flex-start',
-                marginBottom: 6,
+                marginBottom: 8,
               }}>
                 <div style={{
                   maxWidth: '80%',
-                  padding: '6px 10px',
-                  borderRadius: '12px 12px 12px 2px',
-                  background: isError ? '#3a1a1a' : '#1a1a2e',
-                  border: `1px solid ${isError ? '#4a2a2a' : '#2a2a3e'}`,
+                  padding: '8px 12px',
+                  borderRadius: '14px 14px 14px 4px',
+                  background: isError ? 'rgba(248, 81, 73, 0.1)' : 'var(--bg-card)',
+                  border: `1px solid ${isError ? 'rgba(248, 81, 73, 0.2)' : 'var(--border-color)'}`,
                 }}>
-                  <div style={{ fontSize: 12, color: isError ? '#f87171' : '#b0b0c0' }}>
-                    {toolIcon && <span style={{ marginRight: 4 }}>{toolIcon}</span>}
+                  <div style={{ fontSize: 13, color: isError ? 'var(--accent-red)' : 'var(--text-primary)' }}>
+                    {toolIcon && <span style={{ marginRight: 6 }}>{toolIcon}</span>}
                     {summary}
                   </div>
-                  <div style={{ fontSize: 10, color: '#555570', marginTop: 2 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
                     {formatTime(entry.timestamp)}
                   </div>
                 </div>

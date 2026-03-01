@@ -4,7 +4,7 @@ import type { EventLogEntry } from '@claude-alive/core';
 import { useNow } from '../hooks/useNow.ts';
 
 const WINDOW_SECONDS = 60;
-const MAX_HEIGHT = 48;
+const MAX_HEIGHT = 56;
 
 type EventCategory = 'tool' | 'prompt' | 'permission' | 'system';
 
@@ -79,11 +79,11 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
 
   return (
     <div
-      className="border rounded-lg overflow-hidden"
+      className="border rounded-xl overflow-hidden"
       style={{ background: 'var(--bg-card)', borderColor: 'var(--border-color)' }}
     >
       <div
-        className="px-5 py-3.5 text-xs font-medium border-b flex items-center justify-between"
+        className="px-5 py-4 text-[13px] font-semibold border-b flex items-center justify-between"
         style={{
           color: 'var(--text-secondary)',
           borderColor: 'var(--border-color)',
@@ -91,26 +91,26 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
         }}
       >
         <span>{t('activity.title')}</span>
-        <div className="flex items-center gap-2 text-[10px]">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.tool }} />
+        <div className="flex items-center gap-3 text-[11px]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.tool }} />
             {t('activity.tools')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.prompt }} />
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.prompt }} />
             {t('activity.prompts')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.permission }} />
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.permission }} />
             {t('activity.permissions')}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.system }} />
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CATEGORY_COLORS.system }} />
             {t('activity.system')}
           </span>
         </div>
       </div>
-      <div className="px-4 py-4 flex items-end gap-px" style={{ height: MAX_HEIGHT + 28 }}>
+      <div className="px-5 py-5 flex items-end gap-px" style={{ height: MAX_HEIGHT + 32 }}>
         {bars.map((bar, i) => (
           <div
             key={i}
@@ -118,7 +118,7 @@ export function ActivityPulse({ events }: ActivityPulseProps) {
             style={{
               height: bar.height,
               background: bar.color,
-              opacity: bar.total > 0 ? 0.8 : 0.15,
+              opacity: bar.total > 0 ? 0.8 : 0.12,
               flex: '1 1 0',
             }}
           />

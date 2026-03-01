@@ -14,12 +14,12 @@ interface OrgChartOverlayProps {
   camera: React.MutableRefObject<Camera>;
 }
 
-const NODE_WIDTH = 136;
-const NODE_HEIGHT = 56;
-const H_GAP = 16;
-const V_GAP = 40;
-const PADDING = 24;
-const HEADER_HEIGHT = 36;
+const NODE_WIDTH = 160;
+const NODE_HEIGHT = 64;
+const H_GAP = 20;
+const V_GAP = 44;
+const PADDING = 28;
+const HEADER_HEIGHT = 44;
 
 function treeWidth(node: AgentTreeNode): number {
   if (node.children.length === 0) return 1;
@@ -133,21 +133,21 @@ export function OrgChartOverlay({ agents, characters, camera }: OrgChartOverlayP
         onClick={() => setOpen(v => !v)}
         style={{
           position: 'absolute',
-          top: 12,
-          left: 12,
+          top: 16,
+          left: 16,
           zIndex: 20,
-          width: 32,
-          height: 32,
-          background: open ? 'rgba(68, 138, 255, 0.3)' : 'rgba(20, 20, 35, 0.8)',
-          border: `1px solid ${open ? '#448aff' : '#333348'}`,
-          borderRadius: 6,
-          color: '#e0e0e8',
+          width: 36,
+          height: 36,
+          background: open ? 'rgba(88, 166, 255, 0.25)' : 'rgba(22, 27, 34, 0.85)',
+          border: `1px solid ${open ? 'var(--accent-blue)' : 'var(--border-color)'}`,
+          borderRadius: 10,
+          color: 'var(--text-primary)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 14,
-          transition: 'background 0.15s, border-color 0.15s',
+          fontSize: 16,
+          transition: 'all 0.2s ease',
         }}
         title="Agent Hierarchy"
       >
@@ -158,26 +158,27 @@ export function OrgChartOverlay({ agents, characters, camera }: OrgChartOverlayP
         <div
           style={{
             position: 'absolute',
-            top: 52,
-            left: 12,
+            top: 60,
+            left: 16,
             zIndex: 20,
             width: panelWidth,
-            maxHeight: 'calc(100% - 80px)',
-            background: 'rgba(10, 10, 20, 0.92)',
-            border: '1px solid #333348',
-            borderRadius: 8,
+            maxHeight: 'calc(100% - 90px)',
+            background: 'rgba(13, 17, 23, 0.95)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 12,
             overflow: 'auto',
+            backdropFilter: 'blur(12px)',
           }}
         >
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '8px 12px',
-            borderBottom: '1px solid #2a2a3a',
-            fontSize: 12,
-            fontWeight: 'bold',
-            color: '#8888a0',
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--border-color)',
+            fontSize: 14,
+            fontWeight: 700,
+            color: 'var(--text-secondary)',
           }}>
             <span>Agent Hierarchy</span>
             <button
@@ -185,9 +186,9 @@ export function OrgChartOverlay({ agents, characters, camera }: OrgChartOverlayP
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#8888a0',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                fontSize: 14,
+                fontSize: 16,
               }}
             >
               &#x2715;

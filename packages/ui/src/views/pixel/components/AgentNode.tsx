@@ -10,15 +10,15 @@ interface AgentNodeProps {
 }
 
 const STATE_BORDERS: Record<string, string> = {
-  active: '#4A90D9',
-  idle: '#333348',
-  listening: '#333348',
-  spawning: '#333348',
-  waiting: '#F39C12',
-  error: '#E74C3C',
-  done: '#00c853',
-  despawning: '#555570',
-  removed: '#555570',
+  active: 'var(--accent-blue)',
+  idle: 'var(--border-color)',
+  listening: 'var(--border-color)',
+  spawning: 'var(--border-color)',
+  waiting: 'var(--accent-amber)',
+  error: 'var(--accent-red)',
+  done: 'var(--accent-green)',
+  despawning: 'var(--border-color)',
+  removed: 'var(--border-color)',
 };
 
 const STATE_LABELS: Record<string, string> = {
@@ -54,44 +54,45 @@ export function AgentNode({ agent, character, onClick }: AgentNodeProps) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
-        padding: '6px 10px',
-        background: 'rgba(20, 20, 35, 0.85)',
+        gap: 10,
+        padding: '10px 14px',
+        background: 'rgba(22, 27, 34, 0.9)',
         border: `2px solid ${borderColor}`,
-        borderRadius: 4,
+        borderRadius: 12,
         cursor: 'pointer',
-        minWidth: 120,
-        transition: 'filter 0.15s',
+        minWidth: 140,
+        transition: 'all 0.2s ease',
       }}
-      onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(1.3)')}
-      onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}
+      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(33, 38, 45, 0.95)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(22, 27, 34, 0.9)'; e.currentTarget.style.transform = 'translateY(0)'; }}
     >
       {spriteUrl && (
         <img
           src={spriteUrl}
           alt=""
-          style={{ width: 16, height: 32, imageRendering: 'pixelated' }}
+          style={{ width: 18, height: 36, imageRendering: 'pixelated' }}
         />
       )}
       <div style={{ minWidth: 0 }}>
         <div style={{
-          fontSize: 11,
-          fontWeight: 'bold',
-          color: '#e0e0e8',
+          fontSize: 13,
+          fontWeight: 600,
+          color: 'var(--text-primary)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          maxWidth: 90,
+          maxWidth: 100,
         }}>
           {name}
         </div>
         <div style={{
-          fontSize: 9,
+          fontSize: 11,
           color: borderColor,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          maxWidth: 90,
+          maxWidth: 100,
+          marginTop: 2,
         }}>
           {label}
         </div>

@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import type { AgentInfo } from '@claude-alive/core';
 import { useNow } from '../dashboard/hooks/useNow.ts';
 import type { TFunction } from 'i18next';
+import { generateSpriteSet } from '../pixel/engine/sprites';
+import { getSpriteDataUrl } from '../pixel/utils/spriteToImage';
+import type { Character } from '../pixel/engine/character';
 
 const STATE_COLORS: Record<string, string> = {
   spawning: 'var(--accent-purple)',
@@ -56,21 +59,42 @@ function groupByProject(agents: AgentInfo[]): ProjectGroupData[] {
 
 // ── Compact Agent Card ──────────────────────────────────────────────────
 
+// ── Sprite Thumbnail ────────────────────────────────────────────────────
+
+function getSpriteThumbnail(character: Character | undefined, sessionId: string): string | null {
+  if (character) {
+    return getSpriteDataUrl(character.paletteIndex, character.sprites.idle.down);
+  }
+  // Fallback: derive paletteIndex from sessionId hash
+  let hash = 0;
+  for (let i = 0; i < sessionId.length; i++) {
+    hash = ((hash << 5) - hash + sessionId.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(hash) % 6;
+  const sprites = generateSpriteSet(idx);
+  return getSpriteDataUrl(idx, sprites.idle.down);
+}
+
+// ── Compact Agent Card ──────────────────────────────────────────────────
+
 interface CompactCardProps {
   agent: AgentInfo;
+  character?: Character;
   onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
 }
 
-function CompactAgentCard({ agent, onRename, onAgentClick }: CompactCardProps) {
+function CompactAgentCard({ agent, character, onRename, onAgentClick }: CompactCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const stateColor = STATE_COLORS[agent.state] ?? 'var(--text-secondary)';
   const displayLabel = agent.displayName || agent.projectName || agent.sessionId.slice(0, 8);
+  const spriteUrl = useMemo(() => getSpriteThumbnail(character, agent.sessionId), [character?.paletteIndex, agent.sessionId]);
 
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState(agent.displayName ?? '');
+  const [hovered, setHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,28 +109,64 @@ function CompactAgentCard({ agent, onRename, onAgentClick }: CompactCardProps) {
 
   return (
     <div
-      className="rounded-lg p-4 border transition-all duration-200 relative overflow-hidden cursor-pointer hover:brightness-110"
+      className="rounded-2xl px-5 py-4 transition-all duration-200 cursor-pointer"
       style={{
-        background: 'var(--bg-card)',
-        borderColor: agent.state === 'active' ? stateColor : 'var(--border-color)',
+        background: hovered ? 'rgba(255,255,255,0.08)' : 'transparent',
       }}
       onClick={() => onAgentClick?.(agent.sessionId)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
+        {/* Sprite thumbnail — 44px */}
         <div
-          className="w-2.5 h-2.5 rounded-full shrink-0"
+          className="shrink-0 relative"
           style={{
-            background: stateColor,
-            boxShadow: agent.state === 'active' ? `0 0 6px ${stateColor}` : 'none',
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            overflow: 'hidden',
+            background: 'rgba(255,255,255,0.04)',
+            transition: 'transform 0.2s ease',
+            transform: hovered ? 'scale(1.06)' : 'scale(1)',
           }}
-        />
+        >
+          {spriteUrl && (
+            <img
+              src={spriteUrl}
+              alt=""
+              style={{
+                width: '100%',
+                height: '100%',
+                imageRendering: 'pixelated',
+                objectFit: 'contain',
+              }}
+            />
+          )}
+          {/* Status dot */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              background: stateColor,
+              border: '2px solid var(--bg-secondary)',
+              boxShadow: agent.state === 'active' ? `0 0 8px ${stateColor}` : 'none',
+            }}
+          />
+        </div>
+
+        {/* Text content */}
         <div className="flex-1 min-w-0">
           {editing ? (
             <input
               ref={inputRef}
-              className="text-xs font-medium w-full rounded px-1.5 py-0.5 outline-none"
+              className="text-sm font-medium w-full rounded-lg px-2.5 py-1.5 outline-none"
               style={{
-                background: 'var(--bg-secondary)',
+                background: 'rgba(255,255,255,0.06)',
                 color: 'var(--text-primary)',
                 border: '1px solid var(--accent-blue)',
               }}
@@ -121,46 +181,36 @@ function CompactAgentCard({ agent, onRename, onAgentClick }: CompactCardProps) {
             />
           ) : (
             <div
-              className="text-xs font-medium truncate cursor-pointer hover:underline"
-              style={{ color: 'var(--text-primary)' }}
+              className="text-sm font-medium truncate"
+              style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}
               onClick={(e) => { e.stopPropagation(); setNameInput(agent.displayName ?? ''); setEditing(true); }}
               title={t('agents.clickToRename')}
             >
               {displayLabel}
             </div>
           )}
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="text-xs" style={{ color: stateColor }}>
+              {t(`states.${agent.state}`, { defaultValue: agent.state })}
+            </span>
+            {agent.currentTool && (
+              <>
+                <span className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.4 }}>·</span>
+                <span className="text-xs truncate" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                  {agent.currentTool}
+                </span>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Time — right aligned */}
         {timeSince && (
-          <span className="text-[11px] shrink-0" style={{ color: 'var(--text-secondary)' }}>
+          <span className="text-xs shrink-0" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
             {timeSince}
           </span>
         )}
       </div>
-
-      {/* Tool + State row */}
-      <div className="flex items-center justify-between mt-3">
-        <span className="text-[11px] font-medium" style={{ color: stateColor }}>
-          {t(`states.${agent.state}`, { defaultValue: agent.state })}
-        </span>
-        {agent.currentTool && (
-          <span
-            className="text-[11px] px-2 py-0.5 rounded truncate max-w-[140px]"
-            style={{ background: `${stateColor}15`, color: stateColor }}
-          >
-            {agent.currentTool}
-          </span>
-        )}
-      </div>
-
-      {/* Activity bar */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-0.5"
-        style={{
-          background: agent.state === 'active' ? stateColor : 'transparent',
-          opacity: 0.6,
-          transition: 'background 0.3s',
-        }}
-      />
     </div>
   );
 }
@@ -171,47 +221,56 @@ interface SidebarProjectGroupProps {
   projectName: string;
   cwd: string;
   agents: AgentInfo[];
+  characters: Map<string, Character>;
   onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
 }
 
-function SidebarProjectGroup({ projectName, agents, onRename, onAgentClick }: SidebarProjectGroupProps) {
+function SidebarProjectGroup({ projectName, agents, characters, onRename, onAgentClick }: SidebarProjectGroupProps) {
   const [collapsed, setCollapsed] = useState(false);
   const activeCount = agents.filter(a => a.state === 'active' || a.state === 'listening').length;
 
   return (
     <div>
       <button
-        className="w-full flex items-center gap-2.5 px-4 py-3 text-left hover:brightness-110 transition-all rounded-md"
+        className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
         style={{ background: 'transparent' }}
         onClick={() => setCollapsed(!collapsed)}
       >
         <span
           className="text-[11px] shrink-0 transition-transform duration-200"
-          style={{ color: 'var(--text-secondary)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)' }}
+          style={{ color: 'var(--text-secondary)', opacity: 0.5, transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)' }}
         >
           {'\u25BC'}
         </span>
-        <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+        <span className="text-[15px] font-bold truncate" style={{ color: 'var(--text-primary)' }}>
           {projectName}
         </span>
-        {activeCount > 0 && (
-          <span
-            className="text-[11px] px-2 py-0.5 rounded shrink-0"
-            style={{ background: 'var(--accent-green)20', color: 'var(--accent-green)' }}
-          >
-            {activeCount}
+        <div className="flex items-center gap-2.5 ml-auto shrink-0">
+          {activeCount > 0 && (
+            <span
+              className="text-xs px-2.5 py-0.5 rounded-full font-semibold"
+              style={{ background: 'rgba(63,185,80,0.12)', color: 'var(--accent-green)' }}
+            >
+              {activeCount}
+            </span>
+          )}
+          <span className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.4 }}>
+            {agents.length}
           </span>
-        )}
-        <span className="text-[11px] shrink-0 ml-auto" style={{ color: 'var(--text-secondary)' }}>
-          {agents.length}
-        </span>
+        </div>
       </button>
 
       {!collapsed && (
-        <div className="pl-4 pr-2 pb-3 space-y-2.5">
+        <div className="pb-2">
           {agents.map(agent => (
-            <CompactAgentCard key={agent.sessionId} agent={agent} onRename={onRename} onAgentClick={onAgentClick} />
+            <CompactAgentCard
+              key={agent.sessionId}
+              agent={agent}
+              character={characters.get(agent.sessionId)}
+              onRename={onRename}
+              onAgentClick={onAgentClick}
+            />
           ))}
         </div>
       )}
@@ -223,40 +282,42 @@ function SidebarProjectGroup({ projectName, agents, onRename, onAgentClick }: Si
 
 interface ProjectSidebarProps {
   agents: AgentInfo[];
+  characters?: Map<string, Character>;
   onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
 }
 
-export function ProjectSidebar({ agents, onRename, onAgentClick }: ProjectSidebarProps) {
+export function ProjectSidebar({ agents, characters, onRename, onAgentClick }: ProjectSidebarProps) {
   const { t } = useTranslation();
   const projectGroups = useMemo(() => groupByProject(agents), [agents]);
+  const charMap = characters ?? new Map<string, Character>();
 
   return (
     <div
       className="flex flex-col h-full overflow-hidden"
       style={{
-        width: 280,
-        minWidth: 280,
+        width: 300,
+        minWidth: 300,
         background: 'var(--bg-secondary)',
         borderRight: '1px solid var(--border-color)',
       }}
     >
       {/* Sidebar header */}
       <div
-        className="px-5 py-4 text-xs font-medium shrink-0 border-b"
-        style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)' }}
+        className="px-6 pt-6 pb-4 text-xs font-bold uppercase tracking-wider shrink-0"
+        style={{ color: 'var(--text-secondary)', opacity: 0.5 }}
       >
         {t('agents.projects')}
       </div>
 
       {/* Project list */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto pt-0 pb-4 space-y-2">
         {projectGroups.length === 0 ? (
-          <div className="text-center py-10 px-5">
+          <div className="text-center py-16 px-8">
             <div className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
               {t('agents.noAgentsYet')}
             </div>
-            <div className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+            <div className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>
               {t('agents.startSession')}
             </div>
           </div>
@@ -267,6 +328,7 @@ export function ProjectSidebar({ agents, onRename, onAgentClick }: ProjectSideba
               projectName={group.projectName}
               cwd={group.cwd}
               agents={group.agents}
+              characters={charMap}
               onRename={onRename}
               onAgentClick={onAgentClick}
             />

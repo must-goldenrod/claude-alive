@@ -15,19 +15,19 @@ export function HeaderBar() {
         top: 0,
         left: 0,
         right: 0,
-        height: 44,
+        height: 56,
         zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
-        gap: 4,
-        padding: '0 20px',
+        gap: 8,
+        padding: '0 24px',
         background: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border-color)',
       }}
     >
       <span
         style={{
-          fontSize: 13,
+          fontSize: 16,
           fontWeight: 700,
           color: 'var(--text-primary)',
           letterSpacing: '-0.02em',
@@ -40,17 +40,17 @@ export function HeaderBar() {
         <button
           onClick={toggleLang}
           style={{
-            height: 28,
-            padding: '0 10px',
+            height: 32,
+            padding: '0 14px',
             border: '1px solid var(--border-color)',
-            borderRadius: 4,
+            borderRadius: 8,
             cursor: 'pointer',
-            fontSize: 11,
+            fontSize: 13,
             fontWeight: 600,
             fontFamily: 'inherit',
             color: 'var(--text-secondary)',
             background: 'transparent',
-            transition: 'background 0.15s',
+            transition: 'all 0.2s ease',
           }}
         >
           {isKo ? 'EN' : '\ud55c'}

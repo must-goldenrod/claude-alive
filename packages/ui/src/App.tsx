@@ -16,7 +16,7 @@ export default function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <HeaderBar />
-      <div style={{ paddingTop: 44, height: '100%', boxSizing: 'border-box' }}>
+      <div style={{ paddingTop: 56, height: '100%', boxSizing: 'border-box' }}>
         <SilentErrorBoundary>
           <Suspense fallback={null}>
             <PixelOfficePage />

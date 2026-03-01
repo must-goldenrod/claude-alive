@@ -34,10 +34,12 @@ function mapToolAnimation(animation: string | null): 'typing' | 'reading' {
 export function PixelOfficePage() {
   const officeRef = useRef(createOfficeState());
   const cameraRef = useRef(officeRef.current.camera);
+  const cameraTargetRef = useRef<{ x: number; y: number } | null>(null);
   const entitiesRef = useRef<Entity[]>(getEntities(officeRef.current));
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const promptsRef = useRef<PromptEntry[]>([]);
   const [, setPromptsVersion] = useState(0);
+  const [, setCharVersion] = useState(0);
 
   // Stable callback ref for onRawMessage (avoids useWebSocket reconnects)
   const onRawRef = useRef<(msg: WSServerMessage) => void>(() => {});
@@ -71,6 +73,7 @@ export function PixelOfficePage() {
             char.bubble = 'error';
           }
         }
+        setCharVersion(v => v + 1);
         break;
       }
       case 'agent:spawn':
@@ -79,9 +82,11 @@ export function PixelOfficePage() {
           label: msg.agent.displayName,
           project: msg.agent.cwd,
         });
+        setCharVersion(v => v + 1);
         break;
       case 'agent:despawn':
         despawnCharacter(office, msg.sessionId);
+        setCharVersion(v => v + 1);
         break;
       case 'agent:state': {
         const char = office.characters.get(msg.sessionId);
@@ -142,8 +147,7 @@ export function PixelOfficePage() {
   const handleAgentClick = useCallback((sessionId: string) => {
     const char = officeRef.current.characters.get(sessionId);
     if (!char) return;
-    cameraRef.current = {
-      ...cameraRef.current,
+    cameraTargetRef.current = {
       x: char.tileX * TILE_SIZE + TILE_SIZE / 2,
       y: char.tileY * TILE_SIZE + TILE_SIZE / 2,
     };
@@ -172,6 +176,22 @@ export function PixelOfficePage() {
       const office = officeRef.current;
       updateOffice(office, dt);
       entitiesRef.current = getEntities(office);
+
+      // Smooth camera lerp toward target
+      const target = cameraTargetRef.current;
+      if (target) {
+        const lerpSpeed = 1 - Math.pow(0.001, dt); // ~8-10 frames to arrive
+        const cam = cameraRef.current;
+        const dx = target.x - cam.x;
+        const dy = target.y - cam.y;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+          cameraRef.current = { ...cam, x: target.x, y: target.y };
+          cameraTargetRef.current = null;
+        } else {
+          cameraRef.current = { ...cam, x: cam.x + dx * lerpSpeed, y: cam.y + dy * lerpSpeed };
+        }
+      }
+
       office.camera = cameraRef.current;
 
       requestAnimationFrame(tick);
@@ -183,7 +203,7 @@ export function PixelOfficePage() {
 
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-      <ProjectSidebar agents={agentList} onRename={handleRename} onAgentClick={handleAgentClick} />
+      <ProjectSidebar agents={agentList} characters={officeRef.current.characters} onRename={handleRename} onAgentClick={handleAgentClick} />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         <Suspense fallback={null}>
@@ -197,12 +217,12 @@ export function PixelOfficePage() {
         {/* Zoom controls */}
         <div style={{
           position: 'absolute',
-          top: 12,
-          right: 12,
+          top: 16,
+          right: 16,
           zIndex: 20,
           display: 'flex',
           flexDirection: 'column',
-          gap: 4,
+          gap: 6,
         }}>
           {[
             { label: '+', delta: ZOOM_STEP },
@@ -212,19 +232,20 @@ export function PixelOfficePage() {
               key={label}
               onClick={() => handleZoom(delta)}
               style={{
-                width: 32,
-                height: 32,
-                background: 'rgba(20, 20, 35, 0.8)',
-                border: '1px solid #333348',
-                borderRadius: 6,
-                color: '#e0e0e8',
+                width: 36,
+                height: 36,
+                background: 'rgba(22, 27, 34, 0.85)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 10,
+                color: 'var(--text-primary)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: 600,
                 lineHeight: 1,
+                transition: 'all 0.2s ease',
               }}
             >
               {label}
@@ -251,9 +272,9 @@ export function PixelOfficePage() {
           <div
             style={{
               position: 'absolute',
-              bottom: 16,
-              left: 20,
-              right: 20,
+              bottom: 20,
+              left: 24,
+              right: 24,
               zIndex: 10,
               pointerEvents: 'auto',
             }}
