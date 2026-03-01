@@ -4,7 +4,7 @@ export const BG_GRADIENT_TOP = '#1a1a2e';
 export const BG_GRADIENT_BOTTOM = '#16213e';
 
 // ── Live2D model catalog ────────────────────────────
-export const MODEL_NAMES = ['Haru', 'Hiyori', 'Mark', 'Natori', 'Rice'] as const;
+export const MODEL_NAMES = ['Haru', 'Hiyori', 'Rice', 'Mao', 'Ren', 'Wanko'] as const;
 export type ModelName = (typeof MODEL_NAMES)[number];
 
 export function modelPath(name: ModelName): string {

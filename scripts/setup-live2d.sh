@@ -5,7 +5,7 @@
 #   Licensed under Live2D Proprietary Software License Agreement
 #   https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html
 #
-# Sample Models (Haru, Hiyori, Mark, Natori, Rice):
+# Sample Models (Haru, Hiyori, Rice, Mao, Ren, Wanko):
 #   Licensed under Live2D Free Material License
 #   https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html
 #
@@ -17,7 +17,7 @@ DEST="packages/ui/public/live2d"
 MODELS_DIR="$DEST/models"
 CORE_URL="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"
 SAMPLE_REPO="https://github.com/Live2D/CubismWebSamples"
-MODELS=("Haru" "Hiyori" "Mark" "Natori" "Rice")
+MODELS=("Haru" "Hiyori" "Rice" "Mao" "Ren" "Wanko")
 
 echo "claude-alive: Live2D setup"
 echo ""
