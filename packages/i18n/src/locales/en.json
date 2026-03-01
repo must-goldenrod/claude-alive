@@ -95,5 +95,11 @@
     "listening": "Listening!",
     "done": "Done! Good work~"
   },
-  "loadingBishoujo": "Loading Live2D scene..."
+  "loadingBishoujo": "Loading Live2D scene...",
+  "gallery": {
+    "button": "Models",
+    "title": "Character Gallery",
+    "count": "{{count}} models",
+    "close": "Close"
+  }
 }

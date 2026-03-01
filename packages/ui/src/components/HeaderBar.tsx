@@ -1,11 +1,29 @@
 import { useTranslation } from 'react-i18next';
 
-export function HeaderBar() {
-  const { i18n } = useTranslation();
+interface HeaderBarProps {
+  onGalleryOpen: () => void;
+}
+
+export function HeaderBar({ onGalleryOpen }: HeaderBarProps) {
+  const { t, i18n } = useTranslation();
   const isKo = i18n.language?.startsWith('ko');
 
   const toggleLang = () => {
     i18n.changeLanguage(isKo ? 'en' : 'ko');
+  };
+
+  const btnStyle: React.CSSProperties = {
+    height: 28,
+    padding: '0 10px',
+    border: '1px solid var(--border-color)',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 600,
+    fontFamily: 'inherit',
+    color: 'var(--text-secondary)',
+    background: 'transparent',
+    transition: 'background 0.15s',
   };
 
   return (
@@ -37,22 +55,10 @@ export function HeaderBar() {
       </span>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button
-          onClick={toggleLang}
-          style={{
-            height: 28,
-            padding: '0 10px',
-            border: '1px solid var(--border-color)',
-            borderRadius: 4,
-            cursor: 'pointer',
-            fontSize: 11,
-            fontWeight: 600,
-            fontFamily: 'inherit',
-            color: 'var(--text-secondary)',
-            background: 'transparent',
-            transition: 'background 0.15s',
-          }}
-        >
+        <button onClick={onGalleryOpen} style={btnStyle}>
+          {t('gallery.button')}
+        </button>
+        <button onClick={toggleLang} style={btnStyle}>
           {isKo ? 'EN' : '한'}
         </button>
       </div>

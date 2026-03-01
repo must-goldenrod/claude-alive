@@ -95,5 +95,11 @@
     "listening": "듣고 있어요!",
     "done": "작업 끝! 수고하셨습니다~"
   },
-  "loadingBishoujo": "Live2D 씬 로딩 중..."
+  "loadingBishoujo": "Live2D 씬 로딩 중...",
+  "gallery": {
+    "button": "캐릭터",
+    "title": "캐릭터 갤러리",
+    "count": "{{count}}개 모델",
+    "close": "닫기"
+  }
 }
