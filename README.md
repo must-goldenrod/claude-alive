@@ -7,6 +7,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="claude-alive dashboard" width="800" />
+</p>
+
+<p align="center">
   <a href="#quick-start--빠른-시작">Quick Start</a> •
   <a href="#how-it-works--작동-원리">How It Works</a> •
   <a href="#features--주요-기능">Features</a> •
