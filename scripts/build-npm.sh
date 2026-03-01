@@ -30,8 +30,7 @@ npx esbuild "$ROOT/npm/server-entry.ts" \
 
 echo "[5/5] Copying assets..."
 cp "$ROOT/packages/hooks/scripts/stream-event.sh" "$OUT/scripts/"
-# Copy UI dist but exclude proprietary Live2D models
-rsync -a --exclude='live2d/' "$ROOT/packages/ui/dist/" "$OUT/ui/"
+cp -r "$ROOT/packages/ui/dist/." "$OUT/ui/"
 cp "$ROOT/LICENSE" "$OUT/"
 cp "$ROOT/README.md" "$OUT/"
 
@@ -74,7 +73,6 @@ cat > "$OUT/package.json" << PKGJSON
     "agent",
     "monitoring",
     "dashboard",
-    "live2d",
     "hooks",
     "realtime",
     "websocket"

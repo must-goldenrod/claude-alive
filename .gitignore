@@ -6,6 +6,3 @@ npm-dist/
 .DS_Store
 .env
 .env.*
-
-# Live2D SDK and models — proprietary, must be downloaded separately
-packages/ui/public/live2d/
