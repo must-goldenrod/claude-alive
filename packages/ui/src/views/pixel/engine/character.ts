@@ -49,6 +49,9 @@ export interface Character extends Entity {
   bubbleText: string | null;
   bubbleLarge: boolean;
 
+  // Pending animation (applied when arriving at seat after startToolActivity)
+  pendingAnimation: 'typing' | 'reading' | null;
+
   // Sub-agent distinction
   isSubAgent: boolean;
   label: string | null; // display name shown above head
@@ -109,6 +112,8 @@ export function createCharacter(
     bubble: 'none',
     bubbleText: null,
     bubbleLarge: false,
+
+    pendingAnimation: null,
 
     isSubAgent,
     label,
@@ -195,13 +200,24 @@ function arriveAtDestination(char: Character) {
   char.path = null;
   char.pathIndex = 0;
 
-  if (char.seatCol !== null && char.seatRow !== null &&
-      Math.round(char.tileX) === char.seatCol && Math.round(char.tileY) === char.seatRow) {
+  const atSeat = char.seatCol !== null && char.seatRow !== null &&
+      Math.round(char.tileX) === char.seatCol && Math.round(char.tileY) === char.seatRow;
+
+  if (atSeat) {
     if (char.seatFacing) {
       char.direction = char.seatFacing;
     }
+    // Apply pending animation from startToolActivity
+    if (char.pendingAnimation) {
+      char.state = char.pendingAnimation;
+      char.pendingAnimation = null;
+      char.animFrame = 0;
+      char.animTimer = 0;
+      return;
+    }
   }
 
+  char.pendingAnimation = null;
   char.state = 'idle';
   char.animFrame = 0;
   char.animTimer = 0;
@@ -295,6 +311,7 @@ export function startToolActivity(
         { col: char.seatCol, row: char.seatRow },
       );
       if (path && path.length > 0) {
+        char.pendingAnimation = animation;
         char.path = path;
         char.pathIndex = 0;
         char.state = 'walking';
@@ -305,6 +322,7 @@ export function startToolActivity(
     }
   }
 
+  char.pendingAnimation = null;
   char.state = animation;
   char.animFrame = 0;
   char.animTimer = 0;
@@ -315,6 +333,7 @@ export function startToolActivity(
 
 export function setCharacterIdle(char: Character): void {
   char.state = 'idle';
+  char.pendingAnimation = null;
   char.animFrame = 0;
   char.animTimer = 0;
   char.wanderTimer = randomWanderTime();
@@ -350,8 +369,22 @@ function makeRenderFn(char: Character): (ctx: CanvasRenderingContext2D, zoom: nu
       ctx.drawImage(sprite, 0, 0, w, h);
     }
 
+    // Active glow border (typing/reading, or walking with pending animation)
+    const isActive = char.state === 'typing' || char.state === 'reading' || char.pendingAnimation !== null;
+    if (isActive) {
+      ctx.save();
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 6 * zoom;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5 * zoom;
+      ctx.beginPath();
+      ctx.roundRect(-2 * zoom, -2 * zoom, w + 4 * zoom, h + 4 * zoom, 3 * zoom);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Name label above head (all characters)
-    const labelName = char.label || char.sessionId.slice(0, 8);
+    const labelName = char.label || 'General Agent';
     const labelH = drawNameLabel(ctx, labelName, w, zoom);
 
     // Speech bubble (positioned above name label)
@@ -361,8 +394,10 @@ function makeRenderFn(char: Character): (ctx: CanvasRenderingContext2D, zoom: nu
       drawBubble(ctx, char.bubble, w, zoom);
     }
 
-    // Tooltip (always visible)
-    drawTooltip(ctx, char, w, zoom);
+    // Tooltip (only when tool info available)
+    if (char.tooltipTool) {
+      drawTooltip(ctx, char, w, zoom);
+    }
   };
 }
 
@@ -510,7 +545,7 @@ function drawTooltip(
   charWidth: number,
   zoom: number,
 ) {
-  const name = char.label || char.sessionId.slice(0, 8);
+  const name = char.label || 'General Agent';
   const tool = char.tooltipTool;
   const text = tool ? `${name}: ${tool}` : name;
 

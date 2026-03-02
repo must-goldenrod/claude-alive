@@ -115,24 +115,25 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
     if (el) el.scrollTop = el.scrollHeight;
   }, [timeline.length]);
 
-  const displayName = agent.displayName || agent.projectName || agent.sessionId.slice(0, 8);
+  const stats = useMemo(() => {
+    let working = 0, success = 0, failed = 0;
+    for (const e of agentEvents) {
+      if (e.event === 'PreToolUse') working++;
+      else if (e.event === 'PostToolUse') success++;
+      else if (e.event === 'PostToolUseFailure') failed++;
+    }
+    return { working, success, failed };
+  }, [agentEvents]);
+
+  const displayName = agent.displayName || agent.projectName || 'General Agent';
   const stateColor = STATE_COLORS[agent.state] ?? '#8888a0';
 
   return (
     <div style={{
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: '45%',
-      minHeight: 200,
-      maxHeight: 400,
-      zIndex: 15,
+      height: '100%',
       background: 'rgba(13, 17, 23, 0.96)',
-      borderTop: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
-      backdropFilter: 'blur(12px)',
     }}>
       {/* Header */}
       <div style={{
@@ -182,6 +183,33 @@ export function AgentTimelinePanel({ agent, events, prompts, onClose }: AgentTim
         >
           &#x2715;
         </button>
+      </div>
+
+      {/* Stats bar */}
+      <div style={{
+        display: 'flex',
+        gap: 8,
+        padding: '10px 20px',
+        borderBottom: '1px solid var(--border-color)',
+        flexShrink: 0,
+      }}>
+        {[
+          { label: 'Working', count: stats.working, bg: 'rgba(88,166,255,0.12)', color: 'var(--accent-blue)' },
+          { label: 'Success', count: stats.success, bg: 'rgba(63,185,80,0.12)', color: 'var(--accent-green)' },
+          { label: 'Failed', count: stats.failed, bg: 'rgba(248,81,73,0.12)', color: 'var(--accent-red)' },
+        ].map(({ label, count, bg, color }) => (
+          <span key={label} style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '3px 10px',
+            borderRadius: 12,
+            background: bg,
+            color,
+            fontFamily: 'var(--font-mono)',
+          }}>
+            {label} {count}
+          </span>
+        ))}
       </div>
 
       {/* Timeline */}

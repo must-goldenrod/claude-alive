@@ -40,7 +40,7 @@ function stateLabel(state: AgentState, tool: string | null): string {
 
 export function AgentNode({ agent, character, onClick }: AgentNodeProps) {
   const borderColor = STATE_BORDERS[agent.state] ?? '#333348';
-  const name = agent.displayName || agent.sessionId.slice(0, 8);
+  const name = agent.displayName || 'General Agent';
   const label = stateLabel(agent.state, agent.currentTool);
 
   const spriteUrl = useMemo(() => {

@@ -2,8 +2,11 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { Server } from 'node:http';
 import type { WSServerMessage, WSClientMessage } from '@claude-alive/core';
 
+const MAX_CLIENTS = 50;
+
 export interface WSBroadcasterOptions {
   getSnapshot: () => { agents: unknown[]; recentEvents: unknown[]; completedSessions: unknown[] };
+  maxClients?: number;
 }
 
 export class WSBroadcaster {
@@ -11,12 +14,18 @@ export class WSBroadcaster {
   private clients = new Set<WebSocket>();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private getSnapshot: WSBroadcasterOptions['getSnapshot'];
+  private maxClients: number;
 
   constructor(server: Server, options: WSBroadcasterOptions) {
     this.getSnapshot = options.getSnapshot;
+    this.maxClients = options.maxClients ?? MAX_CLIENTS;
     this.wss = new WebSocketServer({ server, path: '/ws' });
 
     this.wss.on('connection', (ws) => {
+      if (this.clients.size >= this.maxClients) {
+        ws.close(1013, 'Too many connections');
+        return;
+      }
       this.clients.add(ws);
       console.log(`[ws] client connected (${this.clients.size} total)`);
 

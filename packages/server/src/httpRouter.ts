@@ -1,6 +1,32 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import type { HookEventPayload, HookEventData } from '@claude-alive/core';
+import { z } from 'zod';
+import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
+
+// --- Zod schemas for runtime input validation ---
+
+const HookEventDataSchema = z.object({
+  session_id: z.string(),
+  hook_event_name: z.string(),
+  cwd: z.string().optional().default(''),
+  tool_name: z.string().optional(),
+  prompt: z.string().optional(),
+  agent_id: z.string().optional(),
+  agent_type: z.string().optional(),
+  transcript_path: z.string().optional(),
+}).passthrough();
+
+const WrappedPayloadSchema = z.object({
+  event: z.string(),
+  tool: z.string().optional().default('system'),
+  session_id: z.string(),
+  timestamp: z.number(),
+  data: HookEventDataSchema,
+});
+
+const RenameBodySchema = z.object({
+  name: z.string().max(100).nullable(),
+});
 
 /**
  * Normalize incoming event payload. Claude Code hook stdin sends raw
@@ -8,15 +34,21 @@ import { createStaticHandler } from './staticFiles.js';
  * adds { event, tool, timestamp, data }. Accept both.
  */
 function normalizePayload(raw: Record<string, unknown>): HookEventPayload {
-  // Already in wrapped format
-  if (raw.event && raw.data) {
-    return raw as unknown as HookEventPayload;
+  // Try wrapped format first
+  const wrapped = WrappedPayloadSchema.safeParse(raw);
+  if (wrapped.success) {
+    return wrapped.data as unknown as HookEventPayload;
   }
 
-  // Raw Claude Code hook stdin — wrap it
-  const data = raw as unknown as HookEventData;
+  // Try raw Claude Code hook stdin format
+  const rawParsed = HookEventDataSchema.safeParse(raw);
+  if (!rawParsed.success) {
+    throw new Error('Invalid event payload');
+  }
+
+  const data = rawParsed.data as unknown as HookEventData;
   return {
-    event: data.hook_event_name,
+    event: data.hook_event_name as HookEventName,
     tool: data.tool_name ?? 'system',
     session_id: data.session_id,
     timestamp: Date.now(),
@@ -34,6 +66,14 @@ export interface HttpRouterOptions {
 }
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
+
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*",
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -71,6 +111,7 @@ function sendJson(res: ServerResponse, status: number, data: unknown, req?: Inco
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    ...SECURITY_HEADERS,
   });
   res.end(JSON.stringify(data));
 }
@@ -95,7 +136,7 @@ export function createHttpServer(options: HttpRouterOptions) {
         onEvent(payload);
         sendJson(res, 200, { ok: true }, req);
       } catch {
-        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+        sendJson(res, 400, { error: 'Invalid payload' }, req);
       }
       return;
     }
@@ -121,8 +162,12 @@ export function createHttpServer(options: HttpRouterOptions) {
     if (req.method === 'PUT' && renameMatch) {
       try {
         const body = await readBody(req);
-        const { name } = JSON.parse(body) as { name: string | null };
-        const ok = renameAgent(renameMatch[1]!, name);
+        const parsed = RenameBodySchema.safeParse(JSON.parse(body));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: name must be a string (max 100 chars) or null' }, req);
+          return;
+        }
+        const ok = renameAgent(renameMatch[1]!, parsed.data.name);
         sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
       } catch {
         sendJson(res, 400, { error: 'Invalid JSON' }, req);

@@ -163,7 +163,7 @@ export default function PixelCanvas({ camera, tileMap, entities, onTileClick, on
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={() => { isPanning.current = false; isDragging.current = false; }}
       onContextMenu={(e) => e.preventDefault()}
     />
   );

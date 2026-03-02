@@ -29,7 +29,7 @@ export function EventStream({ events, agents }: EventStreamProps) {
   const agentNameMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const a of agents) {
-      map.set(a.sessionId, a.displayName || a.projectName || a.sessionId.slice(0, 8));
+      map.set(a.sessionId, a.displayName || a.projectName || 'General Agent');
     }
     return map;
   }, [agents]);
@@ -59,7 +59,7 @@ export function EventStream({ events, agents }: EventStreamProps) {
         {events.map((entry) => {
           const color = EVENT_COLORS[entry.event] ?? 'var(--text-secondary)';
           const time = new Date(entry.timestamp).toLocaleTimeString();
-          const agentName = agentNameMap.get(entry.sessionId) ?? entry.sessionId.slice(0, 8);
+          const agentName = agentNameMap.get(entry.sessionId) ?? 'General Agent';
           const eventLabel = t(`hookEvents.${entry.event}`, { defaultValue: entry.event });
           const stateLabel = t(`states.${entry.agentState}`, { defaultValue: entry.agentState });
 

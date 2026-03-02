@@ -9,7 +9,7 @@ import {
   createOfficeState, updateOffice, getEntities,
   spawnCharacter, despawnCharacter,
 } from './engine/officeState';
-import { startToolActivity, setCharacterIdle } from './engine/character';
+import { startToolActivity, setCharacterIdle, hitTestCharacter } from './engine/character';
 import type { Entity } from './engine/renderer';
 import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './engine/constants';
 import { OrgChartOverlay } from './components/OrgChartOverlay';
@@ -128,6 +128,13 @@ export function PixelOfficePage() {
         setPromptsVersion(v => v + 1);
         break;
       }
+      case 'agent:rename': {
+        const char = office.characters.get(msg.sessionId);
+        if (char) {
+          char.label = msg.name;
+        }
+        break;
+      }
     }
   };
 
@@ -153,6 +160,16 @@ export function PixelOfficePage() {
     };
     setSelectedAgentId(prev => prev === sessionId ? null : sessionId);
   }, []);
+
+  const handleWorldClick = useCallback((worldX: number, worldY: number) => {
+    for (const char of officeRef.current.characters.values()) {
+      if (hitTestCharacter(char, worldX, worldY)) {
+        handleAgentClick(char.sessionId);
+        return;
+      }
+    }
+    setSelectedAgentId(null);
+  }, [handleAgentClick]);
 
   const handleZoom = useCallback((delta: number) => {
     const cur = cameraRef.current.zoom;
@@ -203,7 +220,12 @@ export function PixelOfficePage() {
 
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-      <ProjectSidebar agents={agentList} characters={officeRef.current.characters} onRename={handleRename} onAgentClick={handleAgentClick} />
+      <ProjectSidebar
+        agents={agentList}
+        characters={officeRef.current.characters}
+        onRename={handleRename}
+        onAgentClick={handleAgentClick}
+      />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
         <Suspense fallback={null}>
@@ -211,6 +233,7 @@ export function PixelOfficePage() {
             camera={cameraRef}
             tileMap={officeRef.current.tileMap}
             entities={entitiesRef}
+            onWorldClick={handleWorldClick}
           />
         </Suspense>
 
@@ -259,29 +282,41 @@ export function PixelOfficePage() {
           camera={cameraRef}
         />
 
+        {/* Timeline overlay: slides out from left edge over canvas */}
         {selectedAgentId && agents.get(selectedAgentId) && (
-          <AgentTimelinePanel
-            agent={agents.get(selectedAgentId)!}
-            events={events}
-            prompts={promptsRef.current}
-            onClose={() => setSelectedAgentId(null)}
-          />
-        )}
-
-        {!selectedAgentId && (
           <div
             style={{
               position: 'absolute',
-              bottom: 20,
-              left: 24,
-              right: 24,
-              zIndex: 10,
-              pointerEvents: 'auto',
+              top: 0,
+              left: 0,
+              width: 320,
+              height: '100%',
+              zIndex: 25,
+              borderRight: '1px solid var(--border-color)',
+              boxShadow: '4px 0 16px rgba(0,0,0,0.3)',
             }}
           >
-            <NotificationBanner agents={agentList} />
+            <AgentTimelinePanel
+              agent={agents.get(selectedAgentId)!}
+              events={events}
+              prompts={promptsRef.current}
+              onClose={() => setSelectedAgentId(null)}
+            />
           </div>
         )}
+
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 20,
+            left: 24,
+            right: 24,
+            zIndex: 10,
+            pointerEvents: 'auto',
+          }}
+        >
+          <NotificationBanner agents={agentList} />
+        </div>
       </div>
 
       <RightPanel events={events} agents={agentList} completedSessions={completedSessions} />

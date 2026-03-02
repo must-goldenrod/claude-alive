@@ -8,6 +8,7 @@ const MAX_NAMES = 500;
 type NameMap = Record<string, string>;
 
 let cached: NameMap = {};
+let flushPromise: Promise<void> | null = null;
 
 export async function loadNames(): Promise<NameMap> {
   try {
@@ -25,12 +26,25 @@ export function getNames(): NameMap {
 
 export async function saveName(sessionId: string, name: string): Promise<void> {
   cached[sessionId] = name;
-  await flush();
+  await serializedFlush();
 }
 
 export async function removeName(sessionId: string): Promise<void> {
   delete cached[sessionId];
-  await flush();
+  await serializedFlush();
+}
+
+/** Serialize concurrent flush calls to prevent file corruption from race conditions. */
+async function serializedFlush(): Promise<void> {
+  while (flushPromise) {
+    await flushPromise;
+  }
+  flushPromise = flush();
+  try {
+    await flushPromise;
+  } finally {
+    flushPromise = null;
+  }
 }
 
 async function flush(): Promise<void> {

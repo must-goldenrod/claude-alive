@@ -267,7 +267,9 @@ claude-alive/
 │           ├── dashboard/      # Dashboard components + hooks
 │           └── unified/        # Shared sidebar, right panel
 ├── npm/            # esbuild entry points for npm package
-└── scripts/        # Build & setup scripts
+├── scripts/        # Build, release & changelog scripts
+├── .github/        # CI/CD (GitHub Actions)
+└── CHANGELOG.md    # Auto-generated from git history
 ```
 
 ### Tech Stack / 기술 스택
@@ -303,6 +305,11 @@ claude-alive/
 ### Security / 보안
 
 - All HTTP endpoints only accept `localhost` requests (CORS restricted)
+- Runtime input validation with [Zod](https://zod.dev/) at API boundaries
+- Security headers on all responses (CSP, X-Content-Type-Options, X-Frame-Options)
+- Shell injection protection — hook scripts use stdin pipes instead of variable interpolation
+- WebSocket connection limit (max 50 clients, rejects with code 1013)
+- Write serialization on persistent storage to prevent race conditions
 - Path traversal protection on static file serving
 - Request body size limited to 1MB
 - No external network calls — everything runs locally
@@ -328,11 +335,41 @@ pnpm build
 # Dev mode with hot reload (builds first, then watches)
 pnpm dev
 
+# Run all tests (145 tests across 4 projects)
+pnpm test
+
 # Type check UI package
 pnpm --filter=@claude-alive/ui exec tsc --noEmit
 
+# Generate CHANGELOG.md from git history
+pnpm changelog
+
 # Build npm distributable
 bash scripts/build-npm.sh
+```
+
+### Testing / 테스트
+
+**EN:** 145 tests across 8 test files, organized into 4 vitest projects. Tests run via Turborepo or directly with `npx vitest run`.
+
+**KO:** 8개 테스트 파일, 145개 테스트, 4개 vitest 프로젝트로 구성. Turborepo 또는 `npx vitest run`으로 실행.
+
+| Project | Tests | Coverage |
+|---------|-------|----------|
+| **core** | 83 | FSM state transitions, tool mapping, session store CRUD, sub-agents, completed sessions |
+| **server** | 41 | HTTP routing, CORS, security headers, input validation, WebSocket integration, load testing |
+| **hooks** | 9 | Hook installer, settings.json manipulation, uninstall |
+| **ui** | 12 | `useWebSocket` hook (connect, disconnect, snapshot, spawn, despawn, state, events) |
+
+```bash
+# Run all tests
+pnpm test
+
+# Run a specific project
+npx vitest run --project core
+
+# Run with verbose output
+npx vitest run --reporter=verbose
 ```
 
 ### Package Dependency Graph / 패키지 의존 관계
@@ -392,9 +429,9 @@ pnpm release:minor
 pnpm release:major
 ```
 
-**EN:** Each release command automatically: bumps the version in `package.json`, builds the npm package, creates a git commit + tag (`v0.2.1`), and publishes to npmjs.com. After the script completes, push with `git push origin main --tags`.
+**EN:** Each release command automatically: bumps the version in `package.json`, updates `CHANGELOG.md` from git history, builds the npm package, creates a git commit + tag (`v0.2.1`), and publishes to npmjs.com. After the script completes, push with `git push origin main --tags`.
 
-**KO:** 각 릴리스 명령은 자동으로: `package.json` 버전 업, npm 패키지 빌드, git 커밋 + 태그(`v0.2.1`) 생성, npmjs.com 발행을 수행합니다. 스크립트 완료 후 `git push origin main --tags`로 푸시하세요.
+**KO:** 각 릴리스 명령은 자동으로: `package.json` 버전 업, git 히스토리에서 `CHANGELOG.md` 갱신, npm 패키지 빌드, git 커밋 + 태그(`v0.2.1`) 생성, npmjs.com 발행을 수행합니다. 스크립트 완료 후 `git push origin main --tags`로 푸시하세요.
 
 ### Versioning Policy / 버전 정책
 
@@ -408,12 +445,20 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 ---
 
+## CI/CD
+
+GitHub Actions runs on every push and PR:
+- **Build** + **Typecheck** + **Test** (145 tests)
+- **Security audit** (`pnpm audit`)
+- Matrix: Ubuntu/macOS × Node 20/22
+
 ## Contributing / 기여
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feat/my-feature`)
-3. Commit your changes
-4. Push and open a Pull Request
+3. Run `pnpm test` to verify all tests pass
+4. Commit your changes (use [conventional commits](https://www.conventionalcommits.org/))
+5. Push and open a Pull Request
 
 PRs should focus on one feature or fix.
 

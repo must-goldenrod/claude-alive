@@ -8,9 +8,10 @@
 #
 # What it does:
 #   1. Bumps version in root package.json (single source of truth)
-#   2. Builds the npm package (reads version from package.json)
-#   3. Creates a git tag
-#   4. Publishes to npmjs.com
+#   2. Updates CHANGELOG.md from git history
+#   3. Builds the npm package (reads version from package.json)
+#   4. Creates a git tag
+#   5. Publishes to npmjs.com
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -49,16 +50,20 @@ node -e "
   fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# 3. Build npm package (version is read from root package.json)
+# 3. Update CHANGELOG.md
+echo "Updating CHANGELOG.md..."
+bash scripts/changelog.sh
+
+# 4. Build npm package (version is read from root package.json)
 echo "Building..."
 bash scripts/build-npm.sh
 
-# 4. Git commit + tag
-git add package.json
+# 5. Git commit + tag
+git add package.json CHANGELOG.md
 git commit -m "release: v$NEW_VERSION"
 git tag "v$NEW_VERSION"
 
-# 5. Publish to npm
+# 6. Publish to npm
 echo ""
 echo "Publishing to npm..."
 cd "$ROOT/npm-dist"

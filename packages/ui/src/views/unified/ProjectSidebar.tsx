@@ -89,7 +89,7 @@ function CompactAgentCard({ agent, character, onRename, onAgentClick }: CompactC
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const stateColor = STATE_COLORS[agent.state] ?? 'var(--text-secondary)';
-  const displayLabel = agent.displayName || agent.projectName || agent.sessionId.slice(0, 8);
+  const displayLabel = agent.displayName || agent.projectName || 'General Agent';
   const spriteUrl = useMemo(() => getSpriteThumbnail(character, agent.sessionId), [character?.paletteIndex, agent.sessionId]);
 
   const [editing, setEditing] = useState(false);
@@ -177,7 +177,7 @@ function CompactAgentCard({ agent, character, onRename, onAgentClick }: CompactC
                 if (e.key === 'Enter') handleRename();
                 if (e.key === 'Escape') { setEditing(false); setNameInput(agent.displayName ?? ''); }
               }}
-              placeholder={agent.projectName || agent.sessionId.slice(0, 8)}
+              placeholder={agent.projectName || 'General Agent'}
             />
           ) : (
             <div
@@ -294,7 +294,7 @@ export function ProjectSidebar({ agents, characters, onRename, onAgentClick }: P
 
   return (
     <div
-      className="flex flex-col h-full overflow-hidden"
+      className="flex flex-col h-full overflow-hidden shrink-0"
       style={{
         width: 300,
         minWidth: 300,

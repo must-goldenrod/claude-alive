@@ -21,7 +21,7 @@ export function NotificationBanner({ agents }: NotificationBannerProps) {
     <div className="space-y-3">
       {attentionAgents.map((agent) => {
         const config = ATTENTION_STATES[agent.state]!;
-        const label = agent.displayName || agent.projectName || agent.sessionId.slice(0, 8);
+        const label = agent.displayName || agent.projectName || 'General Agent';
         return (
           <div
             key={agent.sessionId}
@@ -43,7 +43,7 @@ export function NotificationBanner({ agents }: NotificationBannerProps) {
               </span>
             </div>
             <span className="text-xs shrink-0" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-              {agent.sessionId.slice(0, 8)}
+              {'General Agent'}
             </span>
           </div>
         );

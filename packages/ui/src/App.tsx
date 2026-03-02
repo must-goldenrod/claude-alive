@@ -6,10 +6,28 @@ const PixelOfficePage = lazy(() =>
   import('./views/pixel/PixelOfficePage.tsx').then(m => ({ default: m.PixelOfficePage })),
 );
 
-class SilentErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  render() { return this.state.hasError ? null : this.props.children; }
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  state: { hasError: boolean; error: Error | null } = { hasError: false, error: null };
+  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[claude-alive] UI error:', error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 40, color: '#e5534b', fontFamily: 'monospace', textAlign: 'center' }}>
+          <p>Something went wrong. Check the browser console for details.</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ marginTop: 12, padding: '6px 16px', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export default function App() {
@@ -17,11 +35,11 @@ export default function App() {
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <HeaderBar />
       <div style={{ paddingTop: 56, height: '100%', boxSizing: 'border-box' }}>
-        <SilentErrorBoundary>
+        <ErrorBoundary>
           <Suspense fallback={null}>
             <PixelOfficePage />
           </Suspense>
-        </SilentErrorBoundary>
+        </ErrorBoundary>
       </div>
     </div>
   );
