@@ -6,6 +6,7 @@ All notable changes to claude-alive.
 
 ### New Features
 
+-  add security hardening, test suite (145 tests), CI/CD, and changelog
 -  auto-set subagent displayName from agent_type hook field
 -  redesign UI with Toss-style typography, colors, and spacing
 
