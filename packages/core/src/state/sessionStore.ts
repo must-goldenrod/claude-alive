@@ -53,7 +53,7 @@ export class SessionStore {
     }
 
     if (event === 'SubagentStart' && data.agent_id) {
-      return this.createAgent(data.agent_id, data.cwd ?? '', sessionId);
+      return this.createAgent(data.agent_id, data.cwd ?? '', sessionId, data.agent_type);
     }
 
     if (event === 'SubagentStop' && data.agent_id) {
@@ -124,7 +124,7 @@ export class SessionStore {
     return true;
   }
 
-  private createAgent(sessionId: string, cwd: string, parentId?: string): AgentInfo {
+  private createAgent(sessionId: string, cwd: string, parentId?: string, agentType?: string): AgentInfo {
     const projectName = pathBasename(cwd);
     const agent: AgentInfo = {
       id: sessionId,
@@ -137,7 +137,7 @@ export class SessionStore {
       lastEventTime: Date.now(),
       parentId: parentId ?? null,
       createdAt: Date.now(),
-      displayName: null,
+      displayName: agentType ?? null,
       projectName,
       transcriptPath: null,
       totalEvents: 0,
