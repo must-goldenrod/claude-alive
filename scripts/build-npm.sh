@@ -38,7 +38,7 @@ cp "$ROOT/README.md" "$OUT/"
 cat > "$OUT/package.json" << PKGJSON
 {
   "name": "claude-alive",
-  "version": "'"$VERSION"'",
+  "version": "$VERSION",
   "description": "Real-time animated UI for Claude Code sessions, powered by hooks",
   "license": "MIT",
   "type": "module",
