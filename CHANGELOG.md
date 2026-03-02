@@ -12,6 +12,7 @@ All notable changes to claude-alive.
 
 ### Bug Fixes
 
+-  correct version quoting in build-npm.sh heredoc
 -  restore version and fix release script version calculation
 
 ### Documentation
