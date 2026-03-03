@@ -43,7 +43,7 @@ export function NotificationBanner({ agents }: NotificationBannerProps) {
               </span>
             </div>
             <span className="text-xs shrink-0" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-              {'General Agent'}
+              {agent.projectName || agent.sessionId.slice(0, 8)}
             </span>
           </div>
         );

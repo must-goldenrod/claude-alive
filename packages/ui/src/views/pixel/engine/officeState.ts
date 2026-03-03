@@ -76,7 +76,12 @@ export function spawnCharacter(
   options?: SpawnOptions,
 ): Character {
   const existing = state.characters.get(sessionId);
-  if (existing) return existing;
+  if (existing) {
+    // Sync label/subAgent flags — snapshot or late SubagentStart may carry updated info
+    if (options?.label !== undefined) existing.label = options.label;
+    if (options?.isSubAgent !== undefined) existing.isSubAgent = options.isSubAgent;
+    return existing;
+  }
 
   const paletteIndex = state.nextPaletteIndex;
   state.nextPaletteIndex++;
