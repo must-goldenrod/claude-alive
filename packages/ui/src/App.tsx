@@ -33,9 +33,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
 export default function App() {
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <HeaderBar />
-      <div style={{ paddingTop: 56, height: '100%', boxSizing: 'border-box' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <ErrorBoundary>
           <Suspense fallback={null}>
             <PixelOfficePage />

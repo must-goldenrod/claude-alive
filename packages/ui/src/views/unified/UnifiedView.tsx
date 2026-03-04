@@ -1,10 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWebSocket } from '../dashboard/hooks/useWebSocket.ts';
 import { ProjectSidebar } from './ProjectSidebar.tsx';
 import { RightPanel } from './RightPanel.tsx';
 import { NotificationBanner } from '../dashboard/components/NotificationBanner.tsx';
-import { TerminalPanel } from '../terminal/TerminalPanel.tsx';
 
 const WS_URL = `ws://${window.location.hostname}:${window.location.port || '3141'}/ws`;
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
@@ -14,9 +13,6 @@ export function UnifiedView() {
 
   const { agents, events, completedSessions, stats } = useWebSocket(WS_URL);
   const agentList = Array.from(agents.values());
-
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalHeight, setTerminalHeight] = useState(300);
 
   const handleRename = useCallback((sessionId: string, name: string | null) => {
     fetch(`${API_BASE}/api/agents/${sessionId}/name`, {
@@ -65,14 +61,6 @@ export function UnifiedView() {
 
         <RightPanel events={events} agents={agentList} completedSessions={completedSessions} stats={stats} />
       </div>
-
-      {/* Terminal */}
-      <TerminalPanel
-        open={terminalOpen}
-        onToggle={() => setTerminalOpen(prev => !prev)}
-        height={terminalHeight}
-        onHeightChange={setTerminalHeight}
-      />
     </div>
   );
 }
