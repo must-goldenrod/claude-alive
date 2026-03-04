@@ -2,12 +2,33 @@
 
 All notable changes to claude-alive.
 
-## Unreleased (2026-03-03)
+## Unreleased (2026-03-04)
+
+### New Features
+
+-  add embedded xterm.js terminal panel
+-  add terminal WebSocket endpoint /ws/terminal
+-  add PtyManager for terminal sessions
+-  display token usage in stats and completion log
+-  integrate transcript parsing into agent lifecycle
+-  add transcript JSONL parser for token usage
+-  add AgentStats component to RightPanel
+-  add stats API endpoint and WS broadcast
+-  add getStats() with subagent/tool aggregation
+
+### Documentation
+
+-  add dashboard enhancements design and implementation plan
+
+### Other
+
+- test: add coverage for stats API, token usage, and terminal WS
+
+## v0.2.3 (2026-03-03)
 
 ### Bug Fixes
 
 -  replace all hardcoded English strings with translation keys
-
 ## v0.2.2 (2026-03-02)
 
 ### New Features
