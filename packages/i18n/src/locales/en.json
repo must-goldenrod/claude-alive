@@ -147,6 +147,13 @@
     "close": "Close",
     "maxSessions": "Max sessions reached"
   },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "Send a message...",
+    "send": "Send",
+    "you": "You",
+    "agent": "Agent"
+  },
   "bubble": {
     "readingTool": "Reading {{tool}}...",
     "reading": "Reading...",

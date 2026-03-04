@@ -147,6 +147,13 @@
     "close": "닫기",
     "maxSessions": "최대 세션 수 초과"
   },
+  "chat": {
+    "title": "Chat",
+    "placeholder": "메시지를 입력하세요...",
+    "send": "보내기",
+    "you": "나",
+    "agent": "에이전트"
+  },
   "bubble": {
     "readingTool": "{{tool}} 읽는 중...",
     "reading": "읽는 중...",
