@@ -1,12 +1,14 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
 import { createHttpServer } from './httpRouter.js';
-import { WSBroadcaster } from './wsServer.js';
+import { WSBroadcaster, TerminalWSServer } from './wsServer.js';
+import { PtyManager } from './ptyManager.js';
 import { loadNames, getNames, saveName, removeName } from './nameStore.js';
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
 const store = new SessionStore();
+const ptyManager = new PtyManager({ maxSessions: 5 });
 
 // Load persisted agent names before starting the server
 await loadNames();
@@ -114,6 +116,7 @@ function removeAgent(sessionId: string): boolean {
 
 const httpServer = createHttpServer({ onEvent, getSnapshot, renameAgent, removeAgent, getStats: () => store.getStats() });
 const broadcaster = new WSBroadcaster(httpServer, { getSnapshot });
+const terminalWs = new TerminalWSServer(httpServer, ptyManager);
 
 httpServer.listen(PORT, () => {
   console.log(`
@@ -122,6 +125,7 @@ httpServer.listen(PORT, () => {
   ║                                      ║
   ║  HTTP:  http://localhost:${PORT}       ║
   ║  WS:    ws://localhost:${PORT}/ws      ║
+  ║  Term:  ws://localhost:${PORT}/ws/term ║
   ╚══════════════════════════════════════╝
   `);
 });
@@ -130,6 +134,7 @@ process.on('SIGINT', () => {
   console.log('\n[server] shutting down...');
   for (const timer of despawnTimers.values()) clearTimeout(timer);
   despawnTimers.clear();
+  terminalWs.close();
   broadcaster.close();
   httpServer.close();
   process.exit(0);
