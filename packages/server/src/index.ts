@@ -1,4 +1,4 @@
-import { SessionStore } from '@claude-alive/core';
+import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
@@ -49,6 +49,18 @@ function onEvent(payload: HookEventPayload): void {
       }, 30_000));
     } else {
       broadcaster.broadcast({ type: 'agent:despawn', sessionId: agent.sessionId });
+    }
+
+    // Async transcript parsing (non-blocking)
+    if (agent.transcriptPath) {
+      parseTranscriptTokens(agent.transcriptPath).then((usage) => {
+        if (usage) {
+          const current = store.getAgent(agent.sessionId);
+          if (current) {
+            current.tokenUsage = usage;
+          }
+        }
+      }).catch(() => {});
     }
   } else if (event === 'UserPromptSubmit' && payload.data.prompt) {
     broadcaster.broadcast({ type: 'agent:prompt', sessionId: agent.sessionId, prompt: payload.data.prompt });

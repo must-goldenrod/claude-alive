@@ -84,4 +84,16 @@ export interface AgentInfo {
   toolCallCount: number;
   /** Per-tool call counts */
   toolCallCounts: Record<string, number>;
+  /** Token usage from transcript parsing (populated after session ends) */
+  tokenUsage: TokenUsage | null;
+}
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  apiCalls: number;
+  model: string;
 }

@@ -60,6 +60,7 @@ function mockAgent(sessionId: string, overrides: Partial<AgentInfo> = {}): Agent
     toolsUsed: [],
     toolCallCount: 0,
     toolCallCounts: {},
+    tokenUsage: null,
     ...overrides,
   };
 }

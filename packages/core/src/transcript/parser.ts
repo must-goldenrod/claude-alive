@@ -1,15 +1,8 @@
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
+import type { TokenUsage } from '../events/types.js';
 
-export interface TokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
-  totalTokens: number;
-  apiCalls: number;
-  model: string;
-}
+export type { TokenUsage };
 
 export async function parseTranscriptTokens(filePath: string): Promise<TokenUsage | null> {
   const lastByMsgId = new Map<string, { usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number }; model: string }>();

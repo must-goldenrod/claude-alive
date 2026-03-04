@@ -158,6 +158,7 @@ export class SessionStore {
       toolsUsed: [],
       toolCallCount: 0,
       toolCallCounts: {},
+      tokenUsage: null,
     };
     this.agents.set(sessionId, agent);
     this.addLogEntry(
