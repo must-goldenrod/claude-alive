@@ -135,7 +135,15 @@ beforeAll(async () => {
     removeAgent: (id) => store.removeAgent(id),
     getStats: () => store.getStats(),
   });
-  broadcaster = new WSBroadcaster(httpServer, { getSnapshot, maxClients: 50 });
+  broadcaster = new WSBroadcaster({ getSnapshot, maxClients: 50 });
+  httpServer.on('upgrade', (req, socket, head) => {
+    const { pathname } = new URL(req.url ?? '/', `http://${req.headers.host}`);
+    if (pathname === '/ws') {
+      broadcaster.handleUpgrade(req, socket, head);
+    } else {
+      socket.destroy();
+    }
+  });
   baseUrl = await new Promise<string>((resolve) => {
     httpServer.listen(0, () => {
       const addr = httpServer.address();

@@ -1,24 +1,32 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import type { MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { WSServerMessage } from '@claude-alive/core';
 
 interface ChatMessage {
   id: string;
   role: 'user' | 'agent';
   content: string;
   timestamp: number;
+  streaming?: boolean;
 }
+
+export type ChatEventHandler = (msg: WSServerMessage) => void;
 
 interface ChatOverlayProps {
   open: boolean;
   onToggle: () => void;
+  onSend?: (message: string) => void;
+  chatEventRef?: MutableRefObject<ChatEventHandler | null>;
 }
 
-export function ChatOverlay({ open, onToggle }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSend, chatEventRef }: ChatOverlayProps) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const streamingMsgIdRef = useRef<string | null>(null);
 
   // Auto-scroll on new message
   useEffect(() => {
@@ -36,6 +44,50 @@ export function ChatOverlay({ open, onToggle }: ChatOverlayProps) {
     }
   }, [input]);
 
+  // Register chat event handler
+  useEffect(() => {
+    if (!chatEventRef) return;
+    chatEventRef.current = (msg: WSServerMessage) => {
+      if (msg.type === 'chat:chunk') {
+        if (!streamingMsgIdRef.current) {
+          // Create new agent message
+          const id = crypto.randomUUID();
+          streamingMsgIdRef.current = id;
+          setMessages(prev => [...prev, {
+            id,
+            role: 'agent',
+            content: msg.text,
+            timestamp: Date.now(),
+            streaming: true,
+          }]);
+        } else {
+          // Append to existing streaming message
+          const sid = streamingMsgIdRef.current;
+          setMessages(prev => prev.map(m =>
+            m.id === sid ? { ...m, content: m.content + msg.text } : m
+          ));
+        }
+      } else if (msg.type === 'chat:end') {
+        const sid = streamingMsgIdRef.current;
+        if (sid) {
+          setMessages(prev => prev.map(m =>
+            m.id === sid ? { ...m, streaming: false } : m
+          ));
+        }
+        streamingMsgIdRef.current = null;
+      } else if (msg.type === 'chat:error') {
+        streamingMsgIdRef.current = null;
+        setMessages(prev => [...prev, {
+          id: crypto.randomUUID(),
+          role: 'agent',
+          content: t('chat.error', { message: msg.error }),
+          timestamp: Date.now(),
+        }]);
+      }
+    };
+    return () => { chatEventRef.current = null; };
+  }, [chatEventRef, t]);
+
   const sendMessage = useCallback(() => {
     const trimmed = input.trim();
     if (!trimmed) return;
@@ -49,17 +101,10 @@ export function ChatOverlay({ open, onToggle }: ChatOverlayProps) {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
 
-    // Mock agent response (placeholder — real integration later)
-    setTimeout(() => {
-      const agentMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'agent',
-        content: trimmed,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, agentMsg]);
-    }, 600);
-  }, [input]);
+    if (onSend) {
+      onSend(trimmed);
+    }
+  }, [input, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -67,6 +112,8 @@ export function ChatOverlay({ open, onToggle }: ChatOverlayProps) {
       sendMessage();
     }
   }, [sendMessage]);
+
+  const isStreaming = streamingMsgIdRef.current !== null;
 
   if (!open) return null;
 
@@ -189,9 +236,24 @@ export function ChatOverlay({ open, onToggle }: ChatOverlayProps) {
               }}
             >
               {msg.content}
+              {msg.streaming && (
+                <span style={{ opacity: 0.5, fontFamily: 'var(--font-mono)', fontSize: 11 }}> ▍</span>
+              )}
             </div>
           </div>
         ))}
+
+        {/* Streaming indicator when waiting for first chunk */}
+        {isStreaming && messages[messages.length - 1]?.role === 'user' && (
+          <div style={{
+            fontSize: 12,
+            color: 'var(--text-secondary)',
+            fontFamily: 'var(--font-mono)',
+            padding: '4px 0',
+          }}>
+            {t('chat.streaming')}
+          </div>
+        )}
       </div>
 
       {/* Pixel Input */}

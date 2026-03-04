@@ -146,7 +146,9 @@
     "placeholder": "Send a message...",
     "send": "Send",
     "you": "You",
-    "agent": "Agent"
+    "agent": "Agent",
+    "streaming": "Thinking...",
+    "error": "Error: {{message}}"
   },
   "bubble": {
     "readingTool": "Reading {{tool}}...",

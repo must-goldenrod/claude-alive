@@ -146,7 +146,9 @@
     "placeholder": "메시지를 입력하세요...",
     "send": "보내기",
     "you": "나",
-    "agent": "에이전트"
+    "agent": "에이전트",
+    "streaming": "생각하는 중...",
+    "error": "오류: {{message}}"
   },
   "bubble": {
     "readingTool": "{{tool}} 읽는 중...",

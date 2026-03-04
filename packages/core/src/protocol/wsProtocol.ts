@@ -11,8 +11,12 @@ export type WSServerMessage =
   | { type: 'event:new'; entry: EventLogEntry }
   | { type: 'stats:update'; stats: AgentStats }
   | { type: 'snapshot'; agents: AgentInfo[]; recentEvents: EventLogEntry[]; completedSessions: CompletedSession[]; stats: AgentStats }
-  | { type: 'system:heartbeat'; timestamp: number };
+  | { type: 'system:heartbeat'; timestamp: number }
+  | { type: 'chat:chunk'; text: string; sessionId: string }
+  | { type: 'chat:end'; sessionId: string; costUsd?: number }
+  | { type: 'chat:error'; error: string; sessionId: string | null };
 
 export type WSClientMessage =
   | { type: 'ping' }
-  | { type: 'request:snapshot' };
+  | { type: 'request:snapshot' }
+  | { type: 'chat:send'; message: string };

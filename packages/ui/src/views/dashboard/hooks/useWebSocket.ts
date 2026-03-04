@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, AgentStats } from '@claude-alive/core';
+import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats } from '@claude-alive/core';
 
 export interface DashboardState {
   agents: Map<string, AgentInfo>;
@@ -127,6 +127,12 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
     };
   }, [url, onRawMessage]);
 
+  const send = useCallback((msg: WSClientMessage) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
   useEffect(() => {
     connect();
     return () => {
@@ -135,5 +141,5 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
     };
   }, [connect]);
 
-  return state;
+  return { ...state, send };
 }

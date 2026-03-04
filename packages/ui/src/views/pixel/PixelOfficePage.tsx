@@ -16,6 +16,7 @@ import { OrgChartOverlay } from './components/OrgChartOverlay';
 import { AgentTimelinePanel } from './components/AgentTimelinePanel';
 import type { PromptEntry } from './components/AgentTimelinePanel';
 import { ChatOverlay } from '../chat/ChatOverlay.tsx';
+import type { ChatEventHandler } from '../chat/ChatOverlay.tsx';
 
 const PixelCanvas = lazy(() => import('./components/PixelCanvas.tsx'));
 
@@ -42,6 +43,7 @@ export function PixelOfficePage() {
   const [, setPromptsVersion] = useState(0);
   const [, setCharVersion] = useState(0);
   const [chatOpen, setChatOpen] = useState(false);
+  const chatHandlerRef = useRef<ChatEventHandler | null>(null);
 
   // Stable callback ref for onRawMessage (avoids useWebSocket reconnects)
   const onRawRef = useRef<(msg: WSServerMessage) => void>(() => {});
@@ -137,13 +139,22 @@ export function PixelOfficePage() {
         }
         break;
       }
+      case 'chat:chunk':
+      case 'chat:end':
+      case 'chat:error':
+        chatHandlerRef.current?.(msg);
+        break;
     }
   };
 
   const stableOnRaw = useCallback((msg: WSServerMessage) => onRawRef.current(msg), []);
 
-  const { agents, events, completedSessions, stats } = useWebSocket(WS_URL, stableOnRaw);
+  const { agents, events, completedSessions, stats, send } = useWebSocket(WS_URL, stableOnRaw);
   const agentList = Array.from(agents.values());
+
+  const handleChatSend = useCallback((message: string) => {
+    send({ type: 'chat:send', message });
+  }, [send]);
 
   const handleRename = useCallback((sessionId: string, name: string | null) => {
     fetch(`${API_BASE}/api/agents/${sessionId}/name`, {
@@ -348,7 +359,12 @@ export function PixelOfficePage() {
         </button>
 
         {/* Chat overlay */}
-        <ChatOverlay open={chatOpen} onToggle={() => setChatOpen(false)} />
+        <ChatOverlay
+          open={chatOpen}
+          onToggle={() => setChatOpen(false)}
+          onSend={handleChatSend}
+          chatEventRef={chatHandlerRef}
+        />
       </div>
 
       <RightPanel events={events} agents={agentList} completedSessions={completedSessions} stats={stats} />
