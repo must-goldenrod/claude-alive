@@ -193,6 +193,35 @@ describe('WebSocket Integration', () => {
     });
   });
 
+  describe('snapshot includes stats', () => {
+    it('snapshot message contains stats with correct shape', async () => {
+      const c = await connectClient();
+      const msg = await c.waitFor((m) => m.type === 'snapshot');
+      expect(msg.type).toBe('snapshot');
+      if (msg.type === 'snapshot') {
+        expect(msg.stats).toBeDefined();
+        expect(typeof msg.stats.totalAgents).toBe('number');
+        expect(typeof msg.stats.activeAgents).toBe('number');
+        expect(typeof msg.stats.subagentsByType).toBe('object');
+        expect(typeof msg.stats.toolCallsByName).toBe('object');
+      }
+      await c.close();
+    });
+
+    it('request:snapshot also includes stats', async () => {
+      const c = await connectClient();
+      await c.drainSnapshot();
+      c.send({ type: 'request:snapshot' });
+      const msg = await c.waitFor((m) => m.type === 'snapshot');
+      expect(msg.type).toBe('snapshot');
+      if (msg.type === 'snapshot') {
+        expect(msg.stats).toBeDefined();
+        expect(typeof msg.stats.totalAgents).toBe('number');
+      }
+      await c.close();
+    });
+  });
+
   describe('event → broadcast flow', () => {
     it('broadcasts agent:spawn on SessionStart', async () => {
       const c = await connectClient();

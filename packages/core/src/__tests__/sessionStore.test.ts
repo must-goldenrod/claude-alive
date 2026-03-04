@@ -175,6 +175,49 @@ describe('SessionStore', () => {
       expect(store.getCompletedSessions().length).toBe(0);
     });
 
+    it('includes tokenUsage in completed session when set on agent', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-token'));
+      store.processEvent(makePayload('Stop', 'sess-token')); // → idle
+      store.processEvent(makePayload('TaskCompleted', 'sess-token')); // → done
+
+      // Simulate transcript parsing setting tokenUsage before SessionEnd
+      const agent = store.getAgent('sess-token');
+      agent!.tokenUsage = {
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheCreationTokens: 200,
+        cacheReadTokens: 100,
+        totalTokens: 1800,
+        apiCalls: 5,
+        model: 'claude-sonnet-4-20250514',
+      };
+
+      store.processEvent(makePayload('SessionEnd', 'sess-token'));
+      const completed = store.getCompletedSessions();
+      const session = completed.find(c => c.sessionId === 'sess-token');
+      expect(session).toBeDefined();
+      expect(session!.tokenUsage).toEqual({
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheCreationTokens: 200,
+        cacheReadTokens: 100,
+        totalTokens: 1800,
+        apiCalls: 5,
+        model: 'claude-sonnet-4-20250514',
+      });
+    });
+
+    it('completed session has null tokenUsage when not set', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-notoken'));
+      store.processEvent(makePayload('Stop', 'sess-notoken'));
+      store.processEvent(makePayload('TaskCompleted', 'sess-notoken'));
+      store.processEvent(makePayload('SessionEnd', 'sess-notoken'));
+      const completed = store.getCompletedSessions();
+      const session = completed.find(c => c.sessionId === 'sess-notoken');
+      expect(session).toBeDefined();
+      expect(session!.tokenUsage).toBeNull();
+    });
+
     it('respects max completed sessions size', () => {
       const smallStore = new SessionStore(1000, 3);
       for (let i = 0; i < 5; i++) {

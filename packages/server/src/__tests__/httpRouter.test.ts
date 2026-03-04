@@ -232,6 +232,44 @@ describe('HTTP Router', () => {
     });
   });
 
+  describe('GET /api/stats', () => {
+    it('returns 200 with stats object', async () => {
+      const res = await fetch(`${baseUrl}/api/stats`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(typeof body).toBe('object');
+      expect(body).not.toBeNull();
+    });
+
+    it('contains expected fields', async () => {
+      const res = await fetch(`${baseUrl}/api/stats`);
+      const body = await res.json();
+      expect(typeof body.totalAgents).toBe('number');
+      expect(typeof body.activeAgents).toBe('number');
+      expect(typeof body.subagentsByType).toBe('object');
+      expect(typeof body.toolCallsByName).toBe('object');
+    });
+
+    it('reflects agent activity', async () => {
+      // Create a new agent to change stats
+      await fetch(`${baseUrl}/api/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'SessionStart',
+          tool: 'system',
+          session_id: 'stats-test-1',
+          timestamp: Date.now(),
+          data: { session_id: 'stats-test-1', hook_event_name: 'SessionStart', cwd: '/tmp' },
+        }),
+      });
+      const res = await fetch(`${baseUrl}/api/stats`);
+      const body = await res.json();
+      expect(body.totalAgents).toBeGreaterThanOrEqual(1);
+      expect(body.activeAgents).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('404 handling', () => {
     it('returns 404 for unknown POST routes', async () => {
       const res = await fetch(`${baseUrl}/api/nonexistent`, { method: 'POST' });
