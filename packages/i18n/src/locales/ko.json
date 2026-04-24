@@ -22,6 +22,7 @@
     "hideInactive": "비활성 숨기기",
     "inactiveCount": "+{{count}}개 비활성",
     "clickToRename": "클릭하여 이름 변경",
+    "clickToRenameProject": "클릭하여 프로젝트 이름 변경",
     "events": "이벤트",
     "tools": "도구",
     "startedAt": "시작 시간",
@@ -159,7 +160,50 @@
     "modeFullscreen": "전체화면",
     "selectHere": "선택",
     "emptyDir": "하위 폴더 없음",
-    "collapse": "최소화"
+    "collapse": "최소화",
+    "closeDialog": "닫기",
+    "doubleClickRename": "더블클릭하여 이름 변경",
+    "menu": {
+      "localFolder": "로컬 폴더 열기…",
+      "sshPresets": "SSH 프리셋",
+      "manageSsh": "새 SSH 프리셋…",
+      "previousSessions": "이전 세션",
+      "sessionNoPreview": "(미리보기 없음)"
+    },
+    "ssh": {
+      "dialogTitle": "SSH 연결 프리셋",
+      "newTitle": "새 프리셋",
+      "editTitle": "프리셋 수정",
+      "modeFreeform": "명령어",
+      "modeStructured": "호스트",
+      "labelField": "이름",
+      "labelPlaceholder": "Studio 서버",
+      "commandField": "SSH 명령어",
+      "commandHint": "예: `ssh studio` — ~/.ssh/config, 키, agent를 그대로 사용",
+      "host": "호스트",
+      "port": "포트",
+      "user": "사용자",
+      "identityFile": "인증 키 파일",
+      "structuredHint": "호스트를 입력하면 명령어가 자동 생성됩니다",
+      "autoRun": "탭이 열리면 명령어를 자동 실행",
+      "securityNote": "비밀번호는 절대 저장되지 않습니다. 터미널에 직접 입력하거나, 키 기반 인증 / ssh-agent를 사용하세요.",
+      "savePreset": "프리셋 저장",
+      "saveChanges": "변경사항 저장",
+      "cancelEdit": "취소",
+      "connect": "연결",
+      "edit": "수정",
+      "delete": "삭제",
+      "confirmDelete": "프리셋 “{{label}}”을(를) 삭제할까요?"
+    },
+    "sshError": {
+      "permission-denied": "SSH: 인증 실패 — 키 또는 비밀번호를 확인하세요",
+      "connection-refused": "SSH: 연결 거부 — 호스트가 꺼져 있거나 포트가 닫혀 있습니다",
+      "dns": "SSH: 호스트를 찾을 수 없음 — 호스트명을 확인하세요",
+      "timeout": "SSH: 연결 시간 초과 — 네트워크 또는 방화벽을 확인하세요",
+      "host-key": "SSH: 호스트 키 검증 실패",
+      "host-key-changed": "SSH: 원격 호스트 ID 변경 감지 — 중간자 공격 가능성",
+      "unknown": "SSH: 연결 실패"
+    }
   },
   "chat": {
     "title": "Chat",
@@ -167,6 +211,22 @@
     "send": "보내기",
     "you": "나",
     "agent": "에이전트"
+  },
+  "viewMode": {
+    "label": "뷰 모드",
+    "animation": "애니메이션",
+    "list": "리스트"
+  },
+  "listView": {
+    "title": "에이전트",
+    "col": {
+      "name": "에이전트",
+      "state": "상태",
+      "tool": "도구",
+      "project": "프로젝트",
+      "events": "이벤트",
+      "lastEvent": "최근 이벤트"
+    }
   },
   "bubble": {
     "readingTool": "{{tool}} 읽는 중...",

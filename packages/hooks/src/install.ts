@@ -67,7 +67,7 @@ export function installHooks(): { installed: boolean; settingsPath: string; hook
   for (const event of HOOK_EVENTS_TO_REGISTER) {
     const existing = settings.hooks[event] ?? [];
     const alreadyInstalled = existing.some((entry) =>
-      entry.hooks?.some((h) => h.command.includes('claude-alive'))
+      entry.hooks?.some((h) => typeof h.command === 'string' && h.command.includes('claude-alive'))
     );
 
     if (!alreadyInstalled) {
@@ -98,7 +98,7 @@ export function uninstallHooks(): void {
     if (settings.hooks) {
       for (const event of Object.keys(settings.hooks)) {
         settings.hooks[event] = (settings.hooks[event] ?? []).filter((entry) =>
-          !entry.hooks?.some((h) => h.command.includes('claude-alive'))
+          !entry.hooks?.some((h) => typeof h.command === 'string' && h.command.includes('claude-alive'))
         );
         if (settings.hooks[event]!.length === 0) {
           delete settings.hooks[event];

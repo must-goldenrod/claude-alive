@@ -1,14 +1,52 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import type { WSServerMessage } from '@claude-alive/core';
+import type { WSServerMessage, TerminalMode as TerminalSpawnMode, TerminalSource } from '@claude-alive/core';
 import { TerminalTabBar } from './TerminalTabBar.tsx';
 import type { Tab } from './TerminalTabBar.tsx';
+import { SSHPresetDialog } from './SSHPresetDialog.tsx';
+import {
+  loadPresets,
+  createPreset,
+  updatePreset as updatePresetStore,
+  deletePreset as deletePresetStore,
+} from './sshPresets.ts';
+import type { SSHPreset, SSHPresetDraft } from './sshPresets.ts';
 
 export type TerminalEventHandler = (msg: WSServerMessage) => void;
+
+/** Parameters passed to the spawn callback. */
+export interface SpawnRequest {
+  tabId: string;
+  cwd?: string;
+  skipPermissions?: boolean;
+  mode: TerminalSpawnMode;
+  source: TerminalSource;
+  initialCommand?: string;
+  /** UUID passed via `claude --session-id` to 1:1 pair the tab with a Claude session. */
+  claudeSessionId?: string;
+  /** Pre-existing Claude session UUID to resume via `claude --resume`. Wins over claudeSessionId. */
+  resumeSessionId?: string;
+  /** Initial display name passed via `claude -n`. */
+  displayName?: string;
+}
+
+/** Lightweight SSH tab projection broadcast to App so the sidebar can show a presence indicator. */
+export interface SshSessionInfo {
+  tabId: string;
+  label: string;
+  presetId?: string;
+  status: 'idle' | 'active' | 'done';
+  exited: boolean;
+  hasError: boolean;
+}
+
+/** Idle-timeout after the last output before a tab transitions from active → idle (ms). */
+const ACTIVITY_IDLE_MS = 1500;
 
 type TerminalMode = 'popup' | 'bottom' | 'right' | 'fullscreen';
 
@@ -20,12 +58,28 @@ const MAX_RIGHT_RATIO = 0.75; // 75% of viewport width
 interface ChatOverlayProps {
   open: boolean;
   onToggle: () => void;
-  onSpawn?: (tabId: string, cwd?: string, skipPermissions?: boolean) => void;
+  onSpawn?: (req: SpawnRequest) => void;
   onInput?: (tabId: string, data: string) => void;
   onResize?: (tabId: string, cols: number, rows: number) => void;
   onClose?: (tabId: string) => void;
   terminalEventRef?: MutableRefObject<TerminalEventHandler | null>;
   projectPaths?: string[];
+  /**
+   * When true, the overlay animates to a full body-area layout (below header, right of left
+   * sidebar). The mode-switcher, resize handles, minimize button, and floating collapsed bar
+   * are suppressed. The terminal does not move in the DOM — its fixed-position coordinates
+   * change and CSS transitions produce the "sliding" animation.
+   */
+  listViewActive?: boolean;
+  /** Pixel width of the visible left sidebar. Used to compute the list-view left inset. */
+  listLeftInset?: number;
+  /** Called whenever the set of SSH tabs changes. Enables App/Sidebar to show a presence indicator. */
+  onSshSessionsChange?: (sessions: SshSessionInfo[]) => void;
+  /**
+   * cwd → project display name map. Single source of truth — terminal tabs render their label
+   * by looking up the tab's cwd in this map (fallback to pathBasename(cwd)).
+   */
+  projectNames?: Record<string, string>;
 }
 
 const TERM_OPTIONS = {
@@ -64,6 +118,43 @@ const TERM_OPTIONS = {
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
 const HEADER_HEIGHT = 56;
+
+function getListViewStyle(listLeftInset: number): React.CSSProperties {
+  return {
+    position: 'fixed',
+    zIndex: 30,
+    display: 'flex',
+    flexDirection: 'column',
+    background: 'rgba(13, 17, 23, 0.92)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    border: 'none',
+    borderTop: '1px solid var(--border-color)',
+    borderLeft: listLeftInset > 0 ? '1px solid var(--border-color)' : 'none',
+    overflow: 'hidden',
+    top: HEADER_HEIGHT,
+    left: listLeftInset,
+    width: `calc(100vw - ${listLeftInset}px)`,
+    height: `calc(100vh - ${HEADER_HEIGHT}px)`,
+    borderRadius: 0,
+    transform: 'none',
+  };
+}
+
+// Transition applied to the overlay root in every mode. Animates when listViewActive toggles,
+// mode changes, or sidebar inset changes — the terminal visibly "slides" between layouts.
+// Durations tripled from the initial 420ms for a slower, more deliberate feel.
+const OVERLAY_TRANSITION = [
+  'top 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'left 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'right 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'bottom 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'width 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'height 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'transform 1260ms cubic-bezier(0.22, 1, 0.36, 1)',
+  'border-radius 960ms ease',
+  'opacity 720ms ease',
+].join(', ');
 
 function getModeStyle(mode: TerminalMode, bottomHeight?: number, rightWidth?: number): React.CSSProperties {
   const base: React.CSSProperties = {
@@ -138,6 +229,34 @@ function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
 }
 
+function formatRelativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d`;
+  const mo = Math.floor(d / 30);
+  return `${mo}mo`;
+}
+
+/**
+ * Fallback v4-ish UUID for environments without `crypto.randomUUID`.
+ * Claude CLI validates UUID format, so we keep the canonical 8-4-4-4-12 hex layout.
+ */
+function generateFallbackUuid(): string {
+  const rnd = () => Math.random().toString(16).slice(2, 10);
+  const a = rnd();
+  const b = rnd().slice(0, 4);
+  const c = '4' + rnd().slice(0, 3);
+  const d = ((parseInt(rnd().slice(0, 1), 16) & 0x3) | 0x8).toString(16) + rnd().slice(0, 3);
+  const e = rnd() + rnd().slice(0, 4);
+  return `${a}-${b}-${c}-${d}-${e}`;
+}
+
 // Mode button SVG icons
 function ModeIcon({ mode, size = 14 }: { mode: TerminalMode; size?: number }) {
   const s = size;
@@ -179,8 +298,9 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [] }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, projectNames }: ChatOverlayProps) {
   const { t } = useTranslation();
+  const isListView = listViewActive;
 
   const [mode, setMode] = useState<TerminalMode>('popup');
   const [bottomHeight, setBottomHeight] = useState<number | undefined>(undefined);
@@ -192,10 +312,12 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
   const onCloseRef = useRef(onClose);
+  const onSshSessionsChangeRef = useRef(onSshSessionsChange);
   onSpawnRef.current = onSpawn;
   onInputRef.current = onInput;
   onResizeRef.current = onResize;
   onCloseRef.current = onClose;
+  onSshSessionsChangeRef.current = onSshSessionsChange;
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
@@ -207,83 +329,264 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const [browseCurrentPath, setBrowseCurrentPath] = useState('');
   const [browseLoading, setBrowseLoading] = useState(false);
 
+  // SSH preset state
+  const [presets, setPresets] = useState<SSHPreset[]>(() => loadPresets());
+  const [sshDialogOpen, setSshDialogOpen] = useState(false);
+
+  // Previous Claude sessions for the currently-browsed cwd
+  interface PastSession {
+    sessionId: string;
+    cwd: string;
+    startedAt: number;
+    lastActivity: number;
+    preview: string;
+    sizeBytes: number;
+  }
+  const [pastSessions, setPastSessions] = useState<PastSession[]>([]);
+  const [pastSessionsLoading, setPastSessionsLoading] = useState(false);
+
   // Per-tab xterm instances
   const termsRef = useRef(new Map<string, { term: Terminal; fit: FitAddon }>());
   // Per-tab container divs
   const containersRef = useRef(new Map<string, HTMLDivElement>());
-  // Wrapper that holds all tab containers
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  // Per-tab idle-timer handles (for active → idle transition)
+  const idleTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // Wrapper that holds all tab containers. ChatOverlay is always mounted at the App level
+  // and the terminal moves between layouts via CSS transitions on position/size — the DOM
+  // is never relocated, so a simple useRef is sufficient.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   // Track if we've initialized on first open
   const initializedRef = useRef(false);
 
-  // Create a new tab: allocate xterm, mount to container, call onSpawn
-  const createTab = useCallback((cwd?: string, dangerousSkip?: boolean) => {
-    const tabId = makeTabId();
-    const label = cwd ? pathBasename(cwd) : t('terminal.tabLabel', { n: tabCounter });
-
-    setTabs(prev => [...prev, { id: tabId, label, exited: false }]);
-    setActiveTabId(tabId);
-
-    // Defer xterm creation to next frame so the container div exists
-    requestAnimationFrame(() => {
-      const wrapper = wrapperRef.current;
-      if (!wrapper) return;
-
-      const container = document.createElement('div');
-      container.style.flex = '1';
-      container.style.padding = '8px 12px';
-      container.style.overflow = 'hidden';
-      container.style.height = '100%';
-      wrapper.appendChild(container);
-      containersRef.current.set(tabId, container);
-
-      const term = new Terminal(TERM_OPTIONS);
-      const fit = new FitAddon();
-      term.loadAddon(fit);
-      term.open(container);
-      termsRef.current.set(tabId, { term, fit });
-
-      requestAnimationFrame(() => {
-        fit.fit();
-        onResizeRef.current?.(tabId, term.cols, term.rows);
-        term.focus();
-      });
-
-      term.onData((data) => {
-        onInputRef.current?.(tabId, data);
-      });
-
-      onSpawnRef.current?.(tabId, cwd, dangerousSkip);
-    });
-
-    return tabId;
-  }, [t]);
-
-  const fetchBrowse = useCallback((dir: string) => {
-    setBrowseLoading(true);
-    fetch(`${API_BASE}/api/fs/browse?dir=${encodeURIComponent(dir)}`)
-      .then(r => r.json())
-      .then((data: { path: string; dirs: { name: string; path: string }[] }) => {
-        setBrowseCurrentPath(data.path);
-        setBrowseDirs(data.dirs);
-        setBrowsePath(data.path);
-      })
-      .catch(() => {})
-      .finally(() => setBrowseLoading(false));
+  /** Transition a tab to "active" and (re)schedule the idle timer. */
+  const markTabActivity = useCallback((tabId: string) => {
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === tabId && !tab.exited ? { ...tab, status: 'active' } : tab)),
+    );
+    const existing = idleTimersRef.current.get(tabId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      idleTimersRef.current.delete(tabId);
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId && !tab.exited && tab.status === 'active'
+            ? { ...tab, status: 'idle' }
+            : tab,
+        ),
+      );
+    }, ACTIVITY_IDLE_MS);
+    idleTimersRef.current.set(tabId, timer);
   }, []);
 
-  const handleAddClick = useCallback(() => {
+  interface CreateTabOptions {
+    cwd?: string;
+    dangerousSkip?: boolean;
+    mode?: TerminalSpawnMode;
+    source?: TerminalSource;
+    initialCommand?: string;
+    sshPresetId?: string;
+    label?: string;
+    /** If set, pass to `claude --resume <uuid>`. Wins over newly-generated claudeSessionId. */
+    resumeSessionId?: string;
+    /** Optional display name for `claude -n <name>`. */
+    displayName?: string;
+  }
+
+  // Create a new tab: allocate xterm, mount to container, call onSpawn
+  const createTab = useCallback(
+    (opts: CreateTabOptions = {}) => {
+      const tabId = makeTabId();
+      const mode: TerminalSpawnMode = opts.mode ?? 'claude';
+      const source: TerminalSource = opts.source ?? 'local';
+      // Label priority: explicit opts.label (e.g. SSH preset) → projectNames[cwd] → pathBasename(cwd) → fallback.
+      const resolvedProjectName = opts.cwd && projectNames ? projectNames[opts.cwd] : undefined;
+      const defaultLabel = opts.cwd
+        ? resolvedProjectName ?? pathBasename(opts.cwd)
+        : t('terminal.tabLabel', { n: tabCounter });
+      const label = opts.label ?? defaultLabel;
+
+      // Assign a Claude session UUID for 1:1 matching with the sidebar agent.
+      // `--resume` reuses an existing session; otherwise we mint a new v4 UUID to hand via --session-id.
+      const claudeSessionId =
+        mode === 'claude'
+          ? opts.resumeSessionId ?? (crypto.randomUUID?.() ?? generateFallbackUuid())
+          : undefined;
+
+      setTabs((prev) => [
+        ...prev,
+        {
+          id: tabId,
+          label,
+          cwd: opts.cwd,
+          exited: false,
+          status: 'idle',
+          source,
+          sshPresetId: opts.sshPresetId,
+          claudeSessionId,
+        },
+      ]);
+      setActiveTabId(tabId);
+
+      // Defer xterm creation to next frame so the container div exists
+      requestAnimationFrame(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+
+        const container = document.createElement('div');
+        container.style.flex = '1';
+        container.style.padding = '8px 12px';
+        container.style.overflow = 'hidden';
+        container.style.height = '100%';
+        wrapper.appendChild(container);
+        containersRef.current.set(tabId, container);
+
+        const term = new Terminal(TERM_OPTIONS);
+        const fit = new FitAddon();
+        term.loadAddon(fit);
+        term.open(container);
+        termsRef.current.set(tabId, { term, fit });
+
+        requestAnimationFrame(() => {
+          fit.fit();
+          onResizeRef.current?.(tabId, term.cols, term.rows);
+          term.focus();
+        });
+
+        term.onData((data) => {
+          onInputRef.current?.(tabId, data);
+        });
+
+        onSpawnRef.current?.({
+          tabId,
+          cwd: opts.cwd,
+          skipPermissions: opts.dangerousSkip,
+          mode,
+          source,
+          initialCommand: opts.initialCommand,
+          claudeSessionId: opts.resumeSessionId ? undefined : claudeSessionId,
+          resumeSessionId: opts.resumeSessionId,
+          displayName: opts.displayName,
+        });
+      });
+
+      return tabId;
+    },
+    [t, projectNames],
+  );
+
+  const fetchPastSessions = useCallback((cwd: string) => {
+    if (!cwd) {
+      setPastSessions([]);
+      return;
+    }
+    setPastSessionsLoading(true);
+    fetch(`${API_BASE}/api/claude/sessions?cwd=${encodeURIComponent(cwd)}`)
+      .then((r) => r.json())
+      .then((data: { sessions: PastSession[] }) => {
+        setPastSessions(Array.isArray(data.sessions) ? data.sessions : []);
+      })
+      .catch(() => setPastSessions([]))
+      .finally(() => setPastSessionsLoading(false));
+  }, []);
+
+  const fetchBrowse = useCallback(
+    (dir: string) => {
+      setBrowseLoading(true);
+      fetch(`${API_BASE}/api/fs/browse?dir=${encodeURIComponent(dir)}`)
+        .then((r) => r.json())
+        .then((data: { path: string; dirs: { name: string; path: string }[] }) => {
+          setBrowseCurrentPath(data.path);
+          setBrowseDirs(data.dirs);
+          setBrowsePath(data.path);
+          // Kick off past-sessions fetch for this directory in parallel.
+          fetchPastSessions(data.path);
+        })
+        .catch(() => {})
+        .finally(() => setBrowseLoading(false));
+    },
+    [fetchPastSessions],
+  );
+
+  const openLocalPicker = useCallback(() => {
     setCwdPickerOpen(true);
     setCustomPath('');
     fetchBrowse('~');
   }, [fetchBrowse]);
 
-  const handlePickCwd = useCallback((cwd?: string) => {
-    const skip = skipPermissions;
-    setCwdPickerOpen(false);
-    setCustomPath('');
-    createTab(cwd, skip);
-  }, [createTab, skipPermissions]);
+  const launchPreset = useCallback(
+    (preset: SSHPreset) => {
+      setSshDialogOpen(false);
+      createTab({
+        mode: 'shell',
+        source: 'ssh',
+        initialCommand: preset.autoRun ? preset.command : undefined,
+        sshPresetId: preset.id,
+        label: preset.label,
+      });
+    },
+    [createTab],
+  );
+
+  const handlePickCwd = useCallback(
+    (cwd?: string) => {
+      const skip = skipPermissions;
+      setCwdPickerOpen(false);
+      setCustomPath('');
+      createTab({ cwd, dangerousSkip: skip, mode: 'claude', source: 'local' });
+    },
+    [createTab, skipPermissions],
+  );
+
+  const handleResumeSession = useCallback(
+    (session: PastSession) => {
+      setCwdPickerOpen(false);
+      createTab({
+        cwd: session.cwd,
+        dangerousSkip: skipPermissions,
+        mode: 'claude',
+        source: 'local',
+        resumeSessionId: session.sessionId,
+        label: session.preview.slice(0, 32) || pathBasename(session.cwd),
+      });
+    },
+    [createTab, skipPermissions],
+  );
+
+  const handleSavePreset = useCallback(
+    (draft: SSHPresetDraft, editingId: string | null) => {
+      if (editingId) {
+        updatePresetStore(editingId, draft);
+      } else {
+        createPreset(draft);
+      }
+      setPresets(loadPresets());
+    },
+    [],
+  );
+
+  const handleDeletePreset = useCallback((id: string) => {
+    deletePresetStore(id);
+    setPresets(loadPresets());
+  }, []);
+
+  /**
+   * Project-name → tab label sync. Whenever projectNames changes, recompute each tab's label.
+   * Single source of truth: tab.label = projectNames[tab.cwd] ?? pathBasename(tab.cwd).
+   * SSH tabs keep whatever label they were given at spawn (e.g. the SSH preset's own name).
+   */
+  useEffect(() => {
+    setTabs((prev) => {
+      let changed = false;
+      const next = prev.map((tab) => {
+        if (tab.source === 'ssh' || !tab.cwd) return tab;
+        const resolved = (projectNames && projectNames[tab.cwd]) || pathBasename(tab.cwd);
+        if (resolved === tab.label) return tab;
+        changed = true;
+        return { ...tab, label: resolved };
+      });
+      return changed ? next : prev;
+    });
+  }, [projectNames]);
 
   // Close a tab: dispose xterm, remove container, call onClose
   const closeTab = useCallback((tabId: string) => {
@@ -296,6 +599,11 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     if (container) {
       container.remove();
       containersRef.current.delete(tabId);
+    }
+    const timer = idleTimersRef.current.get(tabId);
+    if (timer) {
+      clearTimeout(timer);
+      idleTimersRef.current.delete(tabId);
     }
     onCloseRef.current?.(tabId);
 
@@ -327,7 +635,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     }
   }, [activeTabId]);
 
-  // ResizeObserver for the wrapper — fit the active tab
+  // ResizeObserver for the wrapper — fit the active tab continuously.
+  // During the 420ms view transition this fires on every paint, so xterm resizes
+  // smoothly as the window animates between layouts.
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -343,15 +653,28 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     return () => ro.disconnect();
   }, [activeTabId]);
 
-  // Re-fit terminals when mode changes (container size changes)
+  // Final refit after the view transition settles. ResizeObserver may batch/skip
+  // the last frame; this guarantees xterm reads final dimensions cleanly.
+  // 1300ms ≈ 1260ms transition duration + 40ms buffer.
+  useEffect(() => {
+    const entry = termsRef.current.get(activeTabId);
+    if (!entry) return;
+    const timer = setTimeout(() => {
+      entry.fit.fit();
+      onResizeRef.current?.(activeTabId, entry.term.cols, entry.term.rows);
+    }, 1300);
+    return () => clearTimeout(timer);
+  }, [listViewActive, listLeftInset, activeTabId]);
+
+  // Re-fit terminals when mode changes (container size changes).
+  // Matches the 1260ms positional transition + 40ms buffer.
   useEffect(() => {
     const entry = termsRef.current.get(activeTabId);
     if (entry) {
-      // Delay to let CSS transition settle
       const timer = setTimeout(() => {
         entry.fit.fit();
         onResizeRef.current?.(activeTabId, entry.term.cols, entry.term.rows);
-      }, 300);
+      }, 1300);
       return () => clearTimeout(timer);
     }
   }, [mode, activeTabId]);
@@ -374,20 +697,57 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     }
   }, [open, activeTabId, cwdPickerOpen]);
 
+  // Broadcast SSH tab projection to parent so the sidebar can show a presence indicator.
+  // We can't hook-track remote activity (hooks run locally only) but at least the user
+  // sees that an SSH session is open, its label, and whether it's sending output.
+  useEffect(() => {
+    const sshSessions: SshSessionInfo[] = tabs
+      .filter((t) => t.source === 'ssh')
+      .map((t) => ({
+        tabId: t.id,
+        label: t.label,
+        presetId: t.sshPresetId,
+        status: t.status,
+        exited: t.exited,
+        hasError: !!t.sshError,
+      }));
+    onSshSessionsChangeRef.current?.(sshSessions);
+  }, [tabs]);
+
   // Register terminal event handler for incoming server messages
   useEffect(() => {
     if (!terminalEventRef) return;
     terminalEventRef.current = (msg: WSServerMessage) => {
       if (msg.type === 'terminal:output') {
         termsRef.current.get(msg.tabId)?.term.write(msg.data);
+        markTabActivity(msg.tabId);
       } else if (msg.type === 'terminal:exited') {
-        setTabs(prev => prev.map(tab =>
-          tab.id === msg.tabId ? { ...tab, exited: true } : tab
-        ));
+        const timer = idleTimersRef.current.get(msg.tabId);
+        if (timer) {
+          clearTimeout(timer);
+          idleTimersRef.current.delete(msg.tabId);
+        }
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === msg.tabId
+              ? { ...tab, exited: true, exitCode: msg.exitCode, status: 'done' }
+              : tab,
+          ),
+        );
+      } else if (msg.type === 'terminal:ssh-error') {
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === msg.tabId
+              ? { ...tab, sshError: { kind: msg.kind, line: msg.line } }
+              : tab,
+          ),
+        );
       }
     };
-    return () => { terminalEventRef.current = null; };
-  }, [terminalEventRef]);
+    return () => {
+      terminalEventRef.current = null;
+    };
+  }, [terminalEventRef, markTabActivity]);
 
   // Resize drag handler
   const handleResizeStart = useCallback((edge: 'bottom' | 'right') => {
@@ -425,10 +785,15 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
   // Cleanup all terminals on unmount
   useEffect(() => {
+    const timers = idleTimersRef.current;
+    const terms = termsRef.current;
+    const containers = containersRef.current;
     return () => {
-      for (const { term } of termsRef.current.values()) term.dispose();
-      termsRef.current.clear();
-      containersRef.current.clear();
+      for (const { term } of terms.values()) term.dispose();
+      for (const timer of timers.values()) clearTimeout(timer);
+      terms.clear();
+      containers.clear();
+      timers.clear();
       initializedRef.current = false;
     };
   }, []);
@@ -449,12 +814,25 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const uniquePaths = [...new Set(projectPaths)];
   const hasTabs = tabs.length > 0;
 
-  if (!open && !hasTabs) return null;
+  if (!open && !hasTabs && !isListView) return null;
 
-  return (
+  // Compose root style: the mode/list layout geometry plus a shared transition so changes
+  // to any positioning property animate. Opacity handles open/close; transform: none in
+  // list-view clears the popup's translateX so the terminal "slides" to its new position.
+  const layoutStyle = isListView
+    ? getListViewStyle(listLeftInset)
+    : getModeStyle(mode, bottomHeight, rightWidth);
+  const rootStyle: React.CSSProperties = {
+    ...layoutStyle,
+    transition: resizingRef.current ? 'none' : OVERLAY_TRANSITION,
+    opacity: open ? 1 : 0,
+    pointerEvents: open ? 'auto' : 'none',
+  };
+
+  const tree = (
     <>
-      {/* Collapsed minimized bar — shown when terminal has tabs but is closed */}
-      {!open && hasTabs && (
+      {/* Collapsed minimized bar — only in floating overlay mode; list view always visible. */}
+      {!isListView && !open && hasTabs && (
         <button
           onClick={onToggle}
           style={{
@@ -494,14 +872,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         </button>
       )}
 
-      {/* Always render overlay to preserve xterm DOM — hide with CSS when closed */}
-      <div style={{
-        ...getModeStyle(mode, bottomHeight, rightWidth),
-        ...(open ? {} : { display: 'none' }),
-        ...(resizingRef.current ? { transition: 'none' } : {}),
-      }}>
-      {/* Resize handle */}
-      {mode === 'bottom' && (
+      {/* Always render overlay to preserve xterm DOM — hide with opacity when closed */}
+      <div style={rootStyle}>
+      {/* Resize handles — floating-mode only */}
+      {!isListView && mode === 'bottom' && (
         <div
           onMouseDown={() => handleResizeStart('bottom')}
           style={{
@@ -515,7 +889,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           }}
         />
       )}
-      {mode === 'right' && (
+      {!isListView && mode === 'right' && (
         <div
           onMouseDown={() => handleResizeStart('right')}
           style={{
@@ -552,52 +926,54 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           ■ {t('chat.title')}
         </span>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          {/* Mode toggle buttons */}
-          {MODES.map((m) => (
+        {!isListView && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Mode toggle buttons */}
+            {MODES.map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                title={t(MODE_I18N[m])}
+                style={{
+                  width: 28,
+                  height: 28,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: mode === m ? 'rgba(88, 166, 255, 0.15)' : 'transparent',
+                  border: 'none',
+                  borderRadius: 6,
+                  color: mode === m ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  opacity: mode === m ? 1 : 0.6,
+                }}
+              >
+                <ModeIcon mode={m} />
+              </button>
+            ))}
+
+            <div style={{ width: 1, height: 16, background: 'var(--border-color)', margin: '0 6px' }} />
+
+            {/* Collapse button (minimize) */}
             <button
-              key={m}
-              onClick={() => setMode(m)}
-              title={t(MODE_I18N[m])}
+              onClick={onToggle}
+              title={t('terminal.collapse')}
               style={{
-                width: 28,
-                height: 28,
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: 12,
+                padding: '2px 6px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                background: mode === m ? 'rgba(88, 166, 255, 0.15)' : 'transparent',
-                border: 'none',
-                borderRadius: 6,
-                color: mode === m ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                opacity: mode === m ? 1 : 0.6,
               }}
             >
-              <ModeIcon mode={m} />
+              ▼
             </button>
-          ))}
-
-          <div style={{ width: 1, height: 16, background: 'var(--border-color)', margin: '0 6px' }} />
-
-          {/* Collapse button (minimize) */}
-          <button
-            onClick={onToggle}
-            title={t('terminal.collapse')}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontSize: 12,
-              padding: '2px 6px',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            ▼
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Tab bar */}
@@ -605,43 +981,57 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         tabs={tabs}
         activeTabId={activeTabId}
         onSelect={setActiveTabId}
-        onAdd={handleAddClick}
+        onAdd={openLocalPicker}
         onClose={closeTab}
       />
 
+      {/* SSH preset management dialog */}
+      <SSHPresetDialog
+        open={sshDialogOpen}
+        presets={presets}
+        onClose={() => setSshDialogOpen(false)}
+        onSave={handleSavePreset}
+        onDelete={handleDeletePreset}
+        onLaunch={launchPreset}
+      />
+
       {/* CWD Picker overlay */}
-      {cwdPickerOpen && (
+      {cwdPickerOpen && createPortal(
         <div
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            zIndex: 40,
+            zIndex: 1000,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             background: 'rgba(0, 0, 0, 0.6)',
           }}
-          onClick={() => { if (tabs.length > 0) setCwdPickerOpen(false); }}
+          onClick={() => setCwdPickerOpen(false)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setCwdPickerOpen(false); }}
         >
           <div
             style={{
-              width: 380,
-              maxHeight: '85%',
+              width: 'min(640px, 92vw)',
+              maxHeight: 'min(92vh, 800px)',
               background: 'var(--bg-secondary)',
               border: '1px solid var(--border-color)',
               borderRadius: 12,
               overflow: 'hidden',
               display: 'flex',
               flexDirection: 'column',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.45)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Picker header */}
+            {/* Picker header with close button */}
             <div
               style={{
+                display: 'flex',
+                alignItems: 'center',
                 padding: '12px 16px',
                 borderBottom: '1px solid var(--border-color)',
                 fontSize: 13,
@@ -649,7 +1039,90 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                 color: 'var(--text-primary)',
               }}
             >
-              {t('terminal.selectWorkingDir')}
+              <span style={{ flex: 1 }}>{t('terminal.selectWorkingDir')}</span>
+              <button
+                onClick={() => setCwdPickerOpen(false)}
+                title={t('terminal.closeDialog')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  padding: '2px 6px',
+                  opacity: 0.7,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* SSH quick access — always visible so users can pivot without being trapped */}
+            <div style={{ borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {t('terminal.menu.sshPresets')}
+              </div>
+              {presets.length > 0 && (
+                <div style={{ overflowY: 'auto', maxHeight: 200 }}>
+                  {presets.map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => {
+                        setCwdPickerOpen(false);
+                        launchPreset(preset);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '7px 16px',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'background 0.15s ease',
+                        color: 'var(--text-primary)',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(188, 140, 255, 0.08)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span style={{ fontSize: 12, color: 'var(--accent-purple)' }}>🔗</span>
+                      <span style={{ fontSize: 12, fontWeight: 500 }}>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  setCwdPickerOpen(false);
+                  setSshDialogOpen(true);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 16px 10px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background 0.15s ease',
+                  color: 'var(--accent-purple)',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(188, 140, 255, 0.08)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <span style={{ fontSize: 12 }}>➕</span>
+                <span style={{ fontSize: 12, fontWeight: 500 }}>{t('terminal.menu.manageSsh')}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.5, color: 'var(--text-secondary)' }}>→</span>
+              </button>
+            </div>
+
+            {/* Local folder section label */}
+            <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: uniquePaths.length > 0 ? 'none' : undefined }}>
+              {t('terminal.menu.localFolder')}
             </div>
 
             {/* Active project shortcuts */}
@@ -658,7 +1131,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                 <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   {t('agents.projects')}
                 </div>
-                <div style={{ overflowY: 'auto', maxHeight: 120 }}>
+                <div style={{ overflowY: 'auto', maxHeight: 180 }}>
                   {uniquePaths.map((cwd) => (
                     <button
                       key={cwd}
@@ -685,6 +1158,55 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Previous Claude sessions for current folder */}
+            {(pastSessions.length > 0 || pastSessionsLoading) && (
+              <div style={{ borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {t('terminal.menu.previousSessions')}
+                </div>
+                {pastSessionsLoading ? (
+                  <div style={{ padding: '8px 16px 10px', fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6 }}>…</div>
+                ) : (
+                  <div style={{ overflowY: 'auto', maxHeight: 180 }}>
+                    {pastSessions.slice(0, 20).map((session) => {
+                      const timeAgo = formatRelativeTime(session.lastActivity);
+                      const preview = session.preview || t('terminal.menu.sessionNoPreview');
+                      return (
+                        <button
+                          key={session.sessionId}
+                          onClick={() => handleResumeSession(session)}
+                          title={`${session.sessionId}\n${preview}`}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '7px 16px',
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 0.15s ease',
+                            color: 'var(--text-primary)',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(63, 185, 80, 0.08)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <span style={{ fontSize: 12, color: 'var(--accent-green)' }}>⟲</span>
+                          <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {preview}
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.5, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                            {timeAgo}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -744,7 +1266,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
               </div>
 
               {/* Directory listing */}
-              <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, maxHeight: 200 }}>
+              <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, maxHeight: 320 }}>
                 {browseLoading ? (
                   <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)' }}>...</div>
                 ) : browseDirs.length === 0 ? (
@@ -835,7 +1357,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
               </label>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Terminal containers wrapper */}
@@ -850,4 +1373,6 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     </div>
     </>
   );
+
+  return tree;
 }

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWebSocket } from '../dashboard/hooks/useWebSocket.ts';
 import { ProjectSidebar } from './ProjectSidebar.tsx';
@@ -14,19 +14,38 @@ export function UnifiedView() {
   const { agents, events, completedSessions, stats } = useWebSocket(WS_URL);
   const agentList = Array.from(agents.values());
 
-  const handleRename = useCallback((sessionId: string, name: string | null) => {
-    fetch(`${API_BASE}/api/agents/${sessionId}/name`, {
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch(`${API_BASE}/api/projects/names`)
+      .then((r) => r.json())
+      .then((data: { names?: Record<string, string> }) => {
+        if (data.names) setProjectNames(data.names);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleProjectNameChange = useCallback((cwd: string, name: string | null) => {
+    fetch(`${API_BASE}/api/projects/names`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    }).catch(() => {});
+      body: JSON.stringify({ cwd, name }),
+    })
+      .then((r) => r.json())
+      .then((data: { names?: Record<string, string> }) => {
+        if (data.names) setProjectNames(data.names);
+      })
+      .catch(() => {});
   }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflow: 'hidden' }}>
       {/* Main content */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        <ProjectSidebar agents={agentList} onRename={handleRename} />
+        <ProjectSidebar
+          agents={agentList}
+          projectNames={projectNames}
+          onProjectNameChange={handleProjectNameChange}
+        />
 
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
           <div

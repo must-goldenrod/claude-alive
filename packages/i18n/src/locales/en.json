@@ -22,6 +22,7 @@
     "hideInactive": "hide inactive",
     "inactiveCount": "+{{count}} inactive",
     "clickToRename": "Click to rename",
+    "clickToRenameProject": "Click to rename this project",
     "events": "events",
     "tools": "tools",
     "startedAt": "Started at",
@@ -159,7 +160,50 @@
     "modeFullscreen": "Fullscreen",
     "selectHere": "Select",
     "emptyDir": "No subdirectories",
-    "collapse": "Minimize"
+    "collapse": "Minimize",
+    "closeDialog": "Close",
+    "doubleClickRename": "Double-click to rename",
+    "menu": {
+      "localFolder": "Open local folder…",
+      "sshPresets": "SSH presets",
+      "manageSsh": "New SSH preset…",
+      "previousSessions": "Previous sessions",
+      "sessionNoPreview": "(no preview)"
+    },
+    "ssh": {
+      "dialogTitle": "SSH connection presets",
+      "newTitle": "New preset",
+      "editTitle": "Edit preset",
+      "modeFreeform": "Command",
+      "modeStructured": "Host",
+      "labelField": "Name",
+      "labelPlaceholder": "Studio server",
+      "commandField": "SSH command",
+      "commandHint": "e.g. `ssh studio` — uses your ~/.ssh/config, keys, and agent",
+      "host": "Host",
+      "port": "Port",
+      "user": "User",
+      "identityFile": "Identity file",
+      "structuredHint": "Fill in host to preview the generated command",
+      "autoRun": "Run the command automatically when the tab opens",
+      "securityNote": "Passwords are never stored. Answer any password prompt in the terminal, or use key-based auth / ssh-agent.",
+      "savePreset": "Save preset",
+      "saveChanges": "Save changes",
+      "cancelEdit": "Cancel",
+      "connect": "Connect",
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirmDelete": "Delete preset “{{label}}”?"
+    },
+    "sshError": {
+      "permission-denied": "SSH: permission denied — check key or password",
+      "connection-refused": "SSH: connection refused — host may be down or port closed",
+      "dns": "SSH: host not found — check the hostname",
+      "timeout": "SSH: connection timed out — check network or firewall",
+      "host-key": "SSH: host key verification failed",
+      "host-key-changed": "SSH: remote host identification has changed — possible MITM",
+      "unknown": "SSH: connection failed"
+    }
   },
   "chat": {
     "title": "Chat",
@@ -167,6 +211,22 @@
     "send": "Send",
     "you": "You",
     "agent": "Agent"
+  },
+  "viewMode": {
+    "label": "View mode",
+    "animation": "Animation",
+    "list": "List"
+  },
+  "listView": {
+    "title": "Agents",
+    "col": {
+      "name": "Agent",
+      "state": "State",
+      "tool": "Tool",
+      "project": "Project",
+      "events": "Events",
+      "lastEvent": "Last event"
+    }
   },
   "bubble": {
     "readingTool": "Reading {{tool}}...",

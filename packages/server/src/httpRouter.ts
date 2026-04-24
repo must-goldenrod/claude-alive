@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { z } from 'zod';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
+import { listClaudeSessions } from './claudeSessionIndex.js';
 
 // --- Zod schemas for runtime input validation ---
 
@@ -65,9 +66,20 @@ export interface HttpRouterOptions {
   renameAgent: (sessionId: string, name: string | null) => boolean;
   removeAgent: (sessionId: string) => boolean;
   getStats: () => object;
+  /** Project-name persistence wiring. */
+  getProjectNames: () => Record<string, string>;
+  saveProjectName: (cwd: string, name: string) => Promise<void>;
+  removeProjectName: (cwd: string) => Promise<void>;
+  /** Called after a project name changes so the server can broadcast the new map over WS. */
+  onProjectNamesChanged?: () => void;
   /** Path to the UI dist directory. Defaults to ../../ui/dist relative to server dist. */
   uiDistPath?: string;
 }
+
+const ProjectNameBodySchema = z.object({
+  cwd: z.string().min(1),
+  name: z.string().max(100).nullable(),
+});
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
 
@@ -121,7 +133,18 @@ function sendJson(res: ServerResponse, status: number, data: unknown, req?: Inco
 }
 
 export function createHttpServer(options: HttpRouterOptions) {
-  const { onEvent, getSnapshot, renameAgent, removeAgent, getStats, uiDistPath } = options;
+  const {
+    onEvent,
+    getSnapshot,
+    renameAgent,
+    removeAgent,
+    getStats,
+    getProjectNames,
+    saveProjectName,
+    removeProjectName,
+    onProjectNamesChanged,
+    uiDistPath,
+  } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
   const server = createServer(async (req, res) => {
@@ -214,6 +237,52 @@ export function createHttpServer(options: HttpRouterOptions) {
         sendJson(res, 200, { path: dir, dirs, isRoot: dir === '/' }, req);
       } catch {
         sendJson(res, 400, { error: 'Cannot read directory' }, req);
+      }
+      return;
+    }
+
+    // GET /api/projects/names — full cwd→name map
+    if (req.method === 'GET' && url.pathname === '/api/projects/names') {
+      sendJson(res, 200, { names: getProjectNames() }, req);
+      return;
+    }
+
+    // PUT /api/projects/names — body: { cwd, name: string | null }
+    // null name removes the entry. Broadcasts the new map over WS so every client stays in sync.
+    if (req.method === 'PUT' && url.pathname === '/api/projects/names') {
+      try {
+        const body = await readBody(req);
+        const parsed = ProjectNameBodySchema.safeParse(JSON.parse(body));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body' }, req);
+          return;
+        }
+        const { cwd, name } = parsed.data;
+        if (name === null) {
+          await removeProjectName(cwd);
+        } else {
+          await saveProjectName(cwd, name);
+        }
+        onProjectNamesChanged?.();
+        sendJson(res, 200, { names: getProjectNames() }, req);
+      } catch {
+        sendJson(res, 500, { error: 'Failed to save project name' }, req);
+      }
+      return;
+    }
+
+    // GET /api/claude/sessions?cwd=/abs/path — list past Claude sessions for a project
+    if (req.method === 'GET' && url.pathname === '/api/claude/sessions') {
+      try {
+        const cwd = url.searchParams.get('cwd');
+        if (!cwd) {
+          sendJson(res, 400, { error: 'cwd query parameter required' }, req);
+          return;
+        }
+        const sessions = await listClaudeSessions(cwd);
+        sendJson(res, 200, { sessions }, req);
+      } catch {
+        sendJson(res, 500, { error: 'Failed to list sessions' }, req);
       }
       return;
     }

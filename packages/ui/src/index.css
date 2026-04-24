@@ -68,3 +68,17 @@ html, body, #root {
   0%, 100% { box-shadow: 0 0 8px var(--accent-green)33; }
   50% { box-shadow: 0 0 20px var(--accent-green)55; }
 }
+
+/* Terminal tab status: left-to-right sweeping green when a tab is active */
+@keyframes claude-tab-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Fall back to a static green tint for motion-sensitive users */
+  [style*="claude-tab-sweep"] {
+    animation: none !important;
+    background: rgba(46, 160, 67, 0.22) !important;
+  }
+}
