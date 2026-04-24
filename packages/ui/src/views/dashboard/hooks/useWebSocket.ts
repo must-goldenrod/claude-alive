@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats } from '@claude-alive/core';
 
+const COMPLETION_SOUND_URL = '/sounds/task-complete.mp3';
+
+function playCompletionSound() {
+  try {
+    const audio = new Audio(COMPLETION_SOUND_URL);
+    audio.volume = 0.7;
+    audio.play().catch(() => {
+      // Browser may block autoplay before user interaction — silently ignore
+    });
+  } catch {
+    // Audio not supported — silently ignore
+  }
+}
+
 export interface DashboardState {
   agents: Map<string, AgentInfo>;
   events: EventLogEntry[];
@@ -37,6 +51,10 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data) as WSServerMessage;
       onRawMessage?.(msg);
+
+      if (msg.type === 'agent:completed') {
+        playCompletionSound();
+      }
 
       setState(prev => {
         const agents = new Map(prev.agents);
