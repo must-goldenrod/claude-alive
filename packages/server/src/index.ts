@@ -5,12 +5,23 @@ import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
 import { ClaudeTerminal } from './claudeTerminal.js';
 import { loadNames, getNames, saveName, removeName } from './nameStore.js';
+import {
+  loadProjectNames,
+  getProjectName,
+  getProjectNames,
+  saveProjectName,
+  removeProjectName,
+} from './projectNameStore.js';
+import { SystemMetricsPoller } from './systemMetrics.js';
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
 const store = new SessionStore();
-// Load persisted agent names before starting the server
+// Load persisted names before starting the server. Project names (cwd-keyed) are the
+// primary source of truth; the old sessionId-keyed nameStore is kept as a secondary
+// fallback for agents whose cwd isn't in projectNames yet.
 await loadNames();
+await loadProjectNames();
 
 const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -30,10 +41,12 @@ function onEvent(payload: HookEventPayload): void {
   const event = payload.event;
 
   if (event === 'SessionStart' || event === 'SubagentStart') {
-    // Restore saved name for newly created agents
-    const savedName = getNames()[agent.sessionId];
-    if (savedName) {
-      store.renameAgent(agent.sessionId, savedName);
+    // Resolve displayName in priority order: projectName (cwd) → legacy sessionId name.
+    const projectName = agent.cwd ? getProjectName(agent.cwd) : undefined;
+    const legacyName = getNames()[agent.sessionId];
+    const resolved = projectName ?? legacyName;
+    if (resolved) {
+      store.renameAgent(agent.sessionId, resolved);
     }
     broadcaster.broadcast({ type: 'agent:spawn', agent });
   } else if (event === 'SessionEnd' || event === 'SubagentStop') {
@@ -134,14 +147,39 @@ const broadcaster = new WSBroadcaster({
       if (tabMap.has(msg.tabId)) return; // already exists
       const term = new ClaudeTerminal();
       tabMap.set(msg.tabId, term);
-      term.spawn(
-        (data) => { broadcaster.send(ws, { type: 'terminal:output', tabId: msg.tabId, data }); },
-        80,
-        24,
-        (exitCode) => { broadcaster.send(ws, { type: 'terminal:exited', tabId: msg.tabId, exitCode }); },
-        msg.cwd,
-        msg.skipPermissions,
-      );
+      const isSsh = msg.source === 'ssh';
+      // If the client didn't supply a displayName, fall back to the stored project name for this cwd.
+      // This is what makes the Claude CLI /resume picker, sidebar, and tab label all share one name.
+      const resolvedDisplayName =
+        msg.displayName ?? (msg.cwd ? getProjectName(msg.cwd) : undefined);
+      term.spawn({
+        handler: (data) => {
+          broadcaster.send(ws, { type: 'terminal:output', tabId: msg.tabId, data });
+        },
+        cols: 80,
+        rows: 24,
+        onExit: (exitCode) => {
+          broadcaster.send(ws, { type: 'terminal:exited', tabId: msg.tabId, exitCode });
+        },
+        onSshError: isSsh
+          ? (err) => {
+              broadcaster.send(ws, {
+                type: 'terminal:ssh-error',
+                tabId: msg.tabId,
+                kind: err.kind,
+                line: err.line,
+              });
+            }
+          : undefined,
+        cwd: msg.cwd,
+        mode: msg.mode ?? 'claude',
+        skipPermissions: msg.skipPermissions,
+        initialCommand: msg.initialCommand,
+        detectSshErrors: isSsh,
+        claudeSessionId: msg.claudeSessionId,
+        resumeSessionId: msg.resumeSessionId,
+        displayName: resolvedDisplayName,
+      });
     } else if (msg.type === 'terminal:input') {
       const term = terminals.get(ws)?.get(msg.tabId);
       if (term) term.write(msg.data);
@@ -176,6 +214,20 @@ httpServer.on('upgrade', (req, socket, head) => {
   }
 });
 
+// Host CPU/RAM metrics poller. 2s cadence is smooth for a header indicator without
+// meaningful CPU cost (os.cpus() + os.freemem() are cheap syscalls).
+const metricsPoller = new SystemMetricsPoller(2000);
+metricsPoller.subscribe((snapshot) => {
+  broadcaster.broadcast({
+    type: 'system:metrics',
+    cpu: snapshot.cpu,
+    memUsed: snapshot.memUsed,
+    memTotal: snapshot.memTotal,
+    timestamp: snapshot.timestamp,
+  });
+});
+metricsPoller.start();
+
 httpServer.listen(PORT, () => {
   console.log(`
   ╔══════════════════════════════════════╗
@@ -195,6 +247,7 @@ process.on('SIGINT', () => {
   // terminals cleaned up via onClientDisconnect
   for (const timer of despawnTimers.values()) clearTimeout(timer);
   despawnTimers.clear();
+  metricsPoller.stop();
   broadcaster.close();
   httpServer.close();
   process.exit(0);

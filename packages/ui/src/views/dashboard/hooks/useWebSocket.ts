@@ -15,12 +15,23 @@ function playCompletionSound() {
   }
 }
 
+export interface SystemMetrics {
+  /** CPU usage 0..1 (average across cores, rolling 2s window). */
+  cpu: number;
+  /** Used memory in bytes. */
+  memUsed: number;
+  /** Total memory in bytes. */
+  memTotal: number;
+  timestamp: number;
+}
+
 export interface DashboardState {
   agents: Map<string, AgentInfo>;
   events: EventLogEntry[];
   completedSessions: CompletedSession[];
   stats: AgentStats | null;
   connected: boolean;
+  systemMetrics: SystemMetrics | null;
 }
 
 export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) => void) {
@@ -30,6 +41,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
     completedSessions: [],
     stats: null,
     connected: false,
+    systemMetrics: null,
   });
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -69,7 +81,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
             }
             events = msg.recentEvents;
             completedSessions = msg.completedSessions ?? [];
-            return { agents, events, completedSessions, stats: msg.stats ?? null, connected: true };
+            return { agents, events, completedSessions, stats: msg.stats ?? null, connected: true, systemMetrics: prev.systemMetrics };
           }
           case 'agent:spawn': {
             agents.set(msg.agent.sessionId, msg.agent);
@@ -140,9 +152,20 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
             // Connection alive
             break;
           }
+          case 'system:metrics': {
+            return {
+              ...prev,
+              systemMetrics: {
+                cpu: msg.cpu,
+                memUsed: msg.memUsed,
+                memTotal: msg.memTotal,
+                timestamp: msg.timestamp,
+              },
+            };
+          }
         }
 
-        return { agents, events, completedSessions, stats: prev.stats, connected: true };
+        return { agents, events, completedSessions, stats: prev.stats, connected: true, systemMetrics: prev.systemMetrics };
       });
     };
   }, [url, onRawMessage]);

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
-import type { WSServerMessage } from '@claude-alive/core';
-import { useWebSocket } from '../dashboard/hooks/useWebSocket.ts';
+import type { AgentInfo, AgentStats, CompletedSession, EventLogEntry, WSServerMessage } from '@claude-alive/core';
+import type { SshSessionInfo } from '../chat/ChatOverlay.tsx';
 import { ProjectSidebar } from '../unified/ProjectSidebar.tsx';
 import { RightPanel } from '../unified/RightPanel.tsx';
 import { getAnthropomorphicText } from '../../utils/bubbleText.ts';
@@ -14,14 +14,9 @@ import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './engine/constants';
 import { OrgChartOverlay } from './components/OrgChartOverlay';
 import { AgentTimelinePanel } from './components/AgentTimelinePanel';
 import type { PromptEntry } from './components/AgentTimelinePanel';
-import { ChatOverlay } from '../chat/ChatOverlay.tsx';
-import type { TerminalEventHandler } from '../chat/ChatOverlay.tsx';
-import { ToastContainer, useToasts } from '../../components/ToastContainer.tsx';
+import type { RawMessageSubscribe } from '../../App.tsx';
 
 const PixelCanvas = lazy(() => import('./components/PixelCanvas.tsx'));
-
-const WS_URL = `ws://${window.location.hostname}:${window.location.port || '3141'}/ws`;
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
 function mapToolAnimation(animation: string | null): 'typing' | 'reading' {
   switch (animation) {
@@ -34,13 +29,30 @@ function mapToolAnimation(animation: string | null): 'typing' | 'reading' {
 }
 
 interface PixelOfficePageProps {
+  active: boolean;
+  agents: Map<string, AgentInfo>;
+  events: EventLogEntry[];
+  completedSessions: CompletedSession[];
+  stats: AgentStats | null;
+  subscribeRaw: RawMessageSubscribe;
+  onRename: (sessionId: string, name: string | null) => void;
   leftPanelOpen?: boolean;
   rightPanelOpen?: boolean;
-  chatOpen?: boolean;
-  onChatOpenChange?: (open: boolean) => void;
+  sshSessions?: SshSessionInfo[];
 }
 
-export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, chatOpen = false, onChatOpenChange }: PixelOfficePageProps) {
+export function PixelOfficePage({
+  active,
+  agents,
+  events,
+  completedSessions,
+  stats,
+  subscribeRaw,
+  onRename,
+  leftPanelOpen = true,
+  rightPanelOpen = true,
+  sshSessions,
+}: PixelOfficePageProps) {
   const officeRef = useRef(createOfficeState());
   const cameraRef = useRef(officeRef.current.camera);
   const cameraTargetRef = useRef<{ x: number; y: number } | null>(null);
@@ -49,143 +61,107 @@ export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, c
   const promptsRef = useRef<PromptEntry[]>([]);
   const [, setPromptsVersion] = useState(0);
   const [, setCharVersion] = useState(0);
-  const terminalHandlerRef = useRef<TerminalEventHandler | null>(null);
-  const { toasts, addToast, dismissToast } = useToasts();
-  const addToastRef = useRef(addToast);
-  addToastRef.current = addToast;
 
-  // Stable callback ref for onRawMessage (avoids useWebSocket reconnects)
-  const onRawRef = useRef<(msg: WSServerMessage) => void>(() => {});
+  // Subscribe to raw WS messages to drive the pixel office state machine.
+  // The handler is stable per mount; subscribeRaw is stable from App.
+  useEffect(() => {
+    const handler = (msg: WSServerMessage) => {
+      const office = officeRef.current;
 
-  onRawRef.current = (msg: WSServerMessage) => {
-    const office = officeRef.current;
-
-    switch (msg.type) {
-      case 'snapshot': {
-        // Remove stale characters
-        for (const sid of office.characters.keys()) {
-          if (!msg.agents.some(a => a.sessionId === sid)) {
-            despawnCharacter(office, sid);
+      switch (msg.type) {
+        case 'snapshot': {
+          for (const sid of office.characters.keys()) {
+            if (!msg.agents.some(a => a.sessionId === sid)) {
+              despawnCharacter(office, sid);
+            }
           }
+          for (const agent of msg.agents) {
+            const char = spawnCharacter(office, agent.sessionId, {
+              isSubAgent: !!agent.parentId,
+              label: agent.displayName,
+              project: agent.cwd,
+            });
+            char.bubbleText = getAnthropomorphicText(
+              agent.state, agent.currentTool, agent.currentToolAnimation,
+            );
+            if (agent.state === 'active' && agent.currentToolAnimation) {
+              startToolActivity(char, mapToolAnimation(agent.currentToolAnimation), office.tileMap);
+            } else if (agent.state === 'waiting') {
+              char.bubble = 'waiting';
+            } else if (agent.state === 'error') {
+              char.bubble = 'error';
+            }
+          }
+          setCharVersion(v => v + 1);
+          break;
         }
-        // Spawn/sync all agents
-        for (const agent of msg.agents) {
-          const char = spawnCharacter(office, agent.sessionId, {
-            isSubAgent: !!agent.parentId,
-            label: agent.displayName,
-            project: agent.cwd,
+        case 'agent:spawn':
+          spawnCharacter(office, msg.agent.sessionId, {
+            isSubAgent: !!msg.agent.parentId,
+            label: msg.agent.displayName,
+            project: msg.agent.cwd,
           });
-          char.bubbleText = getAnthropomorphicText(
-            agent.state, agent.currentTool, agent.currentToolAnimation,
-          );
-          if (agent.state === 'active' && agent.currentToolAnimation) {
-            startToolActivity(char, mapToolAnimation(agent.currentToolAnimation), office.tileMap);
-          } else if (agent.state === 'waiting') {
-            char.bubble = 'waiting';
-          } else if (agent.state === 'error') {
-            char.bubble = 'error';
+          setCharVersion(v => v + 1);
+          break;
+        case 'agent:despawn':
+          despawnCharacter(office, msg.sessionId);
+          setCharVersion(v => v + 1);
+          break;
+        case 'agent:state': {
+          const char = office.characters.get(msg.sessionId);
+          if (!char) break;
+          switch (msg.state) {
+            case 'active':
+              startToolActivity(char, mapToolAnimation(msg.animation), office.tileMap);
+              char.bubble = 'none';
+              break;
+            case 'idle':
+            case 'done':
+              setCharacterIdle(char);
+              break;
+            case 'listening':
+              setCharacterIdle(char);
+              char.direction = 'down';
+              break;
+            case 'waiting':
+              char.bubble = 'waiting';
+              break;
+            case 'error':
+              char.bubble = 'error';
+              break;
+            case 'despawning':
+              despawnCharacter(office, msg.sessionId);
+              break;
           }
+          char.bubbleText = getAnthropomorphicText(msg.state, msg.tool, msg.animation);
+          break;
         }
-        setCharVersion(v => v + 1);
-        break;
-      }
-      case 'agent:spawn':
-        spawnCharacter(office, msg.agent.sessionId, {
-          isSubAgent: !!msg.agent.parentId,
-          label: msg.agent.displayName,
-          project: msg.agent.cwd,
-        });
-        setCharVersion(v => v + 1);
-        break;
-      case 'agent:despawn':
-        despawnCharacter(office, msg.sessionId);
-        setCharVersion(v => v + 1);
-        break;
-      case 'agent:state': {
-        const char = office.characters.get(msg.sessionId);
-        if (!char) break;
-        switch (msg.state) {
-          case 'active':
-            startToolActivity(char, mapToolAnimation(msg.animation), office.tileMap);
-            char.bubble = 'none';
-            break;
-          case 'idle':
-          case 'done':
-            setCharacterIdle(char);
-            break;
-          case 'listening':
-            setCharacterIdle(char);
-            char.direction = 'down';
-            break;
-          case 'waiting':
-            char.bubble = 'waiting';
-            addToastRef.current('warning', char.label || msg.sessionId.slice(0, 8), 'notifications.needsPermission', `${msg.sessionId}:waiting`);
-            break;
-          case 'error':
-            char.bubble = 'error';
-            addToastRef.current('error', char.label || msg.sessionId.slice(0, 8), 'notifications.errorOccurred', `${msg.sessionId}:error`);
-            break;
-          case 'despawning':
-            despawnCharacter(office, msg.sessionId);
-            break;
+        case 'agent:prompt': {
+          const char = office.characters.get(msg.sessionId);
+          if (char) char.direction = 'down';
+          promptsRef.current = [...promptsRef.current, {
+            sessionId: msg.sessionId,
+            text: msg.prompt,
+            timestamp: Date.now(),
+          }];
+          setPromptsVersion(v => v + 1);
+          break;
         }
-        char.bubbleText = getAnthropomorphicText(msg.state, msg.tool, msg.animation);
-        break;
-      }
-      case 'agent:prompt': {
-        const char = office.characters.get(msg.sessionId);
-        if (char) char.direction = 'down';
-        promptsRef.current = [...promptsRef.current, {
-          sessionId: msg.sessionId,
-          text: msg.prompt,
-          timestamp: Date.now(),
-        }];
-        setPromptsVersion(v => v + 1);
-        break;
-      }
-      case 'agent:rename': {
-        const char = office.characters.get(msg.sessionId);
-        if (char) {
-          char.label = msg.name;
+        case 'agent:rename': {
+          const char = office.characters.get(msg.sessionId);
+          if (char) {
+            char.label = msg.name;
+          }
+          break;
         }
-        break;
       }
-      case 'terminal:output':
-      case 'terminal:exited':
-        terminalHandlerRef.current?.(msg);
-        break;
-    }
-  };
+    };
+    const unsubscribe = subscribeRaw(handler);
+    return unsubscribe;
+  }, [subscribeRaw]);
 
-  const stableOnRaw = useCallback((msg: WSServerMessage) => onRawRef.current(msg), []);
-
-  const { agents, events, completedSessions, stats, send } = useWebSocket(WS_URL, stableOnRaw);
-  const agentList = Array.from(agents.values());
+  const agentList = useMemo(() => Array.from(agents.values()), [agents]);
   const projectPaths = useMemo(() => [...new Set(agentList.map(a => a.cwd))], [agentList]);
-
-  const handleTerminalSpawn = useCallback((tabId: string, cwd?: string, skipPermissions?: boolean) => {
-    send({ type: 'terminal:spawn', tabId, cwd, skipPermissions });
-  }, [send]);
-
-  const handleTerminalInput = useCallback((tabId: string, data: string) => {
-    send({ type: 'terminal:input', tabId, data });
-  }, [send]);
-
-  const handleTerminalResize = useCallback((tabId: string, cols: number, rows: number) => {
-    send({ type: 'terminal:resize', tabId, cols, rows });
-  }, [send]);
-
-  const handleTerminalClose = useCallback((tabId: string) => {
-    send({ type: 'terminal:close', tabId });
-  }, [send]);
-
-  const handleRename = useCallback((sessionId: string, name: string | null) => {
-    fetch(`${API_BASE}/api/agents/${sessionId}/name`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    }).catch(() => {});
-  }, []);
 
   const handleAgentClick = useCallback((sessionId: string) => {
     const char = officeRef.current.characters.get(sessionId);
@@ -220,7 +196,11 @@ export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, c
     };
   }, []);
 
-  // Game loop: 60fps update cycle
+  // Game loop: paused when view is inactive to save CPU.
+  // Using a ref so toggling `active` doesn't restart the RAF chain — just gates the tick body.
+  const activeRef = useRef(active);
+  activeRef.current = active;
+
   useEffect(() => {
     let running = true;
     let lastTime = performance.now();
@@ -231,26 +211,27 @@ export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, c
       const dt = Math.min((now - lastTime) / 1000, 0.1);
       lastTime = now;
 
-      const office = officeRef.current;
-      updateOffice(office, dt);
-      entitiesRef.current = getEntities(office);
+      if (activeRef.current) {
+        const office = officeRef.current;
+        updateOffice(office, dt);
+        entitiesRef.current = getEntities(office);
 
-      // Smooth camera lerp toward target
-      const target = cameraTargetRef.current;
-      if (target) {
-        const lerpSpeed = 1 - Math.pow(0.001, dt); // ~8-10 frames to arrive
-        const cam = cameraRef.current;
-        const dx = target.x - cam.x;
-        const dy = target.y - cam.y;
-        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
-          cameraRef.current = { ...cam, x: target.x, y: target.y };
-          cameraTargetRef.current = null;
-        } else {
-          cameraRef.current = { ...cam, x: cam.x + dx * lerpSpeed, y: cam.y + dy * lerpSpeed };
+        const target = cameraTargetRef.current;
+        if (target) {
+          const lerpSpeed = 1 - Math.pow(0.001, dt);
+          const cam = cameraRef.current;
+          const dx = target.x - cam.x;
+          const dy = target.y - cam.y;
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+            cameraRef.current = { ...cam, x: target.x, y: target.y };
+            cameraTargetRef.current = null;
+          } else {
+            cameraRef.current = { ...cam, x: cam.x + dx * lerpSpeed, y: cam.y + dy * lerpSpeed };
+          }
         }
-      }
 
-      office.camera = cameraRef.current;
+        office.camera = cameraRef.current;
+      }
 
       requestAnimationFrame(tick);
     }
@@ -259,15 +240,18 @@ export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, c
     return () => { running = false; };
   }, []);
 
+  // Unused props kept for interface parity with App; referenced here to silence unused warnings.
+  void projectPaths;
+
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <ProjectSidebar
         agents={agentList}
         characters={officeRef.current.characters}
-        onRename={handleRename}
+        onRename={onRename}
         onAgentClick={handleAgentClick}
         collapsed={!leftPanelOpen}
+        sshSessions={sshSessions}
       />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
@@ -293,7 +277,7 @@ export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, c
         }}>
           {[
             { label: '+', delta: ZOOM_STEP },
-            { label: '\u2212', delta: -ZOOM_STEP },
+            { label: '−', delta: -ZOOM_STEP },
           ].map(({ label, delta }) => (
             <button
               key={label}
@@ -348,45 +332,6 @@ export function PixelOfficePage({ leftPanelOpen = true, rightPanelOpen = true, c
             />
           </div>
         )}
-
-        {/* Chat toggle button */}
-        <button
-          onClick={() => onChatOpenChange?.(!chatOpen)}
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            right: 16,
-            zIndex: 20,
-            width: 40,
-            height: 40,
-            display: chatOpen ? 'none' : 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(22, 27, 34, 0.85)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 10,
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 16,
-            transition: 'all 0.2s ease',
-          }}
-          title="Chat"
-        >
-          ▣
-        </button>
-
-        {/* Chat overlay */}
-        <ChatOverlay
-          open={chatOpen}
-          onToggle={() => onChatOpenChange?.(false)}
-          onSpawn={handleTerminalSpawn}
-          onInput={handleTerminalInput}
-          onResize={handleTerminalResize}
-          onClose={handleTerminalClose}
-          terminalEventRef={terminalHandlerRef}
-          projectPaths={projectPaths}
-        />
       </div>
 
       <RightPanel events={events} agents={agentList} completedSessions={completedSessions} stats={stats} collapsed={!rightPanelOpen} />

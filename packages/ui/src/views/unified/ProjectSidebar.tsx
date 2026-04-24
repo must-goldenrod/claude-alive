@@ -109,7 +109,7 @@ function CompactAgentCard({ agent, character, onRename, onAgentClick }: CompactC
 
   return (
     <div
-      className="rounded-2xl px-5 py-4 transition-all duration-200 cursor-pointer"
+      className="rounded-2xl px-5 py-2 transition-all duration-200 cursor-pointer"
       style={{
         background: hovered ? 'rgba(255,255,255,0.08)' : 'transparent',
       }}
@@ -233,7 +233,7 @@ function SidebarProjectGroup({ projectName, agents, characters, onRename, onAgen
   return (
     <div>
       <button
-        className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
+        className="w-full flex items-center gap-3 px-6 py-1 text-left transition-all"
         style={{ background: 'transparent' }}
         onClick={() => setCollapsed(!collapsed)}
       >
@@ -278,6 +278,137 @@ function SidebarProjectGroup({ projectName, agents, characters, onRename, onAgen
   );
 }
 
+// ── SSH Presence Section ─────────────────────────────────────────────────
+// Lightweight read-only indicator for active SSH tabs. We can't follow remote Claude activity
+// (hooks are local only), so we just show *that* a session exists + its output pulse.
+
+interface SshPresenceEntry {
+  tabId: string;
+  label: string;
+  status: 'idle' | 'active' | 'done';
+  exited: boolean;
+  hasError: boolean;
+}
+
+interface SshPresenceGroupProps {
+  sessions: SshPresenceEntry[];
+}
+
+function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
+  const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState(false);
+  if (sessions.length === 0) return null;
+  const activeCount = sessions.filter(s => !s.exited && s.status === 'active').length;
+
+  return (
+    <div>
+      <button
+        className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
+        style={{ background: 'transparent' }}
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span
+          className="text-[11px] shrink-0 transition-transform duration-200"
+          style={{ color: 'var(--text-secondary)', opacity: 0.5, transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)' }}
+        >
+          {'▼'}
+        </span>
+        <span className="text-[15px] font-bold truncate" style={{ color: 'var(--accent-purple)' }}>
+          {t('agents.sshSessions', { defaultValue: 'SSH Sessions' })}
+        </span>
+        <div className="flex items-center gap-2.5 ml-auto shrink-0">
+          {activeCount > 0 && (
+            <span
+              className="text-xs px-2.5 py-0.5 rounded-full font-semibold"
+              style={{ background: 'rgba(188, 140, 255, 0.14)', color: 'var(--accent-purple)' }}
+            >
+              {activeCount}
+            </span>
+          )}
+          <span className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.4 }}>
+            {sessions.length}
+          </span>
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div className="pb-2">
+          {sessions.map(s => {
+            const dotColor = s.hasError
+              ? 'var(--accent-red)'
+              : s.exited
+                ? 'var(--text-secondary)'
+                : s.status === 'active'
+                  ? 'var(--accent-green)'
+                  : 'var(--accent-purple)';
+            const isPulsing = !s.exited && s.status === 'active';
+            return (
+              <div
+                key={s.tabId}
+                className="rounded-2xl px-5 py-3 transition-all duration-200"
+                style={{ background: 'transparent' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="shrink-0 flex items-center justify-center"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: 'rgba(188, 140, 255, 0.10)',
+                      border: '1px solid rgba(188, 140, 255, 0.25)',
+                      color: 'var(--accent-purple)',
+                      fontSize: 14,
+                      opacity: s.exited ? 0.5 : 1,
+                    }}
+                  >
+                    {s.hasError ? '⚠' : '⇄'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="text-sm font-medium truncate"
+                      style={{ color: 'var(--text-primary)', opacity: s.exited ? 0.6 : 1, lineHeight: 1.4 }}
+                    >
+                      {s.label}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: dotColor,
+                          display: 'inline-block',
+                          animation: isPulsing ? 'sshPulse 1.4s ease-in-out infinite' : undefined,
+                        }}
+                      />
+                      <span className="text-xs" style={{ color: dotColor }}>
+                        {s.hasError
+                          ? t('agents.sshError', { defaultValue: 'error' })
+                          : s.exited
+                            ? t('states.done')
+                            : s.status === 'active'
+                              ? t('states.active')
+                              : t('states.idle')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <style>{`
+        @keyframes sshPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.45; transform: scale(0.75); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Main Sidebar ────────────────────────────────────────────────────────
 
 interface ProjectSidebarProps {
@@ -286,12 +417,14 @@ interface ProjectSidebarProps {
   onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
   collapsed?: boolean;
+  sshSessions?: SshPresenceEntry[];
 }
 
-export function ProjectSidebar({ agents, characters, onRename, onAgentClick, collapsed = false }: ProjectSidebarProps) {
+export function ProjectSidebar({ agents, characters, onRename, onAgentClick, collapsed = false, sshSessions }: ProjectSidebarProps) {
   const { t } = useTranslation();
   const projectGroups = useMemo(() => groupByProject(agents), [agents]);
   const charMap = characters ?? new Map<string, Character>();
+  const ssh = sshSessions ?? [];
 
   return (
     <div
@@ -315,7 +448,10 @@ export function ProjectSidebar({ agents, characters, onRename, onAgentClick, col
 
       {/* Project list */}
       <div className="flex-1 overflow-y-auto pt-0 pb-4 space-y-2">
-        {projectGroups.length === 0 ? (
+        {/* SSH presence — shown above project groups when any SSH tab is open. */}
+        {ssh.length > 0 && <SshPresenceGroup sessions={ssh} />}
+
+        {projectGroups.length === 0 && ssh.length === 0 ? (
           <div className="text-center py-16 px-8">
             <div className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
               {t('agents.noAgentsYet')}

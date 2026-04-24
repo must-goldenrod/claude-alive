@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { z } from 'zod';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
+import { listClaudeSessions } from './claudeSessionIndex.js';
 
 // --- Zod schemas for runtime input validation ---
 
@@ -214,6 +215,22 @@ export function createHttpServer(options: HttpRouterOptions) {
         sendJson(res, 200, { path: dir, dirs, isRoot: dir === '/' }, req);
       } catch {
         sendJson(res, 400, { error: 'Cannot read directory' }, req);
+      }
+      return;
+    }
+
+    // GET /api/claude/sessions?cwd=/abs/path — list past Claude sessions for a project
+    if (req.method === 'GET' && url.pathname === '/api/claude/sessions') {
+      try {
+        const cwd = url.searchParams.get('cwd');
+        if (!cwd) {
+          sendJson(res, 400, { error: 'cwd query parameter required' }, req);
+          return;
+        }
+        const sessions = await listClaudeSessions(cwd);
+        sendJson(res, 200, { sessions }, req);
+      } catch {
+        sendJson(res, 500, { error: 'Failed to list sessions' }, req);
       }
       return;
     }
