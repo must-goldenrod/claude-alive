@@ -27,7 +27,8 @@ export type WSServerMessage =
   | { type: 'system:metrics'; cpu: number; memUsed: number; memTotal: number; timestamp: number }
   | { type: 'terminal:output'; tabId: string; data: string }
   | { type: 'terminal:exited'; tabId: string; exitCode: number }
-  | { type: 'terminal:ssh-error'; tabId: string; kind: SSHErrorKind; line: string };
+  | { type: 'terminal:ssh-error'; tabId: string; kind: SSHErrorKind; line: string }
+  | { type: 'project:names'; names: Record<string, string> };
 
 export type WSClientMessage =
   | { type: 'ping' }

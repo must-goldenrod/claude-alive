@@ -76,10 +76,10 @@ interface ChatOverlayProps {
   /** Called whenever the set of SSH tabs changes. Enables App/Sidebar to show a presence indicator. */
   onSshSessionsChange?: (sessions: SshSessionInfo[]) => void;
   /**
-   * Agent name map keyed by sessionId (Claude session UUID). Used to auto-sync sidebar renames
-   * into terminal tab labels. Expected shape: `{ [sessionId]: displayName }`.
+   * cwd → project display name map. Single source of truth — terminal tabs render their label
+   * by looking up the tab's cwd in this map (fallback to pathBasename(cwd)).
    */
-  agentNames?: Record<string, string | null>;
+  projectNames?: Record<string, string>;
 }
 
 const TERM_OPTIONS = {
@@ -298,7 +298,7 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, agentNames }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, projectNames }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
@@ -398,8 +398,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       const tabId = makeTabId();
       const mode: TerminalSpawnMode = opts.mode ?? 'claude';
       const source: TerminalSource = opts.source ?? 'local';
+      // Label priority: explicit opts.label (e.g. SSH preset) → projectNames[cwd] → pathBasename(cwd) → fallback.
+      const resolvedProjectName = opts.cwd && projectNames ? projectNames[opts.cwd] : undefined;
       const defaultLabel = opts.cwd
-        ? pathBasename(opts.cwd)
+        ? resolvedProjectName ?? pathBasename(opts.cwd)
         : t('terminal.tabLabel', { n: tabCounter });
       const label = opts.label ?? defaultLabel;
 
@@ -415,6 +417,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         {
           id: tabId,
           label,
+          cwd: opts.cwd,
           exited: false,
           status: 'idle',
           source,
@@ -468,7 +471,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
       return tabId;
     },
-    [t],
+    [t, projectNames],
   );
 
   const fetchPastSessions = useCallback((cwd: string) => {
@@ -566,43 +569,24 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     setPresets(loadPresets());
   }, []);
 
-  const handleRenameTab = useCallback((tabId: string, customLabel: string | null) => {
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === tabId
-          ? {
-              ...tab,
-              customLabel: customLabel ?? undefined,
-              // Mark as pinned so sidebar → tab auto-sync won't overwrite this manual edit.
-              // Clearing the label (null) unpins so sync resumes.
-              pinnedLabel: customLabel !== null,
-            }
-          : tab,
-      ),
-    );
-  }, []);
-
   /**
-   * Sidebar → tab auto-sync. When an agent is renamed in the sidebar, match it to the
-   * terminal tab whose `claudeSessionId` equals that agent's sessionId, and propagate the
-   * new name into the tab's `customLabel` — unless the user has pinned that tab by renaming
-   * it manually (via double-click).
+   * Project-name → tab label sync. Whenever projectNames changes, recompute each tab's label.
+   * Single source of truth: tab.label = projectNames[tab.cwd] ?? pathBasename(tab.cwd).
+   * SSH tabs keep whatever label they were given at spawn (e.g. the SSH preset's own name).
    */
   useEffect(() => {
-    if (!agentNames) return;
     setTabs((prev) => {
       let changed = false;
       const next = prev.map((tab) => {
-        if (!tab.claudeSessionId || tab.pinnedLabel) return tab;
-        const incoming = agentNames[tab.claudeSessionId];
-        const nextLabel = incoming && incoming.trim().length > 0 ? incoming : undefined;
-        if (nextLabel === tab.customLabel) return tab;
+        if (tab.source === 'ssh' || !tab.cwd) return tab;
+        const resolved = (projectNames && projectNames[tab.cwd]) || pathBasename(tab.cwd);
+        if (resolved === tab.label) return tab;
         changed = true;
-        return { ...tab, customLabel: nextLabel };
+        return { ...tab, label: resolved };
       });
       return changed ? next : prev;
     });
-  }, [agentNames]);
+  }, [projectNames]);
 
   // Close a tab: dispose xterm, remove container, call onClose
   const closeTab = useCallback((tabId: string) => {
@@ -721,7 +705,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       .filter((t) => t.source === 'ssh')
       .map((t) => ({
         tabId: t.id,
-        label: t.customLabel ?? t.label,
+        label: t.label,
         presetId: t.sshPresetId,
         status: t.status,
         exited: t.exited,
@@ -999,7 +983,6 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         onSelect={setActiveTabId}
         onAdd={openLocalPicker}
         onClose={closeTab}
-        onRename={handleRenameTab}
       />
 
       {/* SSH preset management dialog */}

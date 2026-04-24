@@ -35,10 +35,11 @@ interface PixelOfficePageProps {
   completedSessions: CompletedSession[];
   stats: AgentStats | null;
   subscribeRaw: RawMessageSubscribe;
-  onRename: (sessionId: string, name: string | null) => void;
   leftPanelOpen?: boolean;
   rightPanelOpen?: boolean;
   sshSessions?: SshSessionInfo[];
+  projectNames?: Record<string, string>;
+  onProjectNameChange?: (cwd: string, name: string | null) => void;
 }
 
 export function PixelOfficePage({
@@ -48,10 +49,11 @@ export function PixelOfficePage({
   completedSessions,
   stats,
   subscribeRaw,
-  onRename,
   leftPanelOpen = true,
   rightPanelOpen = true,
   sshSessions,
+  projectNames,
+  onProjectNameChange,
 }: PixelOfficePageProps) {
   const officeRef = useRef(createOfficeState());
   const cameraRef = useRef(officeRef.current.camera);
@@ -248,10 +250,11 @@ export function PixelOfficePage({
       <ProjectSidebar
         agents={agentList}
         characters={officeRef.current.characters}
-        onRename={onRename}
         onAgentClick={handleAgentClick}
         collapsed={!leftPanelOpen}
         sshSessions={sshSessions}
+        projectNames={projectNames}
+        onProjectNameChange={onProjectNameChange}
       />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>

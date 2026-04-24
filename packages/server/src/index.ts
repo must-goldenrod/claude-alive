@@ -138,7 +138,30 @@ function getOrCreateTabMap(ws: WebSocket): Map<string, ClaudeTerminal> {
   return tabMap;
 }
 
-const httpServer = createHttpServer({ onEvent, getSnapshot, renameAgent, removeAgent, getStats: () => store.getStats() });
+const httpServer = createHttpServer({
+  onEvent,
+  getSnapshot,
+  renameAgent,
+  removeAgent,
+  getStats: () => store.getStats(),
+  getProjectNames,
+  saveProjectName,
+  removeProjectName,
+  onProjectNamesChanged: () => {
+    // Push the new map to every connected client so the sidebar & tabs update instantly.
+    broadcaster.broadcast({ type: 'project:names', names: getProjectNames() });
+    // Also refresh the display name of every live agent whose cwd has a project name now.
+    for (const agent of store.getAllAgents()) {
+      const desired = agent.cwd ? getProjectName(agent.cwd) : undefined;
+      if (desired !== undefined && desired !== agent.displayName) {
+        const ok = store.renameAgent(agent.sessionId, desired);
+        if (ok) {
+          broadcaster.broadcast({ type: 'agent:rename', sessionId: agent.sessionId, name: desired });
+        }
+      }
+    }
+  },
+});
 const broadcaster = new WSBroadcaster({
   getSnapshot,
   onClientMessage: (ws, msg) => {

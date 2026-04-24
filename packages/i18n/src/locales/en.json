@@ -22,6 +22,7 @@
     "hideInactive": "hide inactive",
     "inactiveCount": "+{{count}} inactive",
     "clickToRename": "Click to rename",
+    "clickToRenameProject": "Click to rename this project",
     "events": "events",
     "tools": "tools",
     "startedAt": "Started at",

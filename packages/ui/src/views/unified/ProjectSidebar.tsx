@@ -80,32 +80,17 @@ function getSpriteThumbnail(character: Character | undefined, sessionId: string)
 interface CompactCardProps {
   agent: AgentInfo;
   character?: Character;
-  onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
 }
 
-function CompactAgentCard({ agent, character, onRename, onAgentClick }: CompactCardProps) {
+function CompactAgentCard({ agent, character, onAgentClick }: CompactCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const stateColor = STATE_COLORS[agent.state] ?? 'var(--text-secondary)';
   const displayLabel = agent.displayName || agent.projectName || t('agents.generalAgent');
   const spriteUrl = useMemo(() => getSpriteThumbnail(character, agent.sessionId), [character?.paletteIndex, agent.sessionId]);
-
-  const [editing, setEditing] = useState(false);
-  const [nameInput, setNameInput] = useState(agent.displayName ?? '');
   const [hovered, setHovered] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
-
-  const handleRename = () => {
-    const trimmed = nameInput.trim();
-    onRename?.(agent.sessionId, trimmed || null);
-    setEditing(false);
-  };
 
   return (
     <div
@@ -161,34 +146,12 @@ function CompactAgentCard({ agent, character, onRename, onAgentClick }: CompactC
 
         {/* Text content */}
         <div className="flex-1 min-w-0">
-          {editing ? (
-            <input
-              ref={inputRef}
-              className="text-sm font-medium w-full rounded-lg px-2.5 py-1.5 outline-none"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--accent-blue)',
-              }}
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              onBlur={handleRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleRename();
-                if (e.key === 'Escape') { setEditing(false); setNameInput(agent.displayName ?? ''); }
-              }}
-              placeholder={agent.projectName || t('agents.generalAgent')}
-            />
-          ) : (
-            <div
-              className="text-sm font-medium truncate"
-              style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}
-              onClick={(e) => { e.stopPropagation(); setNameInput(agent.displayName ?? ''); setEditing(true); }}
-              title={t('agents.clickToRename')}
-            >
-              {displayLabel}
-            </div>
-          )}
+          <div
+            className="text-sm font-medium truncate"
+            style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}
+          >
+            {displayLabel}
+          </div>
           <div className="flex items-center gap-2 mt-1.5">
             <span className="text-xs" style={{ color: stateColor }}>
               {t(`states.${agent.state}`, { defaultValue: agent.state })}
@@ -222,30 +185,89 @@ interface SidebarProjectGroupProps {
   cwd: string;
   agents: AgentInfo[];
   characters: Map<string, Character>;
-  onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
+  onProjectNameChange?: (cwd: string, name: string | null) => void;
 }
 
-function SidebarProjectGroup({ projectName, agents, characters, onRename, onAgentClick }: SidebarProjectGroupProps) {
+function SidebarProjectGroup({
+  projectName,
+  cwd,
+  agents,
+  characters,
+  onAgentClick,
+  onProjectNameChange,
+}: SidebarProjectGroupProps) {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(projectName);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const activeCount = agents.filter(a => a.state === 'active' || a.state === 'listening').length;
+
+  useEffect(() => {
+    if (editing) {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    onProjectNameChange?.(cwd, trimmed.length > 0 ? trimmed : null);
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setDraft(projectName);
+    setEditing(false);
+  };
 
   return (
     <div>
-      <button
+      <div
         className="w-full flex items-center gap-3 px-6 py-1 text-left transition-all"
         style={{ background: 'transparent' }}
-        onClick={() => setCollapsed(!collapsed)}
       >
-        <span
-          className="text-[11px] shrink-0 transition-transform duration-200"
-          style={{ color: 'var(--text-secondary)', opacity: 0.5, transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)' }}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="shrink-0"
+          style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
         >
-          {'\u25BC'}
-        </span>
-        <span className="text-[15px] font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-          {projectName}
-        </span>
+          <span
+            className="text-[11px] block transition-transform duration-200"
+            style={{ color: 'var(--text-secondary)', opacity: 0.5, transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)' }}
+          >
+            {'\u25BC'}
+          </span>
+        </button>
+        {editing ? (
+          <input
+            ref={editInputRef}
+            className="text-[15px] font-bold rounded-md px-1.5 py-0.5 outline-none flex-1 min-w-0"
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--accent-blue)',
+            }}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit();
+              else if (e.key === 'Escape') cancel();
+            }}
+            placeholder={cwd.split('/').filter(Boolean).pop() ?? cwd}
+          />
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); setDraft(projectName); setEditing(true); }}
+            className="text-[15px] font-bold truncate flex-1 text-left"
+            style={{ color: 'var(--text-primary)', background: 'transparent', border: 'none', padding: 0, cursor: 'text' }}
+            title={t('agents.clickToRenameProject', { defaultValue: 'Click to rename this project' })}
+          >
+            {projectName}
+          </button>
+        )}
         <div className="flex items-center gap-2.5 ml-auto shrink-0">
           {activeCount > 0 && (
             <span
@@ -259,7 +281,7 @@ function SidebarProjectGroup({ projectName, agents, characters, onRename, onAgen
             {agents.length}
           </span>
         </div>
-      </button>
+      </div>
 
       {!collapsed && (
         <div className="pb-2">
@@ -268,7 +290,6 @@ function SidebarProjectGroup({ projectName, agents, characters, onRename, onAgen
               key={agent.sessionId}
               agent={agent}
               character={characters.get(agent.sessionId)}
-              onRename={onRename}
               onAgentClick={onAgentClick}
             />
           ))}
@@ -414,13 +435,24 @@ function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
 interface ProjectSidebarProps {
   agents: AgentInfo[];
   characters?: Map<string, Character>;
-  onRename?: (sessionId: string, name: string | null) => void;
   onAgentClick?: (sessionId: string) => void;
   collapsed?: boolean;
   sshSessions?: SshPresenceEntry[];
+  /** cwd → project name overrides. Takes precedence over the default pathBasename label. */
+  projectNames?: Record<string, string>;
+  /** Persist a custom project name for a given cwd (pass null to clear). */
+  onProjectNameChange?: (cwd: string, name: string | null) => void;
 }
 
-export function ProjectSidebar({ agents, characters, onRename, onAgentClick, collapsed = false, sshSessions }: ProjectSidebarProps) {
+export function ProjectSidebar({
+  agents,
+  characters,
+  onAgentClick,
+  collapsed = false,
+  sshSessions,
+  projectNames,
+  onProjectNameChange,
+}: ProjectSidebarProps) {
   const { t } = useTranslation();
   const projectGroups = useMemo(() => groupByProject(agents), [agents]);
   const charMap = characters ?? new Map<string, Character>();
@@ -464,12 +496,12 @@ export function ProjectSidebar({ agents, characters, onRename, onAgentClick, col
           projectGroups.map(group => (
             <SidebarProjectGroup
               key={group.cwd}
-              projectName={group.projectName}
+              projectName={projectNames?.[group.cwd] ?? group.projectName}
               cwd={group.cwd}
               agents={group.agents}
               characters={charMap}
-              onRename={onRename}
               onAgentClick={onAgentClick}
+              onProjectNameChange={onProjectNameChange}
             />
           ))
         )}

@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useState, useRef, useCallback, useMemo } from 'react';
+import { Component, lazy, Suspense, useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode, MutableRefObject } from 'react';
 import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
@@ -71,10 +71,30 @@ export default function App() {
   // Snapshot of agents for label lookup in toasts (avoids useWebSocket callback identity churn)
   const agentsSnapshotRef = useRef<Map<string, { displayName: string | null }>>(new Map());
 
+  // Project names (cwd → name) — single source of truth for project labels across sidebar/tabs/CLI.
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({});
+
+  // Initial fetch + refetch on WS reconnect. WS broadcasts (project:names) keep us in sync afterwards.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/projects/names`)
+      .then((r) => r.json())
+      .then((data: { names?: Record<string, string> }) => {
+        if (!cancelled && data.names) setProjectNames(data.names);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stableOnRaw = useCallback((msg: WSServerMessage) => {
     // App-level dispatch: terminal pipe + global toasts
     if (msg.type === 'terminal:output' || msg.type === 'terminal:exited') {
       terminalHandlerRef.current?.(msg);
+    }
+    if (msg.type === 'project:names') {
+      setProjectNames(msg.names);
     }
     if (msg.type === 'agent:state') {
       const label = agentsSnapshotRef.current.get(msg.sessionId)?.displayName || msg.sessionId.slice(0, 8);
@@ -144,25 +164,17 @@ export default function App() {
     send({ type: 'terminal:close', tabId });
   }, [send]);
 
-  const handleRename = useCallback((sessionId: string, name: string | null) => {
-    fetch(`${API_BASE}/api/agents/${sessionId}/name`, {
+  /** Save or clear a project name for a cwd. Server broadcasts the new map back over WS. */
+  const handleProjectNameChange = useCallback((cwd: string, name: string | null) => {
+    fetch(`${API_BASE}/api/projects/names`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ cwd, name }),
     }).catch(() => {});
   }, []);
 
   const agentList = useMemo(() => Array.from(agents.values()), [agents]);
   const projectPaths = useMemo(() => [...new Set(agentList.map(a => a.cwd))], [agentList]);
-  /**
-   * { [sessionId]: displayName | null } — feeds ChatOverlay's sidebar→tab auto-sync.
-   * Using displayName (not projectName) so only *explicitly renamed* agents propagate.
-   */
-  const agentNames = useMemo(() => {
-    const out: Record<string, string | null> = {};
-    for (const a of agentList) out[a.sessionId] = a.displayName ?? null;
-    return out;
-  }, [agentList]);
 
   // In List view, terminal is always visible. In Animation view, follow chatOpen.
   const chatEffectivelyOpen = viewMode === 'list' ? true : chatOpen;
@@ -197,10 +209,11 @@ export default function App() {
                 completedSessions={completedSessions}
                 stats={stats}
                 subscribeRaw={subscribeRaw}
-                onRename={handleRename}
                 leftPanelOpen={leftPanelOpen}
                 rightPanelOpen={rightPanelOpen}
                 sshSessions={sshSessions}
+                projectNames={projectNames}
+                onProjectNameChange={handleProjectNameChange}
               />
             </Suspense>
           </div>
@@ -208,9 +221,10 @@ export default function App() {
             <Suspense fallback={null}>
               <AgentListView
                 agents={agentList}
-                onRename={handleRename}
                 leftPanelOpen={leftPanelOpen}
                 sshSessions={sshSessions}
+                projectNames={projectNames}
+                onProjectNameChange={handleProjectNameChange}
               />
             </Suspense>
           </div>
@@ -232,7 +246,7 @@ export default function App() {
           listViewActive={viewMode === 'list'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
-          agentNames={agentNames}
+          projectNames={projectNames}
         />
       </div>
     </div>

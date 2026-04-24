@@ -4,9 +4,10 @@ import { ProjectSidebar } from '../unified/ProjectSidebar.tsx';
 
 interface AgentListViewProps {
   agents: AgentInfo[];
-  onRename: (sessionId: string, name: string | null) => void;
   leftPanelOpen?: boolean;
   sshSessions?: SshSessionInfo[];
+  projectNames?: Record<string, string>;
+  onProjectNameChange?: (cwd: string, name: string | null) => void;
 }
 
 /**
@@ -17,17 +18,19 @@ interface AgentListViewProps {
  */
 export function AgentListView({
   agents,
-  onRename,
   leftPanelOpen = true,
   sshSessions,
+  projectNames,
+  onProjectNameChange,
 }: AgentListViewProps) {
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
       <ProjectSidebar
         agents={agents}
-        onRename={onRename}
         collapsed={!leftPanelOpen}
         sshSessions={sshSessions}
+        projectNames={projectNames}
+        onProjectNameChange={onProjectNameChange}
       />
       {/* Intentionally empty — the fixed-position ChatOverlay covers this region when
           viewMode === 'list'. The empty div preserves flex layout symmetry. */}
