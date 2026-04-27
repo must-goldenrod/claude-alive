@@ -87,6 +87,14 @@ export interface AgentInfo {
   toolCallCounts: Record<string, number>;
   /** Token usage from transcript parsing (populated after session ends) */
   tokenUsage: TokenUsage | null;
+  /**
+   * Where this Claude session originates from, from the perspective of the dashboard.
+   * - 'spawned-by-ui': created via the in-app `+ New Chat` (server tracked the claudeSessionId).
+   * - 'external': hooks fired but we did not spawn the session (CLI elsewhere, etc.).
+   * - undefined: unknown / pre-source-tracking sessions.
+   * The UI uses this to mark external sessions and offer a "Resume here" affordance.
+   */
+  source?: 'spawned-by-ui' | 'external';
 }
 
 export interface TokenUsage {

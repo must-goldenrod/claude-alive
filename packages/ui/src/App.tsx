@@ -197,15 +197,34 @@ export default function App() {
   const SIDEBAR_WIDTH = 300;
   const listLeftInset = leftPanelOpen ? SIDEBAR_WIDTH : 0;
 
-  // When a sidebar item dispatches a focus/create event, ensure the chat overlay is open
-  // (only relevant for Animation view; List view is always open).
+  // The single source of truth for "which session is currently selected" across the
+  // three surfaces (sidebar item, pixel character, terminal tab). Click on any of
+  // them dispatches `terminal:focusTab` with a sessionId, which we capture here and
+  // broadcast back down via props so all three surfaces stay in sync.
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  // When a sidebar item / pixel character dispatches a focus/create event, ensure the
+  // chat overlay is open AND track the selected session for cross-surface highlight.
+  // For Claude sessions we key on `sessionId`; for SSH (and any tabId-only source) we
+  // fall back to `tabId` so that highlight still works in the sidebar.
   useEffect(() => {
-    const ensureOpen = () => setChatOpen(true);
-    window.addEventListener('terminal:focusTab', ensureOpen);
-    window.addEventListener('terminal:createTab', ensureOpen);
+    const onFocus = (event: Event) => {
+      setChatOpen(true);
+      const detail = (event as CustomEvent).detail as
+        | { sessionId?: string; tabId?: string }
+        | undefined;
+      const id = detail?.sessionId ?? detail?.tabId ?? null;
+      if (id) setSelectedSessionId(id);
+    };
+    const onCreate = () => setChatOpen(true);
+    const onResume = () => setChatOpen(true);
+    window.addEventListener('terminal:focusTab', onFocus);
+    window.addEventListener('terminal:createTab', onCreate);
+    window.addEventListener('terminal:resumeExternal', onResume);
     return () => {
-      window.removeEventListener('terminal:focusTab', ensureOpen);
-      window.removeEventListener('terminal:createTab', ensureOpen);
+      window.removeEventListener('terminal:focusTab', onFocus);
+      window.removeEventListener('terminal:createTab', onCreate);
+      window.removeEventListener('terminal:resumeExternal', onResume);
     };
   }, []);
 
@@ -240,6 +259,7 @@ export default function App() {
                 sshSessions={sshSessions}
                 projectNames={projectNames}
                 onProjectNameChange={handleProjectNameChange}
+                selectedSessionId={selectedSessionId}
               />
             </Suspense>
           </div>
@@ -251,6 +271,7 @@ export default function App() {
                 sshSessions={sshSessions}
                 projectNames={projectNames}
                 onProjectNameChange={handleProjectNameChange}
+                selectedSessionId={selectedSessionId}
               />
             </Suspense>
           </div>

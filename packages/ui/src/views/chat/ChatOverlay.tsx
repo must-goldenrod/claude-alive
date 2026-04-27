@@ -544,6 +544,33 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     return () => window.removeEventListener('terminal:focusTab', handler);
   }, [tabs]);
 
+  // External-session resume: opens a NEW tab running `claude --resume <sessionId>` in
+  // the agent's cwd. The original (external) Claude process keeps running in its own
+  // terminal — both write to the same JSONL transcript, so the user should not actively
+  // continue both at once. If a tab already exists for this session, just focus it.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { sessionId?: string; cwd?: string }
+        | undefined;
+      if (!detail?.sessionId) return;
+      const existing = tabs.find(t => t.claudeSessionId === detail.sessionId);
+      if (existing) {
+        setActiveTabId(existing.id);
+        return;
+      }
+      createTab({
+        cwd: detail.cwd,
+        dangerousSkip: skipPermissions,
+        mode: 'claude',
+        source: 'local',
+        resumeSessionId: detail.sessionId,
+      });
+    };
+    window.addEventListener('terminal:resumeExternal', handler);
+    return () => window.removeEventListener('terminal:resumeExternal', handler);
+  }, [tabs, createTab, skipPermissions]);
+
   const launchPreset = useCallback(
     (preset: SSHPreset) => {
       setSshDialogOpen(false);
@@ -1011,7 +1038,16 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       <TerminalTabBar
         tabs={tabs}
         activeTabId={activeTabId}
-        onSelect={setActiveTabId}
+        onSelect={(tabId) => {
+          setActiveTabId(tabId);
+          // Broadcast so the sidebar / pixel canvas highlight follows the user's tab choice.
+          // Use claudeSessionId when available (Claude tabs) and tabId for SSH tabs.
+          const tab = tabs.find(t => t.id === tabId);
+          const id = tab?.claudeSessionId ?? tabId;
+          window.dispatchEvent(
+            new CustomEvent('terminal:focusTab', { detail: { sessionId: id, tabId } }),
+          );
+        }}
         onAdd={openLocalPicker}
         onClose={closeTab}
       />

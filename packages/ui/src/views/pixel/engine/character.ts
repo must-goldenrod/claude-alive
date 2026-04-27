@@ -60,6 +60,9 @@ export interface Character extends Entity {
   // Tooltip (set by click)
   showTooltip: boolean;
   tooltipTool: string | null;
+
+  // Selection (set by PixelOfficePage based on app-level selectedSessionId)
+  isSelected?: boolean;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────
@@ -380,6 +383,21 @@ function makeRenderFn(char: Character): (ctx: CanvasRenderingContext2D, zoom: nu
       ctx.lineWidth = 1.5 * zoom;
       ctx.beginPath();
       ctx.roundRect(-2 * zoom, -2 * zoom, w + 4 * zoom, h + 4 * zoom, 3 * zoom);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Selection halo (drawn outside the active glow so both can coexist visually).
+    // Uses the same accent-blue tone as the sidebar's selected state for cross-surface
+    // recognition.
+    if (char.isSelected) {
+      ctx.save();
+      ctx.shadowColor = '#58a6ff';
+      ctx.shadowBlur = 12 * zoom;
+      ctx.strokeStyle = '#58a6ff';
+      ctx.lineWidth = 2 * zoom;
+      ctx.beginPath();
+      ctx.roundRect(-5 * zoom, -5 * zoom, w + 10 * zoom, h + 10 * zoom, 5 * zoom);
       ctx.stroke();
       ctx.restore();
     }

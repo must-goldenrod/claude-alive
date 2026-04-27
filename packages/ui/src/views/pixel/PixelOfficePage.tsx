@@ -38,6 +38,7 @@ interface PixelOfficePageProps {
   sshSessions?: SshSessionInfo[];
   projectNames?: Record<string, string>;
   onProjectNameChange?: (cwd: string, name: string | null) => void;
+  selectedSessionId?: string | null;
 }
 
 export function PixelOfficePage({
@@ -52,6 +53,7 @@ export function PixelOfficePage({
   sshSessions,
   projectNames,
   onProjectNameChange,
+  selectedSessionId,
 }: PixelOfficePageProps) {
   const officeRef = useRef(createOfficeState());
   const cameraRef = useRef(officeRef.current.camera);
@@ -162,11 +164,21 @@ export function PixelOfficePage({
       x: char.tileX * TILE_SIZE + TILE_SIZE / 2,
       y: char.tileY * TILE_SIZE + TILE_SIZE / 2,
     };
-    // Also focus the corresponding terminal tab (no-op if none matches).
+    // Broadcast selection — App captures this into selectedSessionId, which flows back
+    // down via the `selectedSessionId` prop and the effect below to set char.isSelected.
     window.dispatchEvent(
       new CustomEvent('terminal:focusTab', { detail: { sessionId } }),
     );
   }, []);
+
+  // Mirror selectedSessionId onto each Character.isSelected so the renderer can draw
+  // a halo around the selected sprite. This runs whenever the prop changes (typically
+  // from a sidebar / pixel / tab click captured at App level).
+  useEffect(() => {
+    for (const char of officeRef.current.characters.values()) {
+      char.isSelected = char.sessionId === selectedSessionId;
+    }
+  }, [selectedSessionId, agents]);
 
   const handleWorldClick = useCallback((worldX: number, worldY: number) => {
     for (const char of officeRef.current.characters.values()) {
@@ -247,6 +259,7 @@ export function PixelOfficePage({
         sshSessions={sshSessions}
         projectNames={projectNames}
         onProjectNameChange={onProjectNameChange}
+        selectedSessionId={selectedSessionId}
       />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
