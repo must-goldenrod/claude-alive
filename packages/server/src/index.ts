@@ -48,6 +48,14 @@ function onEvent(payload: HookEventPayload): void {
     if (resolved) {
       store.renameAgent(agent.sessionId, resolved);
     }
+    // Mark provenance: subagents inherit their parent's source; root agents are
+    // 'spawned-by-ui' if we minted the sessionId via terminal:spawn, else 'external'.
+    if (agent.parentId) {
+      const parent = store.getAgent(agent.parentId);
+      agent.source = parent?.source ?? 'external';
+    } else {
+      agent.source = managedSessionIds.has(agent.sessionId) ? 'spawned-by-ui' : 'external';
+    }
     broadcaster.broadcast({ type: 'agent:spawn', agent });
   } else if (event === 'SessionEnd' || event === 'SubagentStop') {
     // Check if a completion was recorded (agent was in done state)
@@ -129,6 +137,14 @@ function removeAgent(sessionId: string): boolean {
 // Per-client, per-tab terminal instances
 const terminals = new Map<WebSocket, Map<string, ClaudeTerminal>>();
 
+/**
+ * Tracks every Claude session UUID we (the server) spawned via `terminal:spawn`.
+ * When a hook fires for a sessionId, we cross-reference this set to mark the agent
+ * as 'spawned-by-ui' vs 'external'. Resumed sessions also count as spawned-by-ui
+ * because the user explicitly opted in via our UI.
+ */
+const managedSessionIds = new Set<string>();
+
 function getOrCreateTabMap(ws: WebSocket): Map<string, ClaudeTerminal> {
   let tabMap = terminals.get(ws);
   if (!tabMap) {
@@ -171,6 +187,10 @@ const broadcaster = new WSBroadcaster({
       const term = new ClaudeTerminal();
       tabMap.set(msg.tabId, term);
       const isSsh = msg.source === 'ssh';
+      // Remember every Claude session UUID we mint or resume so the hook handler can
+      // distinguish UI-spawned sessions from external CLI invocations.
+      if (msg.claudeSessionId) managedSessionIds.add(msg.claudeSessionId);
+      if (msg.resumeSessionId) managedSessionIds.add(msg.resumeSessionId);
       // If the client didn't supply a displayName, fall back to the stored project name for this cwd.
       // This is what makes the Claude CLI /resume picker, sidebar, and tab label all share one name.
       const resolvedDisplayName =

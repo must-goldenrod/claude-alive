@@ -85,13 +85,30 @@ interface CompactCardProps {
   agent: AgentInfo;
   character?: Character;
   onAgentClick?: (sessionId: string) => void;
+  isSelected?: boolean;
 }
 
-function CompactAgentCard({ agent, character, onAgentClick }: CompactCardProps) {
+function CompactAgentCard({ agent, character, onAgentClick, isSelected = false }: CompactCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const stateColor = STATE_COLORS[agent.state] ?? 'var(--text-secondary)';
+  const isExternal = agent.source === 'external';
+
+  const handleClick = () => {
+    if (isExternal) {
+      // External session: dispatch a resume event so ChatOverlay opens a new tab via
+      // `claude --resume <sessionId>` in the same cwd. The original session keeps
+      // running independently in its own terminal — see Phase 2 design doc.
+      window.dispatchEvent(
+        new CustomEvent('terminal:resumeExternal', {
+          detail: { sessionId: agent.sessionId, cwd: agent.cwd },
+        }),
+      );
+      return;
+    }
+    onAgentClick?.(agent.sessionId);
+  };
   const displayLabel = agent.displayName || agent.projectName || t('agents.generalAgent');
   const spriteUrl = useMemo(() => getSpriteThumbnail(character, agent.sessionId), [character?.paletteIndex, agent.sessionId]);
   const [hovered, setHovered] = useState(false);
@@ -100,11 +117,17 @@ function CompactAgentCard({ agent, character, onAgentClick }: CompactCardProps) 
     <div
       className="rounded-2xl px-5 py-2 transition-all duration-200 cursor-pointer"
       style={{
-        background: hovered ? 'rgba(255,255,255,0.08)' : 'transparent',
+        background: isSelected
+          ? 'rgba(88, 166, 255, 0.14)'
+          : hovered
+            ? 'rgba(255,255,255,0.08)'
+            : 'transparent',
+        boxShadow: isSelected ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)' : undefined,
       }}
-      onClick={() => onAgentClick?.(agent.sessionId)}
+      onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      title={isExternal ? t('agents.resumeExternalHint', { defaultValue: 'External session — click to resume here' }) : undefined}
     >
       <div className="flex items-center gap-4">
         {/* Sprite thumbnail — 44px */}
@@ -150,11 +173,32 @@ function CompactAgentCard({ agent, character, onAgentClick }: CompactCardProps) 
 
         {/* Text content */}
         <div className="flex-1 min-w-0">
-          <div
-            className="text-sm font-medium truncate"
-            style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}
-          >
-            {displayLabel}
+          <div className="flex items-center gap-1.5">
+            <div
+              className="text-sm font-medium truncate"
+              style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}
+            >
+              {displayLabel}
+            </div>
+            {isExternal && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: 0.4,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: 'rgba(255, 184, 108, 0.15)',
+                  color: 'var(--accent-amber, #ffb86c)',
+                  border: '1px solid rgba(255, 184, 108, 0.35)',
+                  flexShrink: 0,
+                  lineHeight: 1.2,
+                }}
+                title={t('agents.externalBadge', { defaultValue: 'Spawned outside this app' })}
+              >
+                EXT
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1.5">
             <span className="text-xs" style={{ color: stateColor }}>
@@ -191,6 +235,7 @@ interface SidebarProjectGroupProps {
   characters: Map<string, Character>;
   onAgentClick?: (sessionId: string) => void;
   onProjectNameChange?: (cwd: string, name: string | null) => void;
+  selectedSessionId?: string | null;
 }
 
 function SidebarProjectGroup({
@@ -200,6 +245,7 @@ function SidebarProjectGroup({
   characters,
   onAgentClick,
   onProjectNameChange,
+  selectedSessionId,
 }: SidebarProjectGroupProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
@@ -295,6 +341,7 @@ function SidebarProjectGroup({
               agent={agent}
               character={characters.get(agent.sessionId)}
               onAgentClick={onAgentClick}
+              isSelected={selectedSessionId === agent.sessionId}
             />
           ))}
         </div>
@@ -317,13 +364,15 @@ interface SshPresenceEntry {
 
 interface SshPresenceGroupProps {
   sessions: SshPresenceEntry[];
+  selectedSessionId?: string | null;
 }
 
 interface SshSessionItemProps {
   session: SshPresenceEntry;
+  isSelected?: boolean;
 }
 
-function SshSessionItem({ session: s }: SshSessionItemProps) {
+function SshSessionItem({ session: s, isSelected = false }: SshSessionItemProps) {
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
 
@@ -339,7 +388,14 @@ function SshSessionItem({ session: s }: SshSessionItemProps) {
   return (
     <div
       className="rounded-2xl px-5 py-2 transition-all duration-200 cursor-pointer"
-      style={{ background: hovered ? 'rgba(188, 140, 255, 0.10)' : 'transparent' }}
+      style={{
+        background: isSelected
+          ? 'rgba(188, 140, 255, 0.20)'
+          : hovered
+            ? 'rgba(188, 140, 255, 0.10)'
+            : 'transparent',
+        boxShadow: isSelected ? 'inset 0 0 0 1px rgba(188, 140, 255, 0.45)' : undefined,
+      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() =>
@@ -398,7 +454,7 @@ function SshSessionItem({ session: s }: SshSessionItemProps) {
   );
 }
 
-function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
+function SshPresenceGroup({ sessions, selectedSessionId }: SshPresenceGroupProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   if (sessions.length === 0) return null;
@@ -438,7 +494,11 @@ function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
       {!collapsed && (
         <div className="pb-2">
           {sessions.map(s => (
-            <SshSessionItem key={s.tabId} session={s} />
+            <SshSessionItem
+              key={s.tabId}
+              session={s}
+              isSelected={selectedSessionId === s.tabId}
+            />
           ))}
         </div>
       )}
@@ -464,6 +524,8 @@ interface ProjectSidebarProps {
   projectNames?: Record<string, string>;
   /** Persist a custom project name for a given cwd (pass null to clear). */
   onProjectNameChange?: (cwd: string, name: string | null) => void;
+  /** Currently-selected session id (or SSH tab id). Used to highlight the matching item. */
+  selectedSessionId?: string | null;
 }
 
 export function ProjectSidebar({
@@ -474,6 +536,7 @@ export function ProjectSidebar({
   sshSessions,
   projectNames,
   onProjectNameChange,
+  selectedSessionId,
 }: ProjectSidebarProps) {
   const { t } = useTranslation();
   const projectGroups = useMemo(() => groupByProject(agents), [agents]);
@@ -576,7 +639,7 @@ export function ProjectSidebar({
       {/* Project list */}
       <div className="flex-1 overflow-y-auto pt-0 pb-4 space-y-2">
         {/* SSH presence — shown above project groups when any SSH tab is open. */}
-        {ssh.length > 0 && <SshPresenceGroup sessions={ssh} />}
+        {ssh.length > 0 && <SshPresenceGroup sessions={ssh} selectedSessionId={selectedSessionId} />}
 
         {projectGroups.length === 0 && ssh.length === 0 ? (
           <div className="text-center py-16 px-8">
@@ -597,6 +660,7 @@ export function ProjectSidebar({
               characters={charMap}
               onAgentClick={onAgentClick}
               onProjectNameChange={onProjectNameChange}
+              selectedSessionId={selectedSessionId}
             />
           ))
         )}

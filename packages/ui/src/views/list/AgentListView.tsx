@@ -8,6 +8,7 @@ interface AgentListViewProps {
   sshSessions?: SshSessionInfo[];
   projectNames?: Record<string, string>;
   onProjectNameChange?: (cwd: string, name: string | null) => void;
+  selectedSessionId?: string | null;
 }
 
 /**
@@ -22,6 +23,7 @@ export function AgentListView({
   sshSessions,
   projectNames,
   onProjectNameChange,
+  selectedSessionId,
 }: AgentListViewProps) {
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
@@ -31,6 +33,7 @@ export function AgentListView({
         sshSessions={sshSessions}
         projectNames={projectNames}
         onProjectNameChange={onProjectNameChange}
+        selectedSessionId={selectedSessionId}
         onAgentClick={(sessionId) =>
           window.dispatchEvent(
             new CustomEvent('terminal:focusTab', { detail: { sessionId } }),
