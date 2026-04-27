@@ -52,6 +52,10 @@ export interface DashboardState {
   systemMetrics: SystemMetrics | null;
 }
 
+// Auto-prune window for agents in `despawning` state. They linger briefly so
+// the user can see the lifecycle ending, then disappear from the list.
+const DESPAWN_PRUNE_MS = 60_000;
+
 export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) => void) {
   const [state, setState] = useState<DashboardState>({
     agents: new Map(),
@@ -63,6 +67,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
   });
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const despawnTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const connect = useCallback(() => {
     const ws = new WebSocket(url);
@@ -214,6 +219,52 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
       wsRef.current?.close();
     };
   }, [connect]);
+
+  // Auto-prune `despawning` agents after DESPAWN_PRUNE_MS. Runs on every agents
+  // map update, but each operation is idempotent (timer registered only if missing,
+  // cleared if the agent recovered or was already removed). Bounded by agent count,
+  // so the cost is trivial in practice.
+  useEffect(() => {
+    const timers = despawnTimers.current;
+    for (const [sessionId, agent] of state.agents) {
+      const isDespawning = agent.state === 'despawning';
+      const hasTimer = timers.has(sessionId);
+      if (isDespawning && !hasTimer) {
+        const handle = setTimeout(() => {
+          timers.delete(sessionId);
+          setState(prev => {
+            const current = prev.agents.get(sessionId);
+            // Skip if the agent recovered to a non-despawning state in the
+            // meantime — only prune if it's still despawning.
+            if (!current || current.state !== 'despawning') return prev;
+            const next = new Map(prev.agents);
+            next.delete(sessionId);
+            return { ...prev, agents: next };
+          });
+        }, DESPAWN_PRUNE_MS);
+        timers.set(sessionId, handle);
+      } else if (!isDespawning && hasTimer) {
+        clearTimeout(timers.get(sessionId)!);
+        timers.delete(sessionId);
+      }
+    }
+    // Clear timers for agents that disappeared (e.g. via agent:despawn or snapshot).
+    for (const sessionId of [...timers.keys()]) {
+      if (!state.agents.has(sessionId)) {
+        clearTimeout(timers.get(sessionId)!);
+        timers.delete(sessionId);
+      }
+    }
+  }, [state.agents]);
+
+  // Final cleanup on unmount.
+  useEffect(() => {
+    const timers = despawnTimers.current;
+    return () => {
+      for (const handle of timers.values()) clearTimeout(handle);
+      timers.clear();
+    };
+  }, []);
 
   return { ...state, send };
 }

@@ -39,7 +39,7 @@
     "waiting": "대기 중",
     "error": "오류",
     "done": "완료",
-    "leaving": "종료 중",
+    "despawning": "종료 중",
     "removed": "제거됨"
   },
   "notifications": {

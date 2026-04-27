@@ -39,7 +39,7 @@
     "waiting": "waiting",
     "error": "error",
     "done": "done",
-    "leaving": "leaving",
+    "despawning": "despawning",
     "removed": "removed"
   },
   "notifications": {
