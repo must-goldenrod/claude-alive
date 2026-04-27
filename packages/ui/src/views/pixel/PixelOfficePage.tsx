@@ -12,8 +12,6 @@ import { startToolActivity, setCharacterIdle, hitTestCharacter } from './engine/
 import type { Entity } from './engine/renderer';
 import { TILE_SIZE, MIN_ZOOM, MAX_ZOOM, ZOOM_STEP } from './engine/constants';
 import { OrgChartOverlay } from './components/OrgChartOverlay';
-import { AgentTimelinePanel } from './components/AgentTimelinePanel';
-import type { PromptEntry } from './components/AgentTimelinePanel';
 import type { RawMessageSubscribe } from '../../App.tsx';
 
 const PixelCanvas = lazy(() => import('./components/PixelCanvas.tsx'));
@@ -59,9 +57,6 @@ export function PixelOfficePage({
   const cameraRef = useRef(officeRef.current.camera);
   const cameraTargetRef = useRef<{ x: number; y: number } | null>(null);
   const entitiesRef = useRef<Entity[]>(getEntities(officeRef.current));
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const promptsRef = useRef<PromptEntry[]>([]);
-  const [, setPromptsVersion] = useState(0);
   const [, setCharVersion] = useState(0);
 
   // Subscribe to raw WS messages to drive the pixel office state machine.
@@ -139,14 +134,9 @@ export function PixelOfficePage({
           break;
         }
         case 'agent:prompt': {
+          // Face the character toward the user when a prompt arrives.
           const char = office.characters.get(msg.sessionId);
           if (char) char.direction = 'down';
-          promptsRef.current = [...promptsRef.current, {
-            sessionId: msg.sessionId,
-            text: msg.prompt,
-            timestamp: Date.now(),
-          }];
-          setPromptsVersion(v => v + 1);
           break;
         }
         case 'agent:rename': {
@@ -172,7 +162,6 @@ export function PixelOfficePage({
       x: char.tileX * TILE_SIZE + TILE_SIZE / 2,
       y: char.tileY * TILE_SIZE + TILE_SIZE / 2,
     };
-    setSelectedAgentId(prev => prev === sessionId ? null : sessionId);
     // Also focus the corresponding terminal tab (no-op if none matches).
     window.dispatchEvent(
       new CustomEvent('terminal:focusTab', { detail: { sessionId } }),
@@ -186,7 +175,6 @@ export function PixelOfficePage({
         return;
       }
     }
-    setSelectedAgentId(null);
     cameraTargetRef.current = null;
   }, [handleAgentClick]);
 
@@ -317,28 +305,6 @@ export function PixelOfficePage({
           camera={cameraRef}
         />
 
-        {/* Timeline overlay: slides out from left edge over canvas */}
-        {selectedAgentId && agents.get(selectedAgentId) && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 320,
-              height: '100%',
-              zIndex: 25,
-              borderRight: '1px solid var(--border-color)',
-              boxShadow: '4px 0 16px rgba(0,0,0,0.3)',
-            }}
-          >
-            <AgentTimelinePanel
-              agent={agents.get(selectedAgentId)!}
-              events={events}
-              prompts={promptsRef.current}
-              onClose={() => setSelectedAgentId(null)}
-            />
-          </div>
-        )}
       </div>
 
       <RightPanel events={events} agents={agentList} completedSessions={completedSessions} stats={stats} collapsed={!rightPanelOpen} />
