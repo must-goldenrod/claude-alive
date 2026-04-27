@@ -9,6 +9,7 @@ interface AgentListViewProps {
   projectNames?: Record<string, string>;
   onProjectNameChange?: (cwd: string, name: string | null) => void;
   selectedSessionId?: string | null;
+  chatClaudeSessionIds?: Set<string>;
 }
 
 /**
@@ -24,6 +25,7 @@ export function AgentListView({
   projectNames,
   onProjectNameChange,
   selectedSessionId,
+  chatClaudeSessionIds,
 }: AgentListViewProps) {
   return (
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
@@ -34,6 +36,7 @@ export function AgentListView({
         projectNames={projectNames}
         onProjectNameChange={onProjectNameChange}
         selectedSessionId={selectedSessionId}
+        chatClaudeSessionIds={chatClaudeSessionIds}
         onAgentClick={(sessionId) =>
           window.dispatchEvent(
             new CustomEvent('terminal:focusTab', { detail: { sessionId } }),

@@ -39,6 +39,7 @@ interface PixelOfficePageProps {
   projectNames?: Record<string, string>;
   onProjectNameChange?: (cwd: string, name: string | null) => void;
   selectedSessionId?: string | null;
+  chatClaudeSessionIds?: Set<string>;
 }
 
 export function PixelOfficePage({
@@ -54,6 +55,7 @@ export function PixelOfficePage({
   projectNames,
   onProjectNameChange,
   selectedSessionId,
+  chatClaudeSessionIds,
 }: PixelOfficePageProps) {
   const officeRef = useRef(createOfficeState());
   const cameraRef = useRef(officeRef.current.camera);
@@ -260,6 +262,7 @@ export function PixelOfficePage({
         projectNames={projectNames}
         onProjectNameChange={onProjectNameChange}
         selectedSessionId={selectedSessionId}
+        chatClaudeSessionIds={chatClaudeSessionIds}
       />
 
       <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>

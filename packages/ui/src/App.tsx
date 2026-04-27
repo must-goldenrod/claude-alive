@@ -60,6 +60,14 @@ export default function App() {
   const handleSshSessionsChange = useCallback((sessions: SshSessionInfo[]) => {
     setSshSessions(sessions);
   }, []);
+  // Set of Claude sessionIds currently open as tabs in the in-app chat. Sidebar
+  // uses this to mark every other agent as "external", which matches user intuition
+  // ("only what's live in the chat right now is internal") instead of the server-side
+  // managedSessionIds set, which never forgets a sessionId once spawned.
+  const [chatClaudeSessionIds, setChatClaudeSessionIds] = useState<Set<string>>(() => new Set());
+  const handleChatClaudeSessionsChange = useCallback((ids: Set<string>) => {
+    setChatClaudeSessionIds(ids);
+  }, []);
 
   const { toasts, addToast, dismissToast } = useToasts();
   const addToastRef = useRef(addToast);
@@ -261,6 +269,7 @@ export default function App() {
                 projectNames={projectNames}
                 onProjectNameChange={handleProjectNameChange}
                 selectedSessionId={selectedSessionId}
+                chatClaudeSessionIds={chatClaudeSessionIds}
               />
             </Suspense>
           </div>
@@ -273,6 +282,7 @@ export default function App() {
                 projectNames={projectNames}
                 onProjectNameChange={handleProjectNameChange}
                 selectedSessionId={selectedSessionId}
+                chatClaudeSessionIds={chatClaudeSessionIds}
               />
             </Suspense>
           </div>
@@ -294,6 +304,7 @@ export default function App() {
           listViewActive={viewMode === 'list'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
+          onChatClaudeSessionsChange={handleChatClaudeSessionsChange}
           projectNames={projectNames}
         />
       </div>
