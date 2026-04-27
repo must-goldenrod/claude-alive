@@ -98,27 +98,6 @@
     "somethingWentWrong": "Something went wrong. Check the browser console for details.",
     "retry": "Retry"
   },
-  "timeline": {
-    "noEvents": "No events yet",
-    "working": "Working",
-    "success": "Success",
-    "failed": "Failed",
-    "sessionStarted": "Session started",
-    "sessionEnded": "Session ended",
-    "usingTool": "Using {{tool}}",
-    "usingToolGeneric": "Using tool",
-    "finishedTool": "Finished {{tool}}",
-    "toolFinished": "Tool finished",
-    "failedTool": "Failed: {{tool}}",
-    "toolFailed": "Tool failed",
-    "waitingPermission": "Waiting for permission",
-    "stopped": "Stopped",
-    "subAgentSpawned": "Sub-agent spawned",
-    "subAgentStopped": "Sub-agent stopped",
-    "taskCompleted": "Task completed",
-    "notification": "Notification",
-    "contextCompacting": "Context compacting"
-  },
   "pixelStates": {
     "active": "working",
     "idle": "idle",
