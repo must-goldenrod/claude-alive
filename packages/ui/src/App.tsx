@@ -3,7 +3,7 @@ import type { ReactNode, MutableRefObject } from 'react';
 import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
 import { HeaderBar } from './components/HeaderBar.tsx';
-import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
+import { useWebSocket, playErrorSound } from './views/dashboard/hooks/useWebSocket.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
@@ -116,6 +116,7 @@ export default function App() {
           tag: `${msg.sessionId}:error`,
           requireInteraction: true,
         });
+        playErrorSound(msg.sessionId);
       }
     }
     // Fan out to view-level subscribers

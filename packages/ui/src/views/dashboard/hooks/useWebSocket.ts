@@ -1,18 +1,36 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats } from '@claude-alive/core';
 
-const COMPLETION_SOUND_URL = '/sounds/task-complete.mp3';
+const COMPLETION_SOUND_URL = '/assets/complete_sound.mp3';
+const ERROR_SOUND_URL = '/assets/error_sound.mp3';
 
-function playCompletionSound() {
+// Debounce window per sessionId+kind to avoid double-firing when both
+// `agent:completed` and a `non-idle → idle` transition arrive close together.
+const SOUND_DEBOUNCE_MS = 800;
+const lastPlayedAt = new Map<string, number>();
+
+function playSound(url: string, dedupeKey: string, volume = 0.7) {
+  const now = Date.now();
+  const prev = lastPlayedAt.get(dedupeKey) ?? 0;
+  if (now - prev < SOUND_DEBOUNCE_MS) return;
+  lastPlayedAt.set(dedupeKey, now);
   try {
-    const audio = new Audio(COMPLETION_SOUND_URL);
-    audio.volume = 0.7;
+    const audio = new Audio(url);
+    audio.volume = volume;
     audio.play().catch(() => {
       // Browser may block autoplay before user interaction — silently ignore
     });
   } catch {
     // Audio not supported — silently ignore
   }
+}
+
+export function playCompletionSound(sessionId = 'global') {
+  playSound(COMPLETION_SOUND_URL, `complete:${sessionId}`);
+}
+
+export function playErrorSound(sessionId = 'global') {
+  playSound(ERROR_SOUND_URL, `error:${sessionId}`);
 }
 
 export interface SystemMetrics {
@@ -65,7 +83,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
       onRawMessage?.(msg);
 
       if (msg.type === 'agent:completed') {
-        playCompletionSound();
+        playCompletionSound(msg.session.sessionId);
       }
 
       setState(prev => {
@@ -97,9 +115,22 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
               const toolsUsed = msg.tool && !agent.toolsUsed.includes(msg.tool)
                 ? [...agent.toolsUsed, msg.tool]
                 : agent.toolsUsed;
+              const nextState = msg.state as AgentState;
+              // "Agent finished work and went back to waiting": fire completion
+              // sound on transitions from an actively-working state into idle.
+              // `spawning → idle` is excluded because that's first-appearance,
+              // not a task completion. The debounce in playSound() collapses
+              // overlap with any concurrent `agent:completed` message.
+              if (
+                nextState === 'idle' &&
+                agent.state !== 'idle' &&
+                agent.state !== 'spawning'
+              ) {
+                playCompletionSound(msg.sessionId);
+              }
               agents.set(msg.sessionId, {
                 ...agent,
-                state: msg.state as AgentState,
+                state: nextState,
                 currentTool: msg.tool,
                 currentToolAnimation: msg.animation as ToolAnimation | null,
                 lastEventTime: msg.timestamp ?? agent.lastEventTime,

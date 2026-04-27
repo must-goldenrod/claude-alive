@@ -34,7 +34,7 @@ function statusBackground(tab: Tab, isActive: boolean): string {
   if (tab.status === 'active') {
     return 'linear-gradient(90deg, rgba(46,160,67,0.05) 0%, rgba(46,160,67,0.32) 50%, rgba(46,160,67,0.05) 100%)';
   }
-  return isActive ? 'rgba(88, 166, 255, 0.12)' : 'transparent';
+  return isActive ? 'rgba(88, 166, 255, 0.14)' : 'transparent';
 }
 
 function statusIcon(tab: Tab): string | null {
@@ -105,6 +105,7 @@ export function TerminalTabBar({
               borderLeft: sshBorder ? borderForSource(tab) : 'none',
               border: sshBorder ? undefined : 'none',
               borderRadius: 6,
+              boxShadow: isActive ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)' : undefined,
               color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',

@@ -180,6 +180,8 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false }
             >
               {displayLabel}
             </div>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5">
             {isExternal && (
               <span
                 style={{
@@ -194,13 +196,13 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false }
                   flexShrink: 0,
                   lineHeight: 1.2,
                 }}
-                title={t('agents.externalBadge', { defaultValue: 'Spawned outside this app' })}
+                title={t('agents.externalBadgeTitle', {
+                  defaultValue: 'Session running in a terminal outside this app',
+                })}
               >
-                EXT
+                {t('agents.externalShort', { defaultValue: 'EXT' })}
               </span>
             )}
-          </div>
-          <div className="flex items-center gap-2 mt-1.5">
             <span className="text-xs" style={{ color: stateColor }}>
               {t(`states.${agent.state}`, { defaultValue: agent.state })}
             </span>
@@ -334,7 +336,7 @@ function SidebarProjectGroup({
       </div>
 
       {!collapsed && (
-        <div className="pb-2">
+        <div className="pb-2 px-2">
           {agents.map(agent => (
             <CompactAgentCard
               key={agent.sessionId}
@@ -492,7 +494,7 @@ function SshPresenceGroup({ sessions, selectedSessionId }: SshPresenceGroupProps
       </button>
 
       {!collapsed && (
-        <div className="pb-2">
+        <div className="pb-2 px-2">
           {sessions.map(s => (
             <SshSessionItem
               key={s.tabId}

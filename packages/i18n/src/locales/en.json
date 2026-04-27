@@ -27,7 +27,9 @@
     "tools": "tools",
     "startedAt": "Started at",
     "totalEvents": "Total events received",
-    "generalAgent": "General Agent"
+    "generalAgent": "General Agent",
+    "externalShort": "EXT",
+    "externalBadgeTitle": "Session running in a terminal outside this app"
   },
   "states": {
     "spawning": "spawning",

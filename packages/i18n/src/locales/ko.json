@@ -27,7 +27,9 @@
     "tools": "도구",
     "startedAt": "시작 시간",
     "totalEvents": "전체 이벤트 수",
-    "generalAgent": "일반 에이전트"
+    "generalAgent": "일반 에이전트",
+    "externalShort": "외부",
+    "externalBadgeTitle": "이 앱이 아닌 다른 터미널에서 실행 중인 세션"
   },
   "states": {
     "spawning": "생성 중",
