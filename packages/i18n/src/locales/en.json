@@ -5,7 +5,42 @@
     "agentCount_other": "{{count}} agents",
     "toggleLeftPanel": "Toggle left panel",
     "toggleRightPanel": "Toggle right panel",
-    "toggleChat": "Toggle chat"
+    "toggleChat": "Toggle chat",
+    "openSettings": "Settings"
+  },
+  "settings": {
+    "title": "Settings",
+    "close": "Close",
+    "done": "Done",
+    "reset": "Reset to defaults",
+    "resetTooltip": "Restore all settings to factory defaults",
+    "tabs": {
+      "sound": "Sound",
+      "terminal": "Terminal"
+    },
+    "sound": {
+      "completion": { "title": "Completion sound" },
+      "error": { "title": "Error sound" },
+      "volume": "Volume",
+      "test": "Test"
+    },
+    "terminal": {
+      "theme": "Color theme",
+      "font": "Font family",
+      "fontSize": "Font size",
+      "lineHeight": "Line spacing",
+      "letterSpacing": "Letter spacing",
+      "cursorStyle": "Cursor style",
+      "cursorBlock": "Block",
+      "cursorBar": "Bar",
+      "cursorUnderline": "Underline",
+      "cursorBlink": "Cursor blink",
+      "cursorWidth": "Cursor width",
+      "paddingX": "Horizontal padding",
+      "paddingY": "Vertical padding",
+      "scrollback": "Scrollback buffer",
+      "lines": "lines"
+    }
   },
   "agents": {
     "noAgentsYet": "No agents yet",

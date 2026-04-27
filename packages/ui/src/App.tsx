@@ -8,6 +8,7 @@ import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
+import { SettingsModal } from './components/SettingsModal.tsx';
 
 const PixelOfficePage = lazy(() =>
   import('./views/pixel/PixelOfficePage.tsx').then(m => ({ default: m.PixelOfficePage })),
@@ -53,6 +54,7 @@ export default function App() {
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // SSH tab presence — mirrored from ChatOverlay so the sidebar can show active SSH sessions.
   // We can't track what's happening inside the remote shell (hooks are local-only) but we
   // can at least show that a session is open and whether it's producing output.
@@ -249,8 +251,10 @@ export default function App() {
         onToggleLeftPanel={() => setLeftPanelOpen(prev => !prev)}
         onToggleRightPanel={() => setRightPanelOpen(prev => !prev)}
         onToggleChat={() => setChatOpen(prev => !prev)}
+        onOpenSettings={() => setSettingsOpen(true)}
         systemMetrics={systemMetrics}
       />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 56, position: 'relative' }}>
         <ErrorBoundary>
           {/* Both views stay mounted. Only CSS display toggles — preserves game state, selected agent, list scroll, etc. */}

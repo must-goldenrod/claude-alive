@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats } from '@claude-alive/core';
+import { getSettings } from '../../../services/settings';
 
 const COMPLETION_SOUND_URL = '/assets/complete_sound.mp3';
 const ERROR_SOUND_URL = '/assets/error_sound.mp3';
@@ -9,7 +10,8 @@ const ERROR_SOUND_URL = '/assets/error_sound.mp3';
 const SOUND_DEBOUNCE_MS = 800;
 const lastPlayedAt = new Map<string, number>();
 
-function playSound(url: string, dedupeKey: string, volume = 0.7) {
+function playSound(url: string, dedupeKey: string, volume: number) {
+  if (volume <= 0) return;
   const now = Date.now();
   const prev = lastPlayedAt.get(dedupeKey) ?? 0;
   if (now - prev < SOUND_DEBOUNCE_MS) return;
@@ -26,11 +28,15 @@ function playSound(url: string, dedupeKey: string, volume = 0.7) {
 }
 
 export function playCompletionSound(sessionId = 'global') {
-  playSound(COMPLETION_SOUND_URL, `complete:${sessionId}`);
+  const cfg = getSettings().sound.completion;
+  if (!cfg.enabled) return;
+  playSound(COMPLETION_SOUND_URL, `complete:${sessionId}`, cfg.volume);
 }
 
 export function playErrorSound(sessionId = 'global') {
-  playSound(ERROR_SOUND_URL, `error:${sessionId}`);
+  const cfg = getSettings().sound.error;
+  if (!cfg.enabled) return;
+  playSound(ERROR_SOUND_URL, `error:${sessionId}`, cfg.volume);
 }
 
 export interface SystemMetrics {
