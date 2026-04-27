@@ -43,7 +43,11 @@
   "notifications": {
     "needsPermission": "권한 필요",
     "errorOccurred": "오류 발생",
-    "taskCompleted": "작업 완료"
+    "taskCompleted": "작업 완료",
+    "toggle": "브라우저 알림 토글",
+    "enable": "브라우저 알림 켜기",
+    "disable": "브라우저 알림 끄기",
+    "denied": "알림 차단됨 — 브라우저 설정에서 허용하세요"
   },
   "activity": {
     "title": "최근 활동",

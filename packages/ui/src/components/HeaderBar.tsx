@@ -1,6 +1,13 @@
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ViewMode } from '../App.tsx';
 import type { SystemMetrics } from '../views/dashboard/hooks/useWebSocket.ts';
+import {
+  currentPermission,
+  notificationsEnabled as readNotificationsEnabled,
+  setNotificationsEnabled,
+  requestNotificationPermission,
+} from '../services/notifications.ts';
 
 interface HeaderBarProps {
   viewMode: ViewMode;
@@ -106,6 +113,32 @@ export function HeaderBar({
   const { t, i18n } = useTranslation();
   const isKo = i18n.language?.startsWith('ko');
 
+  // Notification permission/preference. Stored in localStorage; the bell button reflects
+  // three states: unsupported (hidden), needs-permission (request on click), or
+  // permission-granted (toggle enable/disable).
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission | 'unsupported'>(() => currentPermission());
+  const [notifEnabled, setNotifEnabled] = useState<boolean>(() => readNotificationsEnabled());
+
+  // Re-sync after mount in case localStorage was changed in another tab.
+  useEffect(() => {
+    setNotifPerm(currentPermission());
+    setNotifEnabled(readNotificationsEnabled());
+  }, []);
+
+  const handleNotifToggle = async () => {
+    if (notifPerm === 'unsupported' || notifPerm === 'denied') return;
+    if (notifPerm === 'default') {
+      const result = await requestNotificationPermission();
+      setNotifPerm(result === 'unsupported' ? 'unsupported' : result);
+      setNotifEnabled(readNotificationsEnabled());
+      return;
+    }
+    // Granted — toggle the enabled flag.
+    const next = !notifEnabled;
+    setNotificationsEnabled(next);
+    setNotifEnabled(next);
+  };
+
   const toggleLang = () => {
     i18n.changeLanguage(isKo ? 'en' : 'ko');
   };
@@ -208,6 +241,70 @@ export function HeaderBar({
               primary={`${formatBytes(systemMetrics.memUsed)} / ${formatBytes(systemMetrics.memTotal)}`}
             />
           </div>
+        )}
+
+        {/* Browser notification toggle.
+            - unsupported: hidden
+            - default (not asked): outlined bell, click to request
+            - granted + enabled: filled bell
+            - granted + disabled: outlined bell with low opacity
+            - denied: muted bell with strikethrough tooltip */}
+        {notifPerm !== 'unsupported' && (
+          <button
+            onClick={handleNotifToggle}
+            disabled={notifPerm === 'denied'}
+            style={{
+              ...iconButtonStyle,
+              cursor: notifPerm === 'denied' ? 'not-allowed' : 'pointer',
+              color:
+                notifPerm === 'granted' && notifEnabled
+                  ? 'var(--accent-blue)'
+                  : 'var(--text-secondary)',
+              opacity: notifPerm === 'denied' ? 0.4 : notifPerm === 'granted' && !notifEnabled ? 0.55 : 1,
+              borderColor:
+                notifPerm === 'granted' && notifEnabled ? 'var(--accent-blue)' : 'var(--border-color)',
+              background:
+                notifPerm === 'granted' && notifEnabled ? 'rgba(88, 166, 255, 0.10)' : 'transparent',
+            }}
+            aria-label={t('notifications.toggle')}
+            title={
+              notifPerm === 'denied'
+                ? t('notifications.denied')
+                : notifPerm === 'default'
+                  ? t('notifications.enable')
+                  : notifEnabled
+                    ? t('notifications.disable')
+                    : t('notifications.enable')
+            }
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 1.5a3.5 3.5 0 0 0-3.5 3.5v1.86a3 3 0 0 1-.42 1.54L3 10.5h10l-1.08-2.1A3 3 0 0 1 11.5 6.86V5A3.5 3.5 0 0 0 8 1.5z"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+                fill={notifPerm === 'granted' && notifEnabled ? 'currentColor' : 'none'}
+                fillOpacity={notifPerm === 'granted' && notifEnabled ? 0.15 : 0}
+              />
+              <path
+                d="M6.5 12.5a1.5 1.5 0 0 0 3 0"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+              {notifPerm === 'denied' && (
+                <line
+                  x1="2.5"
+                  y1="2.5"
+                  x2="13.5"
+                  y2="13.5"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+              )}
+            </svg>
+          </button>
         )}
 
         <button

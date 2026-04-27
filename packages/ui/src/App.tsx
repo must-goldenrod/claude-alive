@@ -7,6 +7,7 @@ import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
+import { fireNotification } from './services/notifications.ts';
 
 const PixelOfficePage = lazy(() =>
   import('./views/pixel/PixelOfficePage.tsx').then(m => ({ default: m.PixelOfficePage })),
@@ -100,8 +101,21 @@ export default function App() {
       const label = agentsSnapshotRef.current.get(msg.sessionId)?.displayName || msg.sessionId.slice(0, 8);
       if (msg.state === 'waiting') {
         addToastRef.current('warning', label, 'notifications.needsPermission', `${msg.sessionId}:waiting`);
+        // Native notification (only fires if permission granted, enabled, and tab unfocused).
+        fireNotification({
+          title: i18n.t('notifications.needsPermission'),
+          body: msg.tool ? `${label} · ${msg.tool}` : label,
+          tag: `${msg.sessionId}:waiting`,
+          requireInteraction: true,
+        });
       } else if (msg.state === 'error') {
         addToastRef.current('error', label, 'notifications.errorOccurred', `${msg.sessionId}:error`);
+        fireNotification({
+          title: i18n.t('notifications.errorOccurred'),
+          body: msg.tool ? `${label} · ${msg.tool}` : label,
+          tag: `${msg.sessionId}:error`,
+          requireInteraction: true,
+        });
       }
     }
     // Fan out to view-level subscribers

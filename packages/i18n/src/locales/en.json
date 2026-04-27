@@ -43,7 +43,11 @@
   "notifications": {
     "needsPermission": "Needs permission",
     "errorOccurred": "Error occurred",
-    "taskCompleted": "Task completed"
+    "taskCompleted": "Task completed",
+    "toggle": "Toggle browser notifications",
+    "enable": "Enable browser notifications",
+    "disable": "Disable browser notifications",
+    "denied": "Notifications blocked — allow in browser settings"
   },
   "activity": {
     "title": "Recent Activity",
