@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AgentInfo } from '@claude-alive/core';
 import { useNow } from '../dashboard/hooks/useNow.ts';
@@ -6,6 +6,10 @@ import type { TFunction } from 'i18next';
 import { generateSpriteSet } from '../pixel/engine/sprites';
 import { getSpriteDataUrl } from '../pixel/utils/spriteToImage';
 import type { Character } from '../pixel/engine/character';
+
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 500;
+const SIDEBAR_DEFAULT_WIDTH = 300;
 
 const STATE_COLORS: Record<string, string> = {
   spawning: 'var(--accent-purple)',
@@ -324,7 +328,7 @@ function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
   return (
     <div>
       <button
-        className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
+        className="w-full flex items-center gap-3 px-6 py-1 text-left transition-all"
         style={{ background: 'transparent' }}
         onClick={() => setCollapsed(!collapsed)}
       >
@@ -366,7 +370,7 @@ function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
             return (
               <div
                 key={s.tabId}
-                className="rounded-2xl px-5 py-3 transition-all duration-200"
+                className="rounded-2xl px-5 py-2 transition-all duration-200"
                 style={{ background: 'transparent' }}
               >
                 <div className="flex items-center gap-3">
@@ -458,24 +462,97 @@ export function ProjectSidebar({
   const charMap = characters ?? new Map<string, Character>();
   const ssh = sshSessions ?? [];
 
+  const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(SIDEBAR_DEFAULT_WIDTH);
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    dragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = width;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      // Dragging right increases width (panel is on the left)
+      const delta = ev.clientX - startX.current;
+      setWidth(Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, startWidth.current + delta)));
+    };
+
+    const onMouseUp = () => {
+      dragging.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [width]);
+
   return (
     <div
-      className="flex flex-col h-full overflow-hidden shrink-0"
+      className="flex flex-col h-full overflow-hidden shrink-0 relative"
       style={{
-        width: collapsed ? 0 : 300,
-        minWidth: collapsed ? 0 : 300,
+        width: collapsed ? 0 : width,
+        minWidth: collapsed ? 0 : width,
         opacity: collapsed ? 0 : 1,
         background: 'var(--bg-secondary)',
         borderRight: collapsed ? 'none' : '1px solid var(--border-color)',
-        transition: 'width 200ms ease, min-width 200ms ease, opacity 150ms ease',
+        transition: collapsed ? 'width 200ms ease, min-width 200ms ease, opacity 150ms ease' : undefined,
       }}
     >
+      {/* Resize handle (right edge) */}
+      {!collapsed && (
+        <div
+          onMouseDown={onResizeMouseDown}
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 5,
+            cursor: 'col-resize',
+            zIndex: 10,
+          }}
+        />
+      )}
       {/* Sidebar header */}
-      <div
-        className="px-6 pt-6 pb-4 text-xs font-bold uppercase tracking-wider shrink-0"
-        style={{ color: 'var(--text-secondary)', opacity: 0.5 }}
-      >
-        {t('agents.projects')}
+      <div className="px-6 pt-6 pb-4 flex items-center justify-between gap-2 shrink-0">
+        <div
+          className="text-xs font-bold uppercase tracking-wider"
+          style={{ color: 'var(--text-secondary)', opacity: 0.5 }}
+        >
+          {t('agents.projects')}
+        </div>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('terminal:createTab'))}
+          title={t('terminal.newTab', { defaultValue: 'New Chat' })}
+          className="flex items-center gap-1 transition-all"
+          style={{
+            padding: '4px 10px',
+            borderRadius: 8,
+            background: 'rgba(88, 166, 255, 0.10)',
+            border: '1px solid rgba(88, 166, 255, 0.25)',
+            color: 'var(--accent-blue)',
+            fontSize: 11,
+            fontWeight: 600,
+            lineHeight: 1,
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(88, 166, 255, 0.18)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(88, 166, 255, 0.10)';
+          }}
+        >
+          <span style={{ fontSize: 13, lineHeight: 1 }}>+</span>
+          <span>New Chat</span>
+        </button>
       </div>
 
       {/* Project list */}

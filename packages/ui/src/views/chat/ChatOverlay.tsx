@@ -513,6 +513,16 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     fetchBrowse('~');
   }, [fetchBrowse]);
 
+  // Allow other parts of the app (e.g. ProjectSidebar's "New Chat" button)
+  // to trigger the same flow as the in-tab "+" button via CustomEvent.
+  useEffect(() => {
+    const handler = () => {
+      openLocalPicker();
+    };
+    window.addEventListener('terminal:createTab', handler);
+    return () => window.removeEventListener('terminal:createTab', handler);
+  }, [openLocalPicker]);
+
   const launchPreset = useCallback(
     (preset: SSHPreset) => {
       setSshDialogOpen(false);
