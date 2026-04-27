@@ -86,14 +86,17 @@ interface CompactCardProps {
   character?: Character;
   onAgentClick?: (sessionId: string) => void;
   isSelected?: boolean;
+  /** When provided, overrides `agent.source === 'external'` — set by the sidebar based on
+   *  whether the agent's root session is currently open as a chat tab. */
+  isExternal?: boolean;
 }
 
-function CompactAgentCard({ agent, character, onAgentClick, isSelected = false }: CompactCardProps) {
+function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, isExternal: isExternalProp }: CompactCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const stateColor = STATE_COLORS[agent.state] ?? 'var(--text-secondary)';
-  const isExternal = agent.source === 'external';
+  const isExternal = isExternalProp ?? agent.source === 'external';
 
   const handleClick = () => {
     if (isExternal) {
@@ -180,6 +183,8 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false }
             >
               {displayLabel}
             </div>
+          </div>
+          <div className="flex items-center gap-2 mt-1.5">
             {isExternal && (
               <span
                 style={{
@@ -194,13 +199,13 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false }
                   flexShrink: 0,
                   lineHeight: 1.2,
                 }}
-                title={t('agents.externalBadge', { defaultValue: 'Spawned outside this app' })}
+                title={t('agents.externalBadgeTitle', {
+                  defaultValue: 'Session running in a terminal outside this app',
+                })}
               >
-                EXT
+                {t('agents.externalShort', { defaultValue: 'EXT' })}
               </span>
             )}
-          </div>
-          <div className="flex items-center gap-2 mt-1.5">
             <span className="text-xs" style={{ color: stateColor }}>
               {t(`states.${agent.state}`, { defaultValue: agent.state })}
             </span>
@@ -236,6 +241,9 @@ interface SidebarProjectGroupProps {
   onAgentClick?: (sessionId: string) => void;
   onProjectNameChange?: (cwd: string, name: string | null) => void;
   selectedSessionId?: string | null;
+  /** Set of sessionIds (root + their subagents) considered "internal". When null,
+   *  CompactAgentCard falls back to `agent.source === 'external'`. */
+  internalSessionIds: Set<string> | null;
 }
 
 function SidebarProjectGroup({
@@ -246,6 +254,7 @@ function SidebarProjectGroup({
   onAgentClick,
   onProjectNameChange,
   selectedSessionId,
+  internalSessionIds,
 }: SidebarProjectGroupProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
@@ -334,7 +343,7 @@ function SidebarProjectGroup({
       </div>
 
       {!collapsed && (
-        <div className="pb-2">
+        <div className="pb-2 px-2">
           {agents.map(agent => (
             <CompactAgentCard
               key={agent.sessionId}
@@ -342,6 +351,11 @@ function SidebarProjectGroup({
               character={characters.get(agent.sessionId)}
               onAgentClick={onAgentClick}
               isSelected={selectedSessionId === agent.sessionId}
+              isExternal={
+                internalSessionIds
+                  ? !internalSessionIds.has(agent.sessionId)
+                  : agent.source === 'external'
+              }
             />
           ))}
         </div>
@@ -492,7 +506,7 @@ function SshPresenceGroup({ sessions, selectedSessionId }: SshPresenceGroupProps
       </button>
 
       {!collapsed && (
-        <div className="pb-2">
+        <div className="pb-2 px-2">
           {sessions.map(s => (
             <SshSessionItem
               key={s.tabId}
@@ -526,6 +540,16 @@ interface ProjectSidebarProps {
   onProjectNameChange?: (cwd: string, name: string | null) => void;
   /** Currently-selected session id (or SSH tab id). Used to highlight the matching item. */
   selectedSessionId?: string | null;
+  /**
+   * Set of Claude sessionIds currently open as tabs in the in-app chat. Agents whose
+   * root session is NOT in this set get the "외부 / EXT" badge — i.e. anything the
+   * user can't directly see in the chat panel right now (closed tabs, SSH-driven remote
+   * agents, agents spawned in a separate terminal).
+   *
+   * When undefined or empty, the component falls back to `agent.source === 'external'`
+   * so the badge still works during the brief window before the chat layer reports in.
+   */
+  chatClaudeSessionIds?: Set<string>;
 }
 
 export function ProjectSidebar({
@@ -537,11 +561,33 @@ export function ProjectSidebar({
   projectNames,
   onProjectNameChange,
   selectedSessionId,
+  chatClaudeSessionIds,
 }: ProjectSidebarProps) {
   const { t } = useTranslation();
   const projectGroups = useMemo(() => groupByProject(agents), [agents]);
   const charMap = characters ?? new Map<string, Character>();
   const ssh = sshSessions ?? [];
+
+  // Derive the "internal" sessionId set: start with the chat tab ids, then expand to
+  // include subagents whose root session is internal (subagents have their own sessionId
+  // but their parentId chain ends at a root sessionId we minted in chat).
+  const internalSessionIds = useMemo(() => {
+    if (!chatClaudeSessionIds || chatClaudeSessionIds.size === 0) return null;
+    const byId = new Map(agents.map((a) => [a.sessionId, a]));
+    const result = new Set<string>(chatClaudeSessionIds);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const a of agents) {
+        if (result.has(a.sessionId) || !a.parentId) continue;
+        if (result.has(a.parentId) || (byId.get(a.parentId) && result.has(byId.get(a.parentId)!.sessionId))) {
+          result.add(a.sessionId);
+          added = true;
+        }
+      }
+    }
+    return result;
+  }, [chatClaudeSessionIds, agents]);
 
   const [width, setWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const dragging = useRef(false);
@@ -661,6 +707,7 @@ export function ProjectSidebar({
               onAgentClick={onAgentClick}
               onProjectNameChange={onProjectNameChange}
               selectedSessionId={selectedSessionId}
+              internalSessionIds={internalSessionIds}
             />
           ))
         )}

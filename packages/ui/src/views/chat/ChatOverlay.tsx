@@ -16,6 +16,8 @@ import {
   deletePreset as deletePresetStore,
 } from './sshPresets.ts';
 import type { SSHPreset, SSHPresetDraft } from './sshPresets.ts';
+import { getSettings, getThemeById, getFontFamily, subscribeSettings } from '../../services/settings.ts';
+import type { AppSettings } from '../../services/settings.ts';
 
 export type TerminalEventHandler = (msg: WSServerMessage) => void;
 
@@ -76,44 +78,39 @@ interface ChatOverlayProps {
   /** Called whenever the set of SSH tabs changes. Enables App/Sidebar to show a presence indicator. */
   onSshSessionsChange?: (sessions: SshSessionInfo[]) => void;
   /**
+   * Called whenever the set of currently-open in-chat Claude session ids changes.
+   * The sidebar uses this to mark agents NOT in the set as "external" — i.e. anything
+   * the user can't see directly in this chat panel right now (closed tabs, SSH-driven
+   * remote agents, agents spawned in a separate terminal).
+   */
+  onChatClaudeSessionsChange?: (sessionIds: Set<string>) => void;
+  /**
    * cwd → project display name map. Single source of truth — terminal tabs render their label
    * by looking up the tab's cwd in this map (fallback to pathBasename(cwd)).
    */
   projectNames?: Record<string, string>;
 }
 
-const TERM_OPTIONS = {
-  fontFamily: 'SF Mono, Monaco, Menlo, monospace',
-  fontSize: 13,
-  lineHeight: 1.4,
-  theme: {
-    background: 'transparent',
-    foreground: '#c9d1d9',
-    cursor: '#58a6ff',
-    cursorAccent: '#0d1117',
-    selectionBackground: 'rgba(88, 166, 255, 0.3)',
-    black: '#0d1117',
-    red: '#ff7b72',
-    green: '#7ee787',
-    yellow: '#d29922',
-    blue: '#58a6ff',
-    magenta: '#bc8cff',
-    cyan: '#39d353',
-    white: '#c9d1d9',
-    brightBlack: '#484f58',
-    brightRed: '#ffa198',
-    brightGreen: '#7ee787',
-    brightYellow: '#e3b341',
-    brightBlue: '#79c0ff',
-    brightMagenta: '#d2a8ff',
-    brightCyan: '#56d364',
-    brightWhite: '#f0f6fc',
-  },
-  cursorBlink: true,
-  cursorStyle: 'block' as const,
-  allowTransparency: true,
-  scrollback: 5000,
-};
+/**
+ * Build xterm options from current AppSettings. Pure function — call this every time
+ * you need fresh options (new tab, settings change, etc.). The `allowTransparency`
+ * flag stays on so the 'transparent' theme preset can show the parent backdrop.
+ */
+function buildTermOptions(s: AppSettings) {
+  const t = s.terminal;
+  return {
+    fontFamily: getFontFamily(t.fontFamilyId),
+    fontSize: t.fontSize,
+    lineHeight: t.lineHeight,
+    letterSpacing: t.letterSpacing,
+    theme: getThemeById(t.themeId),
+    cursorBlink: t.cursorBlink,
+    cursorStyle: t.cursorStyle,
+    cursorWidth: t.cursorWidth,
+    allowTransparency: true,
+    scrollback: t.scrollback,
+  };
+}
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
@@ -298,7 +295,7 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, projectNames }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
@@ -313,11 +310,13 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const onResizeRef = useRef(onResize);
   const onCloseRef = useRef(onClose);
   const onSshSessionsChangeRef = useRef(onSshSessionsChange);
+  const onChatClaudeSessionsChangeRef = useRef(onChatClaudeSessionsChange);
   onSpawnRef.current = onSpawn;
   onInputRef.current = onInput;
   onResizeRef.current = onResize;
   onCloseRef.current = onClose;
   onSshSessionsChangeRef.current = onSshSessionsChange;
+  onChatClaudeSessionsChangeRef.current = onChatClaudeSessionsChange;
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
@@ -432,15 +431,16 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
 
+        const settings = getSettings();
         const container = document.createElement('div');
         container.style.flex = '1';
-        container.style.padding = '8px 12px';
+        container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
         container.style.overflow = 'hidden';
         container.style.height = '100%';
         wrapper.appendChild(container);
         containersRef.current.set(tabId, container);
 
-        const term = new Terminal(TERM_OPTIONS);
+        const term = new Terminal(buildTermOptions(settings));
         const fit = new FitAddon();
         term.loadAddon(fit);
         term.open(container);
@@ -693,6 +693,42 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     }
   }, [activeTabId]);
 
+  // Live-apply user settings to all open terminal tabs. xterm v6 lets us mutate most
+  // options on the fly via `term.options.*`; container padding is plain CSS. After
+  // applying we refit because font/lineHeight changes shift the cell grid.
+  useEffect(() => {
+    const apply = (s: AppSettings) => {
+      const opts = buildTermOptions(s);
+      for (const [, entry] of termsRef.current) {
+        // xterm v6 options are individually assignable; reassigning the whole object
+        // is also supported. We assign field-by-field for clarity and to avoid losing
+        // any option not surfaced in the settings UI.
+        entry.term.options.fontFamily = opts.fontFamily;
+        entry.term.options.fontSize = opts.fontSize;
+        entry.term.options.lineHeight = opts.lineHeight;
+        entry.term.options.letterSpacing = opts.letterSpacing;
+        entry.term.options.theme = opts.theme;
+        entry.term.options.cursorBlink = opts.cursorBlink;
+        entry.term.options.cursorStyle = opts.cursorStyle;
+        entry.term.options.cursorWidth = opts.cursorWidth;
+        entry.term.options.scrollback = opts.scrollback;
+      }
+      const padding = `${s.terminal.paddingY}px ${s.terminal.paddingX}px`;
+      for (const [, container] of containersRef.current) {
+        container.style.padding = padding;
+      }
+      // Refit the active tab so the cell grid matches the new metrics.
+      const active = termsRef.current.get(activeTabId);
+      if (active) {
+        requestAnimationFrame(() => {
+          active.fit.fit();
+          onResizeRef.current?.(activeTabId, active.term.cols, active.term.rows);
+        });
+      }
+    };
+    return subscribeSettings(apply);
+  }, [activeTabId]);
+
   // ResizeObserver for the wrapper — fit the active tab continuously.
   // During the 420ms view transition this fires on every paint, so xterm resizes
   // smoothly as the window animates between layouts.
@@ -770,6 +806,19 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         hasError: !!t.sshError,
       }));
     onSshSessionsChangeRef.current?.(sshSessions);
+  }, [tabs]);
+
+  // Emit the set of currently-open in-chat Claude session ids. Excludes exited tabs
+  // (the underlying Claude process is gone) and SSH tabs (no local sessionId — the
+  // remote Claude, if any, runs on the other machine and we can't see its hooks).
+  useEffect(() => {
+    const ids = new Set<string>();
+    for (const t of tabs) {
+      if (t.source !== 'ssh' && !t.exited && t.claudeSessionId) {
+        ids.add(t.claudeSessionId);
+      }
+    }
+    onChatClaudeSessionsChangeRef.current?.(ids);
   }, [tabs]);
 
   // Register terminal event handler for incoming server messages

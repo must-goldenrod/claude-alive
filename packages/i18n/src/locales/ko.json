@@ -5,7 +5,42 @@
     "agentCount_other": "에이전트 {{count}}개",
     "toggleLeftPanel": "왼쪽 패널 토글",
     "toggleRightPanel": "오른쪽 패널 토글",
-    "toggleChat": "채팅 토글"
+    "toggleChat": "채팅 토글",
+    "openSettings": "설정"
+  },
+  "settings": {
+    "title": "설정",
+    "close": "닫기",
+    "done": "완료",
+    "reset": "기본값으로 초기화",
+    "resetTooltip": "모든 설정을 공장 초기값으로 복원",
+    "tabs": {
+      "sound": "사운드",
+      "terminal": "터미널"
+    },
+    "sound": {
+      "completion": { "title": "완료 사운드" },
+      "error": { "title": "에러 사운드" },
+      "volume": "볼륨",
+      "test": "테스트"
+    },
+    "terminal": {
+      "theme": "컬러 테마",
+      "font": "글꼴",
+      "fontSize": "글자 크기",
+      "lineHeight": "줄 간격",
+      "letterSpacing": "자간",
+      "cursorStyle": "커서 모양",
+      "cursorBlock": "블록",
+      "cursorBar": "막대",
+      "cursorUnderline": "밑줄",
+      "cursorBlink": "커서 깜빡임",
+      "cursorWidth": "커서 굵기",
+      "paddingX": "좌우 여백",
+      "paddingY": "상하 여백",
+      "scrollback": "스크롤 버퍼",
+      "lines": "줄"
+    }
   },
   "agents": {
     "noAgentsYet": "아직 에이전트가 없습니다",
@@ -27,7 +62,9 @@
     "tools": "도구",
     "startedAt": "시작 시간",
     "totalEvents": "전체 이벤트 수",
-    "generalAgent": "일반 에이전트"
+    "generalAgent": "일반 에이전트",
+    "externalShort": "외부",
+    "externalBadgeTitle": "이 앱이 아닌 다른 터미널에서 실행 중인 세션"
   },
   "states": {
     "spawning": "생성 중",
@@ -37,7 +74,7 @@
     "waiting": "대기 중",
     "error": "오류",
     "done": "완료",
-    "leaving": "종료 중",
+    "despawning": "종료 중",
     "removed": "제거됨"
   },
   "notifications": {
