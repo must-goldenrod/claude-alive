@@ -523,6 +523,27 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     return () => window.removeEventListener('terminal:createTab', handler);
   }, [openLocalPicker]);
 
+  // Allow sidebar items (agents / SSH presence) to focus a specific terminal tab.
+  // Detail accepts either { tabId } (direct match) or { sessionId } (matched via Tab.claudeSessionId).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { tabId?: string; sessionId?: string }
+        | undefined;
+      if (!detail) return;
+      let target: string | undefined;
+      if (detail.tabId && tabs.some(t => t.id === detail.tabId)) {
+        target = detail.tabId;
+      } else if (detail.sessionId) {
+        const matched = tabs.find(t => t.claudeSessionId === detail.sessionId);
+        if (matched) target = matched.id;
+      }
+      if (target) setActiveTabId(target);
+    };
+    window.addEventListener('terminal:focusTab', handler);
+    return () => window.removeEventListener('terminal:focusTab', handler);
+  }, [tabs]);
+
   const launchPreset = useCallback(
     (preset: SSHPreset) => {
       setSshDialogOpen(false);

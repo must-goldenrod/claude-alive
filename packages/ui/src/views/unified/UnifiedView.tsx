@@ -45,6 +45,11 @@ export function UnifiedView() {
           agents={agentList}
           projectNames={projectNames}
           onProjectNameChange={handleProjectNameChange}
+          onAgentClick={(sessionId) =>
+            window.dispatchEvent(
+              new CustomEvent('terminal:focusTab', { detail: { sessionId } }),
+            )
+          }
         />
 
         <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
