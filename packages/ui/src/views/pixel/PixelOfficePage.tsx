@@ -173,6 +173,10 @@ export function PixelOfficePage({
       y: char.tileY * TILE_SIZE + TILE_SIZE / 2,
     };
     setSelectedAgentId(prev => prev === sessionId ? null : sessionId);
+    // Also focus the corresponding terminal tab (no-op if none matches).
+    window.dispatchEvent(
+      new CustomEvent('terminal:focusTab', { detail: { sessionId } }),
+    );
   }, []);
 
   const handleWorldClick = useCallback((worldX: number, worldY: number) => {

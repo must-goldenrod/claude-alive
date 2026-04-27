@@ -319,6 +319,85 @@ interface SshPresenceGroupProps {
   sessions: SshPresenceEntry[];
 }
 
+interface SshSessionItemProps {
+  session: SshPresenceEntry;
+}
+
+function SshSessionItem({ session: s }: SshSessionItemProps) {
+  const { t } = useTranslation();
+  const [hovered, setHovered] = useState(false);
+
+  const dotColor = s.hasError
+    ? 'var(--accent-red)'
+    : s.exited
+      ? 'var(--text-secondary)'
+      : s.status === 'active'
+        ? 'var(--accent-green)'
+        : 'var(--accent-purple)';
+  const isPulsing = !s.exited && s.status === 'active';
+
+  return (
+    <div
+      className="rounded-2xl px-5 py-2 transition-all duration-200 cursor-pointer"
+      style={{ background: hovered ? 'rgba(188, 140, 255, 0.10)' : 'transparent' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() =>
+        window.dispatchEvent(
+          new CustomEvent('terminal:focusTab', { detail: { tabId: s.tabId } }),
+        )
+      }
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="shrink-0 flex items-center justify-center"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            background: 'rgba(188, 140, 255, 0.10)',
+            border: '1px solid rgba(188, 140, 255, 0.25)',
+            color: 'var(--accent-purple)',
+            fontSize: 14,
+            opacity: s.exited ? 0.5 : 1,
+          }}
+        >
+          {s.hasError ? '⚠' : '⇄'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-sm font-medium truncate"
+            style={{ color: 'var(--text-primary)', opacity: s.exited ? 0.6 : 1, lineHeight: 1.4 }}
+          >
+            {s.label}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: dotColor,
+                display: 'inline-block',
+                animation: isPulsing ? 'sshPulse 1.4s ease-in-out infinite' : undefined,
+              }}
+            />
+            <span className="text-xs" style={{ color: dotColor }}>
+              {s.hasError
+                ? t('agents.sshError', { defaultValue: 'error' })
+                : s.exited
+                  ? t('states.done')
+                  : s.status === 'active'
+                    ? t('states.active')
+                    : t('states.idle')}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
@@ -358,70 +437,9 @@ function SshPresenceGroup({ sessions }: SshPresenceGroupProps) {
 
       {!collapsed && (
         <div className="pb-2">
-          {sessions.map(s => {
-            const dotColor = s.hasError
-              ? 'var(--accent-red)'
-              : s.exited
-                ? 'var(--text-secondary)'
-                : s.status === 'active'
-                  ? 'var(--accent-green)'
-                  : 'var(--accent-purple)';
-            const isPulsing = !s.exited && s.status === 'active';
-            return (
-              <div
-                key={s.tabId}
-                className="rounded-2xl px-5 py-2 transition-all duration-200"
-                style={{ background: 'transparent' }}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="shrink-0 flex items-center justify-center"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 10,
-                      background: 'rgba(188, 140, 255, 0.10)',
-                      border: '1px solid rgba(188, 140, 255, 0.25)',
-                      color: 'var(--accent-purple)',
-                      fontSize: 14,
-                      opacity: s.exited ? 0.5 : 1,
-                    }}
-                  >
-                    {s.hasError ? '⚠' : '⇄'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className="text-sm font-medium truncate"
-                      style={{ color: 'var(--text-primary)', opacity: s.exited ? 0.6 : 1, lineHeight: 1.4 }}
-                    >
-                      {s.label}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span
-                        style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          background: dotColor,
-                          display: 'inline-block',
-                          animation: isPulsing ? 'sshPulse 1.4s ease-in-out infinite' : undefined,
-                        }}
-                      />
-                      <span className="text-xs" style={{ color: dotColor }}>
-                        {s.hasError
-                          ? t('agents.sshError', { defaultValue: 'error' })
-                          : s.exited
-                            ? t('states.done')
-                            : s.status === 'active'
-                              ? t('states.active')
-                              : t('states.idle')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {sessions.map(s => (
+            <SshSessionItem key={s.tabId} session={s} />
+          ))}
         </div>
       )}
       <style>{`

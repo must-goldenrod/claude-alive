@@ -31,6 +31,11 @@ export function AgentListView({
         sshSessions={sshSessions}
         projectNames={projectNames}
         onProjectNameChange={onProjectNameChange}
+        onAgentClick={(sessionId) =>
+          window.dispatchEvent(
+            new CustomEvent('terminal:focusTab', { detail: { sessionId } }),
+          )
+        }
       />
       {/* Intentionally empty — the fixed-position ChatOverlay covers this region when
           viewMode === 'list'. The empty div preserves flex layout symmetry. */}

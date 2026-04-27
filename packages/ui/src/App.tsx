@@ -197,6 +197,18 @@ export default function App() {
   const SIDEBAR_WIDTH = 300;
   const listLeftInset = leftPanelOpen ? SIDEBAR_WIDTH : 0;
 
+  // When a sidebar item dispatches a focus/create event, ensure the chat overlay is open
+  // (only relevant for Animation view; List view is always open).
+  useEffect(() => {
+    const ensureOpen = () => setChatOpen(true);
+    window.addEventListener('terminal:focusTab', ensureOpen);
+    window.addEventListener('terminal:createTab', ensureOpen);
+    return () => {
+      window.removeEventListener('terminal:focusTab', ensureOpen);
+      window.removeEventListener('terminal:createTab', ensureOpen);
+    };
+  }, []);
+
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
