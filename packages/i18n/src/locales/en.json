@@ -187,8 +187,9 @@
       "localFolder": "Open local folder…",
       "sshPresets": "SSH presets",
       "manageSsh": "New SSH preset…",
-      "previousSessions": "Previous sessions",
-      "sessionNoPreview": "(no preview)"
+      "recentFolders": "Recent folders",
+      "noRecentFolders": "No recently used folders",
+      "removeRecentFolder": "Remove from recent"
     },
     "ssh": {
       "dialogTitle": "SSH connection presets",
