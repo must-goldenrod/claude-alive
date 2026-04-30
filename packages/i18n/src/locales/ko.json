@@ -187,8 +187,9 @@
       "localFolder": "로컬 폴더 열기…",
       "sshPresets": "SSH 프리셋",
       "manageSsh": "새 SSH 프리셋…",
-      "previousSessions": "이전 세션",
-      "sessionNoPreview": "(미리보기 없음)"
+      "recentFolders": "최근 폴더",
+      "noRecentFolders": "최근 선택한 폴더 없음",
+      "removeRecentFolder": "최근 폴더에서 제거"
     },
     "ssh": {
       "dialogTitle": "SSH 연결 프리셋",

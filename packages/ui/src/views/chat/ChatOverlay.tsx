@@ -16,6 +16,7 @@ import {
   deletePreset as deletePresetStore,
 } from './sshPresets.ts';
 import type { SSHPreset, SSHPresetDraft } from './sshPresets.ts';
+import { loadRecentFolders, pushRecentFolder, removeRecentFolder } from './recentFolders.ts';
 import { getSettings, getThemeById, getFontFamily, subscribeSettings } from '../../services/settings.ts';
 import type { AppSettings } from '../../services/settings.ts';
 
@@ -226,20 +227,6 @@ function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
 }
 
-function formatRelativeTime(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d`;
-  const mo = Math.floor(d / 30);
-  return `${mo}mo`;
-}
-
 /**
  * Fallback v4-ish UUID for environments without `crypto.randomUUID`.
  * Claude CLI validates UUID format, so we keep the canonical 8-4-4-4-12 hex layout.
@@ -332,17 +319,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const [presets, setPresets] = useState<SSHPreset[]>(() => loadPresets());
   const [sshDialogOpen, setSshDialogOpen] = useState(false);
 
-  // Previous Claude sessions for the currently-browsed cwd
-  interface PastSession {
-    sessionId: string;
-    cwd: string;
-    startedAt: number;
-    lastActivity: number;
-    preview: string;
-    sizeBytes: number;
-  }
-  const [pastSessions, setPastSessions] = useState<PastSession[]>([]);
-  const [pastSessionsLoading, setPastSessionsLoading] = useState(false);
+  // Folders the user has previously selected via the local-folder picker.
+  // Persisted in localStorage, surfaced as quick shortcuts at the top of the picker.
+  const [recentFolders, setRecentFolders] = useState<string[]>(() => loadRecentFolders());
 
   // Per-tab xterm instances
   const termsRef = useRef(new Map<string, { term: Terminal; fit: FitAddon }>());
@@ -474,21 +453,6 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     [t, projectNames],
   );
 
-  const fetchPastSessions = useCallback((cwd: string) => {
-    if (!cwd) {
-      setPastSessions([]);
-      return;
-    }
-    setPastSessionsLoading(true);
-    fetch(`${API_BASE}/api/claude/sessions?cwd=${encodeURIComponent(cwd)}`)
-      .then((r) => r.json())
-      .then((data: { sessions: PastSession[] }) => {
-        setPastSessions(Array.isArray(data.sessions) ? data.sessions : []);
-      })
-      .catch(() => setPastSessions([]))
-      .finally(() => setPastSessionsLoading(false));
-  }, []);
-
   const fetchBrowse = useCallback(
     (dir: string) => {
       setBrowseLoading(true);
@@ -498,13 +462,11 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           setBrowseCurrentPath(data.path);
           setBrowseDirs(data.dirs);
           setBrowsePath(data.path);
-          // Kick off past-sessions fetch for this directory in parallel.
-          fetchPastSessions(data.path);
         })
         .catch(() => {})
         .finally(() => setBrowseLoading(false));
     },
-    [fetchPastSessions],
+    [],
   );
 
   const openLocalPicker = useCallback(() => {
@@ -590,25 +552,18 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       const skip = skipPermissions;
       setCwdPickerOpen(false);
       setCustomPath('');
+      if (cwd) {
+        // Record this folder as recently-used so the picker can surface it next time.
+        setRecentFolders(pushRecentFolder(cwd));
+      }
       createTab({ cwd, dangerousSkip: skip, mode: 'claude', source: 'local' });
     },
     [createTab, skipPermissions],
   );
 
-  const handleResumeSession = useCallback(
-    (session: PastSession) => {
-      setCwdPickerOpen(false);
-      createTab({
-        cwd: session.cwd,
-        dangerousSkip: skipPermissions,
-        mode: 'claude',
-        source: 'local',
-        resumeSessionId: session.sessionId,
-        label: session.preview.slice(0, 32) || pathBasename(session.cwd),
-      });
-    },
-    [createTab, skipPermissions],
-  );
+  const handleRemoveRecentFolder = useCallback((cwd: string) => {
+    setRecentFolders(removeRecentFolder(cwd));
+  }, []);
 
   const handleSavePreset = useCallback(
     (draft: SSHPresetDraft, editingId: string | null) => {
@@ -1277,26 +1232,36 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
               </div>
             )}
 
-            {/* Previous Claude sessions for current folder */}
-            {(pastSessions.length > 0 || pastSessionsLoading) && (
-              <div style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {t('terminal.menu.previousSessions')}
-                </div>
-                {pastSessionsLoading ? (
-                  <div style={{ padding: '8px 16px 10px', fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6 }}>…</div>
-                ) : (
-                  <div style={{ overflowY: 'auto', maxHeight: 180 }}>
-                    {pastSessions.slice(0, 20).map((session) => {
-                      const timeAgo = formatRelativeTime(session.lastActivity);
-                      const preview = session.preview || t('terminal.menu.sessionNoPreview');
-                      return (
+            {/* Recently picked folders (LRU history from localStorage).
+                Filtered to drop folders already shown in the active-projects section
+                above so the same path isn't listed twice. */}
+            {(() => {
+              const activeSet = new Set(uniquePaths);
+              const visibleRecent = recentFolders.filter((p) => !activeSet.has(p));
+              if (visibleRecent.length === 0) return null;
+              return (
+                <div style={{ borderBottom: '1px solid var(--border-color)' }}>
+                  <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t('terminal.menu.recentFolders')}
+                  </div>
+                  <div style={{ overflowY: 'auto', maxHeight: 220 }}>
+                    {visibleRecent.map((cwd) => (
+                      <div
+                        key={cwd}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          width: '100%',
+                          transition: 'background 0.15s ease',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(63, 185, 80, 0.08)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                      >
                         <button
-                          key={session.sessionId}
-                          onClick={() => handleResumeSession(session)}
-                          title={`${session.sessionId}\n${preview}`}
+                          onClick={() => handlePickCwd(cwd)}
+                          title={cwd}
                           style={{
-                            width: '100%',
+                            flex: 1,
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
@@ -1305,26 +1270,39 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                             border: 'none',
                             cursor: 'pointer',
                             textAlign: 'left',
-                            transition: 'background 0.15s ease',
                             color: 'var(--text-primary)',
+                            minWidth: 0,
                           }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(63, 185, 80, 0.08)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         >
                           <span style={{ fontSize: 12, color: 'var(--accent-green)' }}>⟲</span>
-                          <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                            {preview}
-                          </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.5, fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                            {timeAgo}
-                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 500, flexShrink: 0 }}>{pathBasename(cwd)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.45, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{cwd}</span>
                         </button>
-                      );
-                    })}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveRecentFolder(cwd); }}
+                          title={t('terminal.menu.removeRecentFolder')}
+                          aria-label={t('terminal.menu.removeRecentFolder')}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-secondary)',
+                            opacity: 0.4,
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            padding: '4px 12px',
+                            flexShrink: 0,
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
 
             {/* Folder browser */}
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
