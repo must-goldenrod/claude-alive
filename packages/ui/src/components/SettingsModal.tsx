@@ -18,7 +18,7 @@ interface SettingsModalProps {
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { t } = useTranslation();
   const settings = useSettings();
-  const [tab, setTab] = useState<'sound' | 'terminal'>('sound');
+  const [tab, setTab] = useState<'sound' | 'terminal' | 'alerts'>('sound');
 
   useEffect(() => {
     if (!open) return;
@@ -104,6 +104,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             active={tab === 'terminal'}
             onClick={() => setTab('terminal')}
             label={t('settings.tabs.terminal', { defaultValue: 'Terminal' })}
+          />
+          <TabButton
+            active={tab === 'alerts'}
+            onClick={() => setTab('alerts')}
+            label={t('settings.tabs.alerts', { defaultValue: 'Alerts' })}
           />
         </div>
 
@@ -287,6 +292,65 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               />
             </>
           )}
+
+          {tab === 'alerts' && (
+            <>
+              <AlertSection
+                titleKey="settings.alerts.cpu.title"
+                defaultTitle="CPU usage alert"
+                config={settings.alerts.cpu}
+                onToggleEnabled={(enabled) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    alerts: { ...prev.alerts, cpu: { ...prev.alerts.cpu, enabled } },
+                  }))
+                }
+                onThreshold={(thresholdPct) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    alerts: { ...prev.alerts, cpu: { ...prev.alerts.cpu, thresholdPct } },
+                  }))
+                }
+                onToggleSound={(soundEnabled) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    alerts: { ...prev.alerts, cpu: { ...prev.alerts.cpu, soundEnabled } },
+                  }))
+                }
+              />
+              <AlertSection
+                titleKey="settings.alerts.memory.title"
+                defaultTitle="Memory usage alert"
+                config={settings.alerts.memory}
+                onToggleEnabled={(enabled) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    alerts: { ...prev.alerts, memory: { ...prev.alerts.memory, enabled } },
+                  }))
+                }
+                onThreshold={(thresholdPct) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    alerts: { ...prev.alerts, memory: { ...prev.alerts.memory, thresholdPct } },
+                  }))
+                }
+                onToggleSound={(soundEnabled) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    alerts: { ...prev.alerts, memory: { ...prev.alerts.memory, soundEnabled } },
+                  }))
+                }
+              />
+              <SliderRow
+                label={t('settings.alerts.sustain', { defaultValue: 'Sustain time before firing' })}
+                value={settings.alerts.sustainSeconds}
+                min={1} max={30} step={1} unit={t('settings.alerts.seconds', { defaultValue: 's' })}
+                onChange={(sustainSeconds) =>
+                  setSettings(prev => ({ ...prev, alerts: { ...prev.alerts, sustainSeconds } }))
+                }
+              />
+            </>
+          )}
         </div>
 
         {/* Footer */}
@@ -407,6 +471,75 @@ function SoundSection({
         <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 36, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
           {Math.round(volume * 100)}%
         </span>
+      </div>
+    </div>
+  );
+}
+
+function AlertSection({
+  titleKey,
+  defaultTitle,
+  config,
+  onToggleEnabled,
+  onThreshold,
+  onToggleSound,
+}: {
+  titleKey: string;
+  defaultTitle: string;
+  config: { enabled: boolean; thresholdPct: number; soundEnabled: boolean };
+  onToggleEnabled: (v: boolean) => void;
+  onThreshold: (v: number) => void;
+  onToggleSound: (v: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>
+          {t(titleKey, { defaultValue: defaultTitle })}
+        </span>
+        <Switch checked={config.enabled} onChange={onToggleEnabled} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: config.enabled ? 1 : 0.45 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 64 }}>
+          {t('settings.alerts.threshold', { defaultValue: 'Threshold' })}
+        </span>
+        <input
+          type="range"
+          min={50}
+          max={99}
+          step={1}
+          value={config.thresholdPct}
+          disabled={!config.enabled}
+          onChange={(e) => onThreshold(Number(e.target.value))}
+          style={rangeStyle}
+        />
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 36, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+          {config.thresholdPct}%
+        </span>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          opacity: config.enabled ? 1 : 0.45,
+        }}
+      >
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          {t('settings.alerts.soundEnabled', { defaultValue: 'Play sound on alert' })}
+        </span>
+        <Switch checked={config.soundEnabled} onChange={onToggleSound} />
       </div>
     </div>
   );

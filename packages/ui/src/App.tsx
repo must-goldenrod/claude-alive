@@ -9,6 +9,8 @@ import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOver
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
 import { SettingsModal } from './components/SettingsModal.tsx';
+import { ResourceAlert, type ResourceAlertData } from './components/ResourceAlert.tsx';
+import { getSettings } from './services/settings.ts';
 
 const PixelOfficePage = lazy(() =>
   import('./views/pixel/PixelOfficePage.tsx').then(m => ({ default: m.PixelOfficePage })),
@@ -137,6 +139,66 @@ export default function App() {
 
   const { agents, events, completedSessions, stats, systemMetrics, send } = useWebSocket(WS_URL, stableOnRaw);
 
+  // Resource alert: fires when CPU or memory stays above the configured threshold for
+  // `sustainSeconds`. After dismiss we apply a 30s cooldown to avoid spam loops.
+  const [resourceAlert, setResourceAlert] = useState<ResourceAlertData | null>(null);
+  const breachStartRef = useRef<number | null>(null);
+  const lastFiredAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!systemMetrics) return;
+    const settings = getSettings();
+    const { alerts } = settings;
+    const cpuPct = systemMetrics.cpu * 100;
+    const memPct = systemMetrics.memTotal > 0 ? (systemMetrics.memUsed / systemMetrics.memTotal) * 100 : 0;
+    const cpuBreach = alerts.cpu.enabled && cpuPct >= alerts.cpu.thresholdPct;
+    const memBreach = alerts.memory.enabled && memPct >= alerts.memory.thresholdPct;
+
+    if (!cpuBreach && !memBreach) {
+      breachStartRef.current = null;
+      return;
+    }
+    if (resourceAlert) return;
+
+    const now = Date.now();
+    if (breachStartRef.current === null) {
+      breachStartRef.current = now;
+      return;
+    }
+    if (now - breachStartRef.current < alerts.sustainSeconds * 1000) return;
+    if (now - lastFiredAtRef.current < 30_000) return;
+
+    const kind: ResourceAlertData['kind'] =
+      cpuBreach && memBreach ? 'both' : cpuBreach ? 'cpu' : 'memory';
+    setResourceAlert({
+      kind,
+      cpuPct,
+      memPct,
+      cpuThreshold: alerts.cpu.thresholdPct,
+      memThreshold: alerts.memory.thresholdPct,
+    });
+
+    const soundEnabled =
+      (kind === 'cpu' && alerts.cpu.soundEnabled) ||
+      (kind === 'memory' && alerts.memory.soundEnabled) ||
+      (kind === 'both' && (alerts.cpu.soundEnabled || alerts.memory.soundEnabled));
+    if (soundEnabled) {
+      try {
+        const audio = new Audio('/assets/error_sound.mp3');
+        audio.volume = settings.sound.error.volume;
+        audio.play().catch(() => {});
+      } catch {
+        // Audio unsupported — silently ignore
+      }
+    }
+  }, [systemMetrics, resourceAlert]);
+
+  const handleResourceAlertDismiss = useCallback(() => {
+    setResourceAlert(null);
+    lastFiredAtRef.current = Date.now();
+    breachStartRef.current = null;
+  }, []);
+
   // Keep the snapshot ref in sync for the toast-label lookup
   agentsSnapshotRef.current = useMemo(() => {
     const m = new Map<string, { displayName: string | null }>();
@@ -255,6 +317,7 @@ export default function App() {
         systemMetrics={systemMetrics}
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ResourceAlert alert={resourceAlert} onDismiss={handleResourceAlertDismiss} />
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 56, position: 'relative' }}>
         <ErrorBoundary>
           {/* Both views stay mounted. Only CSS display toggles — preserves game state, selected agent, list scroll, etc. */}

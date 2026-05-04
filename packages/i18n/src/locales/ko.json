@@ -16,7 +16,8 @@
     "resetTooltip": "모든 설정을 공장 초기값으로 복원",
     "tabs": {
       "sound": "사운드",
-      "terminal": "터미널"
+      "terminal": "터미널",
+      "alerts": "알림"
     },
     "sound": {
       "completion": { "title": "완료 사운드" },
@@ -40,7 +41,24 @@
       "paddingY": "상하 여백",
       "scrollback": "스크롤 버퍼",
       "lines": "줄"
+    },
+    "alerts": {
+      "cpu": { "title": "CPU 사용량 알림" },
+      "memory": { "title": "메모리 사용량 알림" },
+      "threshold": "임계값",
+      "sustain": "발동 전 지속 시간",
+      "seconds": "초",
+      "soundEnabled": "알림음 재생"
     }
+  },
+  "alert": {
+    "title": {
+      "cpu": "CPU 사용량 높음",
+      "memory": "메모리 사용량 높음",
+      "both": "시스템 부하 높음"
+    },
+    "message": "시스템 리소스 사용량이 설정한 임계값을 초과했습니다.",
+    "dismiss": "확인"
   },
   "agents": {
     "noAgentsYet": "아직 에이전트가 없습니다",

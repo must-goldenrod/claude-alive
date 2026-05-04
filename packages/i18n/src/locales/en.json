@@ -16,7 +16,8 @@
     "resetTooltip": "Restore all settings to factory defaults",
     "tabs": {
       "sound": "Sound",
-      "terminal": "Terminal"
+      "terminal": "Terminal",
+      "alerts": "Alerts"
     },
     "sound": {
       "completion": { "title": "Completion sound" },
@@ -40,7 +41,24 @@
       "paddingY": "Vertical padding",
       "scrollback": "Scrollback buffer",
       "lines": "lines"
+    },
+    "alerts": {
+      "cpu": { "title": "CPU usage alert" },
+      "memory": { "title": "Memory usage alert" },
+      "threshold": "Threshold",
+      "sustain": "Sustain time before firing",
+      "seconds": "s",
+      "soundEnabled": "Play sound on alert"
     }
+  },
+  "alert": {
+    "title": {
+      "cpu": "High CPU usage",
+      "memory": "High memory usage",
+      "both": "High system load"
+    },
+    "message": "System resource usage has exceeded the configured threshold.",
+    "dismiss": "Dismiss"
   },
   "agents": {
     "noAgentsYet": "No agents yet",

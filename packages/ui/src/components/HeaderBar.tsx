@@ -176,16 +176,25 @@ export function HeaderBar({
         borderBottom: '1px solid var(--border-color)',
       }}
     >
-      <span
-        style={{
-          fontSize: 16,
-          fontWeight: 700,
-          color: 'var(--text-primary)',
-          letterSpacing: '-0.02em',
-        }}
-      >
-        claude-alive
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.02em',
+          }}
+        >
+          claude-alive
+        </span>
+        <img
+          src="/favicon.svg"
+          alt="claude-alive logo"
+          width={20}
+          height={20}
+          style={{ display: 'block', borderRadius: 5 }}
+        />
+      </div>
 
       {/* View mode segmented control */}
       <div
