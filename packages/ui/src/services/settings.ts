@@ -227,6 +227,11 @@ export interface AppSettings {
     paddingY: number;       // 0..32
     scrollback: number;     // 1000..50000
   };
+  alerts: {
+    cpu: { enabled: boolean; thresholdPct: number; soundEnabled: boolean };
+    memory: { enabled: boolean; thresholdPct: number; soundEnabled: boolean };
+    sustainSeconds: number; // 1..30 — must stay above threshold for this long before firing
+  };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -247,6 +252,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     paddingY: 8,
     scrollback: 5000,
   },
+  alerts: {
+    cpu: { enabled: true, thresholdPct: 90, soundEnabled: true },
+    memory: { enabled: true, thresholdPct: 90, soundEnabled: true },
+    sustainSeconds: 3,
+  },
 };
 
 // ── Persistence ────────────────────────────────────────────────────────────
@@ -263,6 +273,9 @@ function sanitize(raw: unknown): AppSettings {
   const obj = (raw && typeof raw === 'object' ? raw : {}) as Partial<AppSettings>;
   const sound = (obj.sound ?? {}) as Partial<AppSettings['sound']>;
   const term = (obj.terminal ?? {}) as Partial<AppSettings['terminal']>;
+  const alerts = (obj.alerts ?? {}) as Partial<AppSettings['alerts']>;
+  const alertsCpu = (alerts.cpu ?? {}) as Partial<AppSettings['alerts']['cpu']>;
+  const alertsMem = (alerts.memory ?? {}) as Partial<AppSettings['alerts']['memory']>;
   return {
     sound: {
       completion: {
@@ -288,6 +301,19 @@ function sanitize(raw: unknown): AppSettings {
       paddingX: clamp(Number(term.paddingX ?? DEFAULT_SETTINGS.terminal.paddingX), 0, 32),
       paddingY: clamp(Number(term.paddingY ?? DEFAULT_SETTINGS.terminal.paddingY), 0, 32),
       scrollback: clamp(Number(term.scrollback ?? DEFAULT_SETTINGS.terminal.scrollback), 1000, 50000),
+    },
+    alerts: {
+      cpu: {
+        enabled: typeof alertsCpu.enabled === 'boolean' ? alertsCpu.enabled : DEFAULT_SETTINGS.alerts.cpu.enabled,
+        thresholdPct: clamp(Number(alertsCpu.thresholdPct ?? DEFAULT_SETTINGS.alerts.cpu.thresholdPct), 50, 99),
+        soundEnabled: typeof alertsCpu.soundEnabled === 'boolean' ? alertsCpu.soundEnabled : DEFAULT_SETTINGS.alerts.cpu.soundEnabled,
+      },
+      memory: {
+        enabled: typeof alertsMem.enabled === 'boolean' ? alertsMem.enabled : DEFAULT_SETTINGS.alerts.memory.enabled,
+        thresholdPct: clamp(Number(alertsMem.thresholdPct ?? DEFAULT_SETTINGS.alerts.memory.thresholdPct), 50, 99),
+        soundEnabled: typeof alertsMem.soundEnabled === 'boolean' ? alertsMem.soundEnabled : DEFAULT_SETTINGS.alerts.memory.soundEnabled,
+      },
+      sustainSeconds: clamp(Number(alerts.sustainSeconds ?? DEFAULT_SETTINGS.alerts.sustainSeconds), 1, 30),
     },
   };
 }
