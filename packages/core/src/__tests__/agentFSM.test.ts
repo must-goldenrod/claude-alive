@@ -72,6 +72,26 @@ describe('agentFSM', () => {
       expect(transition('active', 'PermissionRequest').newState).toBe('waiting');
     });
 
+    it('listening → waiting on PermissionRequest', () => {
+      expect(transition('listening', 'PermissionRequest').newState).toBe('waiting');
+    });
+
+    it('idle → waiting on PermissionRequest', () => {
+      expect(transition('idle', 'PermissionRequest').newState).toBe('waiting');
+    });
+
+    it('done → waiting on PermissionRequest', () => {
+      expect(transition('done', 'PermissionRequest').newState).toBe('waiting');
+    });
+
+    it('error → waiting on PermissionRequest', () => {
+      expect(transition('error', 'PermissionRequest').newState).toBe('waiting');
+    });
+
+    it('waiting → listening on UserPromptSubmit (user resumes after deny)', () => {
+      expect(transition('waiting', 'UserPromptSubmit').newState).toBe('listening');
+    });
+
     it('active stays active on SubagentStart', () => {
       expect(transition('active', 'SubagentStart').newState).toBe('active');
     });

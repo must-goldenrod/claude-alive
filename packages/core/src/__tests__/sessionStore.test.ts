@@ -65,6 +65,53 @@ describe('SessionStore', () => {
     });
   });
 
+  describe('Notification permission detection', () => {
+    it('Notification with permission message → waiting state (from active)', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Bash' }));
+      const agent = store.processEvent(makePayload('Notification', 'sess-1', {
+        message: 'Claude needs your permission to use Bash',
+      }));
+      expect(agent!.state).toBe('waiting');
+      expect(agent!.currentTool).toBe('Bash');
+    });
+
+    it('Notification with permission message → waiting state (from listening)', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('UserPromptSubmit', 'sess-1', { prompt: 'do thing' }));
+      const agent = store.processEvent(makePayload('Notification', 'sess-1', {
+        message: 'Claude needs your permission to use Edit',
+      }));
+      expect(agent!.state).toBe('waiting');
+    });
+
+    it('Notification with idle message does NOT trigger waiting', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('Stop', 'sess-1'));
+      const agent = store.processEvent(makePayload('Notification', 'sess-1', {
+        message: 'Claude is waiting for your input',
+      }));
+      expect(agent!.state).toBe('idle');
+    });
+
+    it('Notification without message keeps current state', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Read' }));
+      const agent = store.processEvent(makePayload('Notification', 'sess-1'));
+      expect(agent!.state).toBe('active');
+    });
+
+    it('PreToolUse after permission grant transitions waiting → active', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('UserPromptSubmit', 'sess-1', { prompt: 'do thing' }));
+      store.processEvent(makePayload('Notification', 'sess-1', {
+        message: 'Claude needs your permission to use Bash',
+      }));
+      const agent = store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Bash' }));
+      expect(agent!.state).toBe('active');
+    });
+  });
+
   describe('sub-agents', () => {
     it('creates sub-agent on SubagentStart', () => {
       store.processEvent(makePayload('SessionStart', 'parent-1'));
