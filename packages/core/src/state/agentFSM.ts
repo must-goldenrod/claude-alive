@@ -17,12 +17,14 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   idle: {
     UserPromptSubmit: 'listening',
     PreToolUse: 'active',
+    PermissionRequest: 'waiting',
     SessionEnd: 'despawning',
     Notification: 'idle',
     TaskCompleted: 'done',
   },
   listening: {
     PreToolUse: 'active',
+    PermissionRequest: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     TaskCompleted: 'done',
@@ -41,6 +43,7 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   waiting: {
     PreToolUse: 'active',
     PostToolUse: 'active',
+    UserPromptSubmit: 'listening',
     Stop: 'idle',
     SessionEnd: 'despawning',
     Notification: 'waiting',
@@ -49,6 +52,7 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   error: {
     PreToolUse: 'active',
     UserPromptSubmit: 'listening',
+    PermissionRequest: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     TaskCompleted: 'done',
@@ -56,6 +60,7 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   done: {
     UserPromptSubmit: 'listening',
     PreToolUse: 'active',
+    PermissionRequest: 'waiting',
     SessionEnd: 'despawning',
   },
   despawning: {},

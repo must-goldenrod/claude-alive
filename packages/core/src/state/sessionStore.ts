@@ -81,8 +81,26 @@ export class SessionStore {
       agent = this.createAgent(sessionId, data.cwd ?? '');
     }
 
-    const toolName = data.tool_name ?? undefined;
-    const result = transition(agent.state, event, toolName);
+    let toolName = data.tool_name ?? undefined;
+    // Claude Code's `Notification` hook fires for two distinct cases:
+    //   1) Permission needed — message like "Claude needs your permission to use Bash"
+    //   2) Idle 60s — "Claude is waiting for your input"
+    // Only (1) requires a user decision, so we remap it to the synthetic `PermissionRequest`
+    // event so the FSM transitions to `waiting` (which the UI renders as amber/orange).
+    let effectiveEvent = event;
+    if (event === 'Notification' && data.message) {
+      const msg = data.message.toLowerCase();
+      if (msg.includes('permission') || msg.includes('needs your')) {
+        effectiveEvent = 'PermissionRequest';
+        if (!toolName) {
+          // Extract tool from message tail: "...permission to use <Tool>" or "...use <Tool> ..."
+          const m = data.message.match(/permission to use ([A-Za-z][\w-]*)/i)
+            ?? data.message.match(/use ([A-Za-z][\w-]*)/i);
+          if (m) toolName = m[1];
+        }
+      }
+    }
+    const result = transition(agent.state, effectiveEvent, toolName);
 
     agent.state = result.newState;
     agent.currentTool = result.toolName ? extractToolDisplayName(result.toolName) : null;
