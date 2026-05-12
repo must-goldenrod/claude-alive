@@ -201,6 +201,13 @@
     "collapse": "Minimize",
     "closeDialog": "Close",
     "doubleClickRename": "Double-click to rename",
+    "closeConfirm": {
+      "title": "Close terminal",
+      "message": "Close this terminal session? Any running work will be terminated.",
+      "confirm": "Close",
+      "cancel": "Cancel"
+    },
+    "reorderTab": "Reorder tab",
     "menu": {
       "localFolder": "Open local folder…",
       "sshPresets": "SSH presets",
