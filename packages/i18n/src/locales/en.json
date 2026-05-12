@@ -279,7 +279,14 @@
       "hitsHeader_one": "1 rule hit",
       "hitsHeader_other": "{{count}} rule hits",
       "hitsEmpty": "No rule hits — looks clean.",
-      "coachHeader": "Coaching hint injected into Claude"
+      "coachHeader": "Coaching hint injected into Claude",
+      "efficiencyShort": "efficiency",
+      "baselineDelta": "vs your baseline: {{delta}}"
+    },
+    "confidence": {
+      "high": "confident",
+      "medium": "estimate",
+      "low": "reference"
     }
   },
   "listView": {
