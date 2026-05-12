@@ -20,7 +20,11 @@ const AgentListView = lazy(() =>
   import('./views/list/AgentListView.tsx').then(m => ({ default: m.AgentListView })),
 );
 
-export type ViewMode = 'animation' | 'list';
+const PromptView = lazy(() =>
+  import('./views/list/PromptView.tsx').then(m => ({ default: m.PromptView })),
+);
+
+export type ViewMode = 'animation' | 'list' | 'prompt';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -351,6 +355,11 @@ export default function App() {
                 selectedSessionId={selectedSessionId}
                 chatClaudeSessionIds={chatClaudeSessionIds}
               />
+            </Suspense>
+          </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'prompt' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <PromptView active={viewMode === 'prompt'} />
             </Suspense>
           </div>
         </ErrorBoundary>

@@ -98,6 +98,7 @@ function MetricPill({ label, ratio, primary, secondary }: MetricPillProps) {
 const VIEW_MODES: { mode: ViewMode; labelKey: string }[] = [
   { mode: 'animation', labelKey: 'viewMode.animation' },
   { mode: 'list', labelKey: 'viewMode.list' },
+  { mode: 'prompt', labelKey: 'viewMode.prompt' },
 ];
 
 export function HeaderBar({
