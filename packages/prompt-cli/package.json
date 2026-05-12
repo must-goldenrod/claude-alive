@@ -1,0 +1,39 @@
+{
+  "name": "@think-prompt/cli-internal",
+  "version": "0.6.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "commander": "^12.1.0",
+    "fastify": "^5.2.0",
+    "franc-min": "^6.2.0",
+    "picocolors": "^1.1.1",
+    "pino": "^9.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@think-prompt/agent": "workspace:*",
+    "@think-prompt/core": "workspace:*",
+    "@think-prompt/rules": "workspace:*",
+    "@think-prompt/worker": "workspace:*",
+    "typescript": "^5.7.2",
+    "@types/node": "^22"
+  },
+  "private": true,
+  "exports": {
+    ".": "./dist/index.js",
+    "./dist/commands/*.js": "./dist/commands/*.js",
+    "./dist/daemon.js": "./dist/daemon.js"
+  }
+}

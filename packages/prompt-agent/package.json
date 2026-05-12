@@ -1,0 +1,37 @@
+{
+  "name": "@think-prompt/agent",
+  "version": "0.6.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "think-prompt-agent": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@think-prompt/core": "workspace:*",
+    "@think-prompt/rules": "workspace:*",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "@types/node": "^22"
+  },
+  "private": true
+}

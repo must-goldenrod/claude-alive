@@ -1,0 +1,43 @@
+{
+  "name": "@think-prompt/core",
+  "version": "0.6.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "import": "./dist/db.js"
+    },
+    "./transcript": {
+      "types": "./dist/transcript/parser.d.ts",
+      "import": "./dist/transcript/parser.js"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "franc-min": "^6.2.0",
+    "pino": "^9.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "typescript": "^5.7.2",
+    "tsup": "^8.3.5",
+    "vitest": "^2.1.8",
+    "@types/node": "^22"
+  },
+  "private": true
+}
