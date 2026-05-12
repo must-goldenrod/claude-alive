@@ -261,7 +261,26 @@
   "viewMode": {
     "label": "View mode",
     "animation": "Animation",
-    "list": "List"
+    "list": "List",
+    "prompt": "Prompt"
+  },
+  "prompt": {
+    "listTitle": "Recent prompts",
+    "empty": "No prompts captured yet. Use Claude Code with the hooks installed and they will appear here.",
+    "loading": "Loading…",
+    "unreachable": {
+      "title": "think-prompt is not reachable",
+      "body": "The Prompt tab reads from the think-prompt agent on 127.0.0.1:47823. Install and start it with claude-alive's installer to enable this surface."
+    },
+    "detail": {
+      "empty": "Select a prompt on the left to see its rule hits and coaching context.",
+      "notFound": "Prompt not found.",
+      "promptHeader": "Prompt",
+      "hitsHeader_one": "1 rule hit",
+      "hitsHeader_other": "{{count}} rule hits",
+      "hitsEmpty": "No rule hits — looks clean.",
+      "coachHeader": "Coaching hint injected into Claude"
+    }
   },
   "listView": {
     "title": "Agents",

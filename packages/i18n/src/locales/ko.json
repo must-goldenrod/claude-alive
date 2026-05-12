@@ -261,7 +261,26 @@
   "viewMode": {
     "label": "뷰 모드",
     "animation": "애니메이션",
-    "list": "리스트"
+    "list": "리스트",
+    "prompt": "프롬프트"
+  },
+  "prompt": {
+    "listTitle": "최근 프롬프트",
+    "empty": "아직 캡처된 프롬프트가 없습니다. 훅이 설치된 상태에서 Claude Code를 사용하면 여기에 나타납니다.",
+    "loading": "불러오는 중…",
+    "unreachable": {
+      "title": "think-prompt에 연결할 수 없습니다",
+      "body": "프롬프트 탭은 127.0.0.1:47823의 think-prompt 에이전트에서 데이터를 읽습니다. claude-alive 설치 명령으로 함께 설치/실행하면 이 영역이 활성화됩니다."
+    },
+    "detail": {
+      "empty": "왼쪽에서 프롬프트를 선택하면 룰 hit와 코칭 컨텍스트를 볼 수 있습니다.",
+      "notFound": "프롬프트를 찾을 수 없습니다.",
+      "promptHeader": "프롬프트",
+      "hitsHeader_one": "룰 hit 1건",
+      "hitsHeader_other": "룰 hit {{count}}건",
+      "hitsEmpty": "룰 hit 없음 — 깔끔합니다.",
+      "coachHeader": "Claude에게 주입된 코칭 힌트"
+    }
   },
   "listView": {
     "title": "에이전트",
