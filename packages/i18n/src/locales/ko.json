@@ -279,7 +279,14 @@
       "hitsHeader_one": "룰 hit 1건",
       "hitsHeader_other": "룰 hit {{count}}건",
       "hitsEmpty": "룰 hit 없음 — 깔끔합니다.",
-      "coachHeader": "Claude에게 주입된 코칭 힌트"
+      "coachHeader": "Claude에게 주입된 코칭 힌트",
+      "efficiencyShort": "효율",
+      "baselineDelta": "내 평균 대비 {{delta}}"
+    },
+    "confidence": {
+      "high": "확실",
+      "medium": "추정",
+      "low": "참고용"
     }
   },
   "listView": {

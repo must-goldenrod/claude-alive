@@ -3,8 +3,15 @@
 import { installHooks, uninstallHooks } from '@claude-alive/hooks';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, openSync, existsSync } from 'node:fs';
+import { spawn, spawnSync, execFileSync } from 'node:child_process';
+import {
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync,
+  openSync,
+  existsSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 
 const ALIVE_DIR = join(homedir(), '.claude-alive');
@@ -21,6 +28,11 @@ function readPid(): number | null {
     try { unlinkSync(PID_FILE); } catch {}
     return null;
   }
+}
+
+function serverEntryPath(): string {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  return resolve(currentDir, '..', '..', 'server', 'dist', 'index.js');
 }
 
 /**
@@ -51,21 +63,107 @@ function runThinkPrompt(args: string[]): { ok: boolean; stdout: string; stderr: 
   };
 }
 
-/**
- * Best-effort think-prompt install in embed mode. If `--no-dashboard` is not
- * supported (older think-prompt versions), fall back to the plain `install`
- * which starts dashboard too — that just means the user can also visit
- * :47824 directly. Both modes feed the same DB the claude-alive UI reads.
- */
-function thinkPromptInstall(): { ok: boolean; mode: 'embed' | 'standalone' | 'missing'; output: string } {
-  const probe = runThinkPrompt(['--help']);
-  if (!probe.ok && /not found|ENOENT/.test(probe.stderr)) {
-    return { ok: false, mode: 'missing', output: probe.stderr };
+// ──────────────────────────────────────────────────────────────────────────
+// macOS launchd plist for the claude-alive dashboard server. Mirrors the
+// crash-only respawn / 10s back-off / combined log policy that think-prompt's
+// autostart uses (think-prompt D-031) so both surfaces feel the same. We do
+// NOT ship a systemd unit yet — Linux GUIs that benefit from auto-starting a
+// local dashboard server are uncommon, and adding a `--user` unit means
+// every Linux quirk (lingering, getty, headless servers) becomes our problem.
+// Linux users wanting autostart should drop their own systemd unit or run
+// `claude-alive start` from their shell rc.
+// ──────────────────────────────────────────────────────────────────────────
+
+const LAUNCHD_LABEL = 'com.claudealive.server';
+const LAUNCHD_FILE = `${homedir()}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist`;
+
+function xmlEscape(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildClaudeAlivePlist(): string {
+  const nodePath = process.execPath;
+  const entry = serverEntryPath();
+  const logFile = join(ALIVE_DIR, 'autostart-server.log');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LAUNCHD_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${xmlEscape(nodePath)}</string>
+    <string>${xmlEscape(entry)}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>WorkingDirectory</key>
+  <string>${xmlEscape(ALIVE_DIR)}</string>
+  <key>StandardOutPath</key>
+  <string>${xmlEscape(logFile)}</string>
+  <key>StandardErrorPath</key>
+  <string>${xmlEscape(logFile)}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+</dict>
+</plist>
+`;
+}
+
+function uid(): string {
+  return execFileSync('id', ['-u']).toString().trim();
+}
+
+function tryRun(cmd: string, args: string[]): { ok: boolean; stdout: string } {
+  try {
+    const out = execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+    return { ok: true, stdout: out };
+  } catch {
+    return { ok: false, stdout: '' };
   }
-  const embed = runThinkPrompt(['install', '--no-dashboard']);
-  if (embed.ok) return { ok: true, mode: 'embed', output: embed.stdout };
-  const standalone = runThinkPrompt(['install']);
-  return { ok: standalone.ok, mode: 'standalone', output: standalone.stdout || standalone.stderr };
+}
+
+function claudeAliveAutostart(sub: 'enable' | 'disable' | 'status'): void {
+  if (process.platform !== 'darwin') {
+    // No-op on non-macOS; the delegated think-prompt autostart still runs.
+    console.log(`  • claude-alive autostart plist: skipped (macOS only)`);
+    return;
+  }
+  mkdirSync(`${homedir()}/Library/LaunchAgents`, { recursive: true });
+  if (sub === 'enable') {
+    writeFileSync(LAUNCHD_FILE, buildClaudeAlivePlist(), 'utf-8');
+    // `bootstrap` is the modern launchctl verb. If it fails (e.g. already loaded),
+    // try the legacy `load` for older macOS versions.
+    const boot = tryRun('launchctl', ['bootstrap', `gui/${uid()}`, LAUNCHD_FILE]);
+    if (!boot.ok) tryRun('launchctl', ['load', '-w', LAUNCHD_FILE]);
+    console.log(`  ✓ claude-alive autostart plist installed at ${LAUNCHD_FILE}`);
+  } else if (sub === 'disable') {
+    if (existsSync(LAUNCHD_FILE)) {
+      tryRun('launchctl', ['bootout', `gui/${uid()}/${LAUNCHD_LABEL}`]);
+      tryRun('launchctl', ['unload', '-w', LAUNCHD_FILE]);
+      try { unlinkSync(LAUNCHD_FILE); } catch {}
+      console.log(`  ✓ claude-alive autostart plist removed`);
+    } else {
+      console.log(`  • claude-alive autostart plist not installed`);
+    }
+  } else {
+    const installed = existsSync(LAUNCHD_FILE);
+    const loaded = tryRun('launchctl', ['print', `gui/${uid()}/${LAUNCHD_LABEL}`]).ok;
+    console.log(`  claude-alive autostart: installed=${installed}, loaded=${loaded}`);
+  }
 }
 
 const command = process.argv[2];
@@ -78,16 +176,30 @@ switch (command) {
     console.log(`  ✓ settings:    ${result.settingsPath}`);
 
     console.log('\nSetting up think-prompt (agent + worker in background)...');
-    const tp = thinkPromptInstall();
-    if (tp.mode === 'missing') {
+    const probe = runThinkPrompt(['--help']);
+    if (!probe.ok && /not found|ENOENT/.test(probe.stderr)) {
       console.warn(
         '  ⚠ think-prompt binary not found — Prompt tab will be inactive.\n' +
-        '    Install with: npm i -g think-prompt && think-prompt install',
+        '    Install with: npm i -g think-prompt && think-prompt install --no-dashboard',
       );
-    } else if (tp.mode === 'embed') {
-      console.log('  ✓ think-prompt installed in embed mode (no dashboard daemon)');
     } else {
-      console.log('  ✓ think-prompt installed (with dashboard — older version without --no-dashboard support)');
+      // `--no-dashboard` is supported from think-prompt 0.6.0+. Older releases
+      // (0.3.0 on npm) don't know the flag, so we fall back to the plain
+      // install — the Prompt tab still works because both modes serve the
+      // same agent JSON API. The extra dashboard daemon on :47824 is benign.
+      const embed = runThinkPrompt(['install', '--no-dashboard']);
+      if (embed.ok) {
+        console.log('  ✓ think-prompt installed in embed mode (no dashboard daemon)');
+      } else if (/unknown option|invalid flag|unrecognized/i.test(embed.stderr + embed.stdout)) {
+        const standalone = runThinkPrompt(['install']);
+        if (standalone.ok) {
+          console.log('  ✓ think-prompt installed (older version — dashboard also running on :47824)');
+        } else {
+          console.warn('  ⚠ think-prompt install failed:\n' + (standalone.stderr || standalone.stdout));
+        }
+      } else {
+        console.warn('  ⚠ think-prompt install reported errors:\n' + (embed.stderr || embed.stdout));
+      }
     }
 
     console.log('\nDone! Claude Code will now stream events to claude-alive + think-prompt.');
@@ -109,6 +221,11 @@ switch (command) {
     } else {
       console.warn('  ⚠ think-prompt uninstall reported errors:\n' + tp.stderr);
     }
+
+    // Best-effort cleanup of our own autostart plist if it exists.
+    if (process.platform === 'darwin' && existsSync(LAUNCHD_FILE)) {
+      claudeAliveAutostart('disable');
+    }
     console.log('\nDone.');
     break;
   }
@@ -119,10 +236,8 @@ switch (command) {
       console.log(`claude-alive server is already running (PID: ${existingPid}).`);
     } else {
       mkdirSync(ALIVE_DIR, { recursive: true });
-      const currentDir = dirname(fileURLToPath(import.meta.url));
-      const serverEntry = resolve(currentDir, '..', '..', 'server', 'dist', 'index.js');
       const logFd = openSync(LOG_FILE, 'a');
-      const child = spawn('node', [serverEntry], {
+      const child = spawn('node', [serverEntryPath()], {
         detached: true,
         stdio: ['ignore', logFd, logFd],
       });
@@ -191,18 +306,19 @@ switch (command) {
       console.error(`Unknown autostart subcommand "${sub}". Use enable|disable|status.`);
       process.exit(1);
     }
-    // Delegate the OS-level launchd/systemd unit management to think-prompt
-    // (its `autostart` implementation already covers agent + worker on both
-    // macOS and Linux). claude-alive's own server is intentionally NOT in an
-    // autostart unit yet — the WebSocket dashboard is interactive, not a
-    // background capture surface like the think-prompt daemons. Users keep
-    // launching it with `claude-alive start` when they want the UI.
-    const tp = runThinkPrompt(['autostart', sub]);
+    const action = sub as 'enable' | 'disable' | 'status';
+
+    // 1. Manage think-prompt's daemons via its own autostart implementation.
+    console.log(`think-prompt autostart ${action}:`);
+    const tp = runThinkPrompt(['autostart', action]);
     process.stdout.write(tp.stdout);
-    if (!tp.ok) {
-      process.stderr.write(tp.stderr);
-      process.exit(1);
-    }
+    if (!tp.ok) process.stderr.write(tp.stderr);
+
+    // 2. Manage our own dashboard server plist on macOS.
+    console.log(`\nclaude-alive server autostart ${action}:`);
+    claudeAliveAutostart(action);
+
+    if (!tp.ok) process.exit(1);
     break;
   }
 
@@ -228,7 +344,7 @@ Usage:
   claude-alive start        Start the dashboard server (:3141) + think-prompt daemons
   claude-alive stop         Stop everything (data preserved)
   claude-alive status       Show status of both surfaces
-  claude-alive autostart    enable|disable|status — OS-level autostart (delegates to think-prompt)
+  claude-alive autostart    enable|disable|status — OS-level autostart for both surfaces
   claude-alive logs         Show recent server logs
 `);
   }
