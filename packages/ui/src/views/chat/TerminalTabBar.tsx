@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SSHErrorKind, TerminalSource } from '@claude-alive/core';
 
@@ -25,6 +26,8 @@ interface TerminalTabBarProps {
   onSelect: (tabId: string) => void;
   onAdd: () => void;
   onClose: (tabId: string) => void;
+  /** Reorder callback: move the tab at `fromIndex` so it sits at `toIndex` after the move. */
+  onReorder?: (fromIndex: number, toIndex: number) => void;
 }
 
 function statusBackground(tab: Tab, isActive: boolean): string {
@@ -62,8 +65,11 @@ export function TerminalTabBar({
   onSelect,
   onAdd,
   onClose,
+  onReorder,
 }: TerminalTabBarProps) {
   const { t } = useTranslation();
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   return (
     <div
@@ -77,14 +83,44 @@ export function TerminalTabBar({
         overflowX: 'auto',
       }}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const icon = statusIcon(tab);
         const sshBorder = tab.source === 'ssh';
+        const isDragging = dragIndex === index;
+        const isDragTarget = overIndex === index && dragIndex !== null && dragIndex !== index;
 
         return (
           <div
             key={tab.id}
+            draggable={!!onReorder}
+            onDragStart={(e) => {
+              if (!onReorder) return;
+              setDragIndex(index);
+              e.dataTransfer.effectAllowed = 'move';
+              // Some browsers require non-empty data to initiate the drag.
+              try { e.dataTransfer.setData('text/plain', String(index)); } catch { /* ignore */ }
+            }}
+            onDragOver={(e) => {
+              if (!onReorder || dragIndex === null) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              if (overIndex !== index) setOverIndex(index);
+            }}
+            onDragLeave={() => {
+              if (overIndex === index) setOverIndex(null);
+            }}
+            onDrop={(e) => {
+              if (!onReorder || dragIndex === null) return;
+              e.preventDefault();
+              if (dragIndex !== index) onReorder(dragIndex, index);
+              setDragIndex(null);
+              setOverIndex(null);
+            }}
+            onDragEnd={() => {
+              setDragIndex(null);
+              setOverIndex(null);
+            }}
             onClick={() => onSelect(tab.id)}
             title={
               tab.sshError
@@ -105,13 +141,18 @@ export function TerminalTabBar({
               borderLeft: sshBorder ? borderForSource(tab) : 'none',
               border: sshBorder ? undefined : 'none',
               borderRadius: 6,
-              boxShadow: isActive ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)' : undefined,
+              boxShadow: isDragTarget
+                ? 'inset 2px 0 0 0 var(--accent-blue)'
+                : isActive
+                  ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)'
+                  : undefined,
               color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-              cursor: 'pointer',
+              cursor: onReorder ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
+              opacity: isDragging ? 0.5 : 1,
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
               whiteSpace: 'nowrap',
-              transition: 'background-color 0.15s ease',
+              transition: 'background-color 0.15s ease, opacity 0.15s ease',
             }}
           >
             {sshBorder && (

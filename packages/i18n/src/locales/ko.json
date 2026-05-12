@@ -201,6 +201,13 @@
     "collapse": "최소화",
     "closeDialog": "닫기",
     "doubleClickRename": "더블클릭하여 이름 변경",
+    "closeConfirm": {
+      "title": "터미널 닫기",
+      "message": "이 터미널 세션을 닫으시겠습니까? 실행 중인 작업이 종료됩니다.",
+      "confirm": "닫기",
+      "cancel": "취소"
+    },
+    "reorderTab": "탭 순서 변경",
     "menu": {
       "localFolder": "로컬 폴더 열기…",
       "sshPresets": "SSH 프리셋",

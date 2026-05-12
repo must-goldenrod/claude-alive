@@ -260,6 +260,7 @@ function SidebarProjectGroup({
   const [collapsed, setCollapsed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(projectName);
+  const [hovered, setHovered] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
   const activeCount = agents.filter(a => a.state === 'active' || a.state === 'listening').length;
 
@@ -281,11 +282,26 @@ function SidebarProjectGroup({
     setEditing(false);
   };
 
+  const startEdit = () => {
+    setDraft(projectName);
+    setEditing(true);
+  };
+
+  const canEdit = !!onProjectNameChange;
+  const renameHint = t('agents.clickToRenameProject', {
+    defaultValue: 'Click to rename this project',
+  });
+
   return (
     <div>
       <div
         className="w-full flex items-center gap-3 px-6 py-1 text-left transition-all"
-        style={{ background: 'transparent' }}
+        style={{
+          background: hovered && !editing ? 'rgba(255,255,255,0.03)' : 'transparent',
+          borderRadius: 8,
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -319,12 +335,58 @@ function SidebarProjectGroup({
           />
         ) : (
           <button
-            onClick={(e) => { e.stopPropagation(); setDraft(projectName); setEditing(true); }}
+            onClick={(e) => {
+              if (!canEdit) return;
+              e.stopPropagation();
+              startEdit();
+            }}
+            onDoubleClick={(e) => {
+              if (!canEdit) return;
+              e.stopPropagation();
+              startEdit();
+            }}
             className="text-[15px] font-bold truncate flex-1 text-left"
-            style={{ color: 'var(--text-primary)', background: 'transparent', border: 'none', padding: 0, cursor: 'text' }}
-            title={t('agents.clickToRenameProject', { defaultValue: 'Click to rename this project' })}
+            style={{
+              color: 'var(--text-primary)',
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              cursor: canEdit ? 'pointer' : 'default',
+            }}
+            title={canEdit ? renameHint : undefined}
           >
             {projectName}
+          </button>
+        )}
+        {/* Pencil affordance \u2014 appears on hover so the rename action is discoverable.
+            Click is wired separately from the title (which also opens edit mode) so the
+            user can still trigger rename even if they hover over the icon directly. */}
+        {!editing && canEdit && (
+          <button
+            onClick={(e) => { e.stopPropagation(); startEdit(); }}
+            title={renameHint}
+            aria-label={renameHint}
+            className="shrink-0"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '2px 4px',
+              cursor: 'pointer',
+              opacity: hovered ? 0.8 : 0,
+              transition: 'opacity 0.15s ease',
+              color: 'var(--text-secondary)',
+              lineHeight: 1,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M11.5 2.5 L13.5 4.5 L5 13 L2.5 13.5 L3 11 Z"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </svg>
           </button>
         )}
         <div className="flex items-center gap-2.5 ml-auto shrink-0">

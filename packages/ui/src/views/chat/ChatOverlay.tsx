@@ -307,6 +307,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
+  /** Tab id pending a close-confirmation. null = no dialog open. */
+  const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [customPath, setCustomPath] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(true);
@@ -631,6 +633,36 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       // Switch to the last remaining tab
       const remaining = [...termsRef.current.keys()].filter(id => id !== tabId);
       return remaining.length > 0 ? remaining[remaining.length - 1]! : '';
+    });
+  }, []);
+
+  /**
+   * Tab-bar X button handler. Already-exited tabs close immediately (no live work to lose);
+   * live tabs queue a confirmation dialog so the user doesn't kill a running session by accident.
+   */
+  const requestCloseTab = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab || tab.exited) {
+        closeTab(tabId);
+        return;
+      }
+      setPendingCloseTabId(tabId);
+    },
+    [tabs, closeTab],
+  );
+
+  /** Move a tab from `from` to `to` in the tabs array. Bound to TerminalTabBar's onReorder. */
+  const reorderTabs = useCallback((from: number, to: number) => {
+    setTabs((prev) => {
+      if (from < 0 || from >= prev.length || to < 0 || to >= prev.length || from === to) {
+        return prev;
+      }
+      const next = prev.slice();
+      const [moved] = next.splice(from, 1);
+      if (!moved) return prev;
+      next.splice(to, 0, moved);
+      return next;
     });
   }, []);
 
@@ -1053,8 +1085,110 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           );
         }}
         onAdd={openLocalPicker}
-        onClose={closeTab}
+        onClose={requestCloseTab}
+        onReorder={reorderTabs}
       />
+
+      {/* Close-confirmation modal — gates live tabs so the user can't accidentally
+          terminate a running Claude session. Exited tabs bypass this and close immediately. */}
+      {pendingCloseTabId && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.55)',
+          }}
+          onClick={() => setPendingCloseTabId(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setPendingCloseTabId(null);
+            if (e.key === 'Enter') {
+              const id = pendingCloseTabId;
+              setPendingCloseTabId(null);
+              if (id) closeTab(id);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(420px, 92vw)',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 12,
+              padding: '20px 22px 18px',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                marginBottom: 8,
+              }}
+            >
+              {t('terminal.closeConfirm.title')}
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                lineHeight: 1.5,
+                marginBottom: 18,
+              }}
+            >
+              {(() => {
+                const tab = tabs.find((tab) => tab.id === pendingCloseTabId);
+                return tab ? `${tab.label} — ${t('terminal.closeConfirm.message')}` : t('terminal.closeConfirm.message');
+              })()}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setPendingCloseTabId(null)}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 8,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('terminal.closeConfirm.cancel')}
+              </button>
+              <button
+                autoFocus
+                onClick={() => {
+                  const id = pendingCloseTabId;
+                  setPendingCloseTabId(null);
+                  if (id) closeTab(id);
+                }}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: 'var(--accent-red, #f85149)',
+                  border: '1px solid var(--accent-red, #f85149)',
+                  borderRadius: 8,
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('terminal.closeConfirm.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* SSH preset management dialog */}
       <SSHPresetDialog
