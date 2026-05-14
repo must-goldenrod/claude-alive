@@ -108,13 +108,24 @@ describe('agentFSM', () => {
       expect(transition('active', 'TaskCompleted').newState).toBe('done');
     });
 
-    // --- waiting state ---
-    it('waiting → active on PreToolUse', () => {
-      expect(transition('waiting', 'PreToolUse', 'Glob').newState).toBe('active');
+    // --- waiting state (sticky question marker) ---
+    // PreToolUse and PostToolUse no longer exit waiting — by design the
+    // amber question state persists until the user explicitly prompts
+    // again. See agentFSM.ts comment for the rationale.
+    it('waiting stays waiting on PreToolUse', () => {
+      expect(transition('waiting', 'PreToolUse', 'Glob').newState).toBe('waiting');
+    });
+
+    it('waiting stays waiting on PostToolUse', () => {
+      expect(transition('waiting', 'PostToolUse').newState).toBe('waiting');
     });
 
     it('waiting stays waiting on Notification', () => {
       expect(transition('waiting', 'Notification').newState).toBe('waiting');
+    });
+
+    it('waiting → listening only on UserPromptSubmit', () => {
+      expect(transition('waiting', 'UserPromptSubmit').newState).toBe('listening');
     });
 
     // --- error state ---
