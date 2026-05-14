@@ -2,7 +2,44 @@
 
 All notable changes to claude-alive.
 
+## Unreleased (2026-05-14)
 
+### New Features
+
+-  Claude 질문 시 amber 알림 체인 통합 / Surface Claude questions via amber attention chain
+-  Prompt 탭 Dashboard/Prompts 분리 + sticky 질문 상태 / Split Prompt tab into Dashboard/Prompts sub-tabs + sticky waiting state
+-  think-prompt 완전 흡수 - 단일 서버 통합 / Fully absorb think-prompt into unified server
+-  think-prompt 패키지 흡수 — D-048 / Absorb think-prompt packages (D-048)
+-  autostart 통합 + Prompt 탭에 D-046 confidence/delta 노출 / Unified autostart + D-046 confidence/delta in Prompt tab
+-  think-prompt 통합 — 단일 설치/시작 + Prompt 탭 / Unified install + Prompt tab via think-prompt
+-  터미널 X 확인 모달·이름 수정 펜슬 어포던스·탭 드래그앤드롭 / Terminal close confirm modal, rename pencil affordance, tab drag-and-drop reorder
+-  권한 요청 Notification 훅을 waiting 상태로 매핑 / Map permission-request Notification hook to waiting state
+-  CPU/RAM 임계값 알럿 + 설정 탭 + 헤더 로고·파비콘 / Resource usage alerts with configurable thresholds + alerts settings tab + header logo & favicon
+-  폴더 picker의 '이전 세션'을 '최근 폴더 히스토리'로 교체 / Replace 'Previous sessions' with 'Recent folders' history in folder picker
+-  설정 모달 추가 (사운드·터미널) + 사운드 enable/볼륨 제어 / Add Settings modal (sound, terminal) + sound enable/volume controls
+-  despawning 한국어 번역 추가 + 1분 후 자동 제거 / Add despawning Korean translation + auto-prune after 1 min
+-  활성 상태 시각 동질화·외부 뱃지 위치 변경·알림 사운드 추가 / Unify active-state visuals, relocate external badge, add notification sounds
+-  사이드바·픽셀 캐릭터·터미널 탭 3-way 선택 동기화 + 외부 세션 EXT 표시 / 3-way selection sync (sidebar/pixel/terminal) + external session EXT badge
+-  에이전트 클릭 시 해당 터미널 탭 자동 포커스 / Auto-focus terminal tab when agent is clicked
+-  사이드바 리사이즈·New Chat 버튼·SSH 패딩 정규화 / Resizable sidebar, New Chat button, SSH padding normalization
+-  에이전트 권한 요청·오류 시 브라우저 네이티브 알림 / Browser native notifications for permission requests and errors
+-  대시보드 2-뷰 분리·시스템 메트릭·SSH 프리젠스·세션 재개 / 2-view dashboard split, system metrics, SSH presence, session resume
+-  작업 완료 시 알림 사운드 재생 / Play completion sound on agent done
+
+### Bug Fixes
+
+-  외부 뱃지를 챗 활성 탭 기준으로 정확히 표시 / Drive external badge from currently-open chat tabs
+-  다른 hook 타입과 공존 시 install/uninstall TypeError 수정 / Guard against non-command hook entries
+-  update ChatOverlay test for new minimize button
+
+### Refactoring
+
+-  프로젝트 이름 cwd 기반 단일 편집 지점으로 통합 / Unify project naming via single cwd-keyed store
+
+### Maintenance
+
+-  파비콘 디자인 업데이트 / Update favicon design
+-  AgentTimelinePanel 제거 / Remove AgentTimelinePanel
 
 ## v0.3.1 (2026-03-04)
 
