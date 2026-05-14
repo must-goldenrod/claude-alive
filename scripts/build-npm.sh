@@ -16,17 +16,30 @@ echo "[2/5] Cleaning npm-dist..."
 rm -rf "$OUT"
 mkdir -p "$OUT/dist" "$OUT/scripts" "$OUT/ui"
 
+# pino (absorbed via prompt-core in D-048) uses dynamic require() of node: builtins
+# and transport workers at runtime — esbuild can't statically resolve those when
+# bundling to ESM, so the bundled output throws "Dynamic require of 'node:os'".
+# Mark pino + its runtime-resolved deps external so Node loads them from
+# node_modules at install time. They must also be listed under `dependencies` in
+# the generated package.json below.
+# All runtime deps that either (a) ship native bindings or (b) use dynamic require()
+# at runtime are externalized here. When prompt-* packages were absorbed in D-048
+# the server bundle suddenly pulled in pino/fastify/better-sqlite3/franc-min — none
+# of which survive esbuild ESM bundling. Externalizing keeps the bundle small and
+# defers loading to install-time `node_modules`.
+EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --external:pino --external:pino-* --external:thread-stream --external:sonic-boom --external:on-exit-leak-free --external:real-require --external:atomic-sleep --external:safe-stable-stringify --external:fast-redact --external:quick-format-unescaped --external:process-warning --external:fastify --external:@fastify/* --external:franc-min --external:trigram-utils --external:n-gram --external:collapse-white-space --external:commander --external:picocolors --external:zod"
+
 echo "[3/5] Bundling CLI..."
 npx esbuild "$ROOT/npm/cli-entry.ts" \
   --bundle --platform=node --format=esm \
   --target=node20 --outfile="$OUT/dist/cli.js" \
-  --external:ws
+  $EXTERNAL_FLAGS
 
 echo "[4/5] Bundling server..."
 npx esbuild "$ROOT/npm/server-entry.ts" \
   --bundle --platform=node --format=esm \
   --target=node20 --outfile="$OUT/dist/server.js" \
-  --external:ws
+  $EXTERNAL_FLAGS
 
 echo "[5/5] Copying assets..."
 cp "$ROOT/packages/hooks/scripts/stream-event.sh" "$OUT/scripts/"
@@ -54,7 +67,15 @@ cat > "$OUT/package.json" << PKGJSON
     "README.md"
   ],
   "dependencies": {
-    "ws": "^8"
+    "ws": "^8",
+    "node-pty": "1.2.0-beta.11",
+    "better-sqlite3": "^11.7.0",
+    "pino": "^9.5.0",
+    "fastify": "^5.2.0",
+    "franc-min": "^6.2.0",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.1",
+    "zod": "^4.3.6"
   },
   "engines": {
     "node": ">=20"
