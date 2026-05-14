@@ -23,6 +23,27 @@ function readPid(): number | null {
 }
 
 const command = process.argv[2];
+const args = process.argv.slice(3);
+
+/**
+ * Open `url` in the user's default browser. Best-effort: errors are swallowed
+ * because failing to launch the browser shouldn't crash `start` — the user
+ * still has the URL printed in the console as a fallback.
+ */
+function openBrowser(url: string): void {
+  try {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+    } else if (platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+  } catch {
+    // Headless box or missing opener — user can copy the URL from stdout.
+  }
+}
 
 switch (command) {
   case 'install': {
@@ -42,9 +63,18 @@ switch (command) {
   }
 
   case 'start': {
+    // `--no-open` skips auto-launching the browser. Default is to open: most
+    // users only run `claude-alive start` to see the dashboard, so requiring
+    // an extra copy-paste step is friction. Matches `vite`, `next dev`, etc.
+    const noOpen = args.includes('--no-open');
+    const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
+    const url = `http://localhost:${port}`;
+
     const existingPid = readPid();
     if (existingPid) {
       console.log(`claude-alive server is already running (PID: ${existingPid}).`);
+      console.log(`  Dashboard: ${url}`);
+      if (!noOpen) openBrowser(url);
       break;
     }
 
@@ -59,10 +89,15 @@ switch (command) {
     writeFileSync(PID_FILE, String(child.pid));
     child.unref();
 
-    const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
     console.log(`claude-alive server started in background (PID: ${child.pid}).`);
-    console.log(`  Dashboard: http://localhost:${port}`);
+    console.log(`  Dashboard: ${url}`);
     console.log(`  Logs:      ${LOG_FILE}`);
+
+    if (!noOpen) {
+      // Wait ~800ms for the server to bind :3141 before opening the browser,
+      // otherwise the user lands on "site can't be reached" and has to refresh.
+      setTimeout(() => openBrowser(url), 800);
+    }
     break;
   }
 
@@ -112,7 +147,8 @@ claude-alive — Real-time animated UI for Claude Code
 Usage:
   claude-alive install     Install hooks into ~/.claude/settings.json
   claude-alive uninstall   Remove hooks from settings.json
-  claude-alive start       Start the server in background
+  claude-alive start       Start the server (:3141) and open the dashboard
+                           (pass --no-open to skip browser launch)
   claude-alive stop        Stop the background server
   claude-alive status      Check if server is running
   claude-alive logs        Show recent server logs
