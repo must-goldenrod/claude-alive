@@ -129,6 +129,32 @@ function claudeAliveAutostart(sub: 'enable' | 'disable' | 'status'): void {
 }
 
 const command = process.argv[2];
+const args = process.argv.slice(3);
+
+/**
+ * Open `url` in the user's default browser. Best-effort: errors are swallowed
+ * because failing to launch the browser shouldn't crash `start` — the user
+ * still has the URL printed in the console as a fallback.
+ *
+ * Per-platform invocations:
+ *   macOS   → `open <url>`
+ *   Linux   → `xdg-open <url>` (most distros)
+ *   Windows → `cmd /c start "" "<url>"` (quoted to handle URLs with &)
+ */
+function openBrowser(url: string): void {
+  try {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
+    } else if (platform === 'win32') {
+      spawn('cmd', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+  } catch {
+    // Headless box or missing opener — user can copy the URL from stdout.
+  }
+}
 
 switch (command) {
   case 'install': {
@@ -154,9 +180,19 @@ switch (command) {
   }
 
   case 'start': {
+    // `--no-open` skips auto-launching the browser. Default is to open: most
+    // users only run `claude-alive start` to see the dashboard, so requiring
+    // an extra copy-paste step is friction. Power users / CI / headless boxes
+    // pass --no-open. Matches the convention of `vite`, `next dev`, etc.
+    const noOpen = args.includes('--no-open');
+    const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
+    const url = `http://localhost:${port}`;
+
     const existingPid = readPid();
     if (existingPid) {
       console.log(`claude-alive server is already running (PID: ${existingPid}).`);
+      console.log(`  Dashboard: ${url}`);
+      if (!noOpen) openBrowser(url);
       break;
     }
     mkdirSync(ALIVE_DIR, { recursive: true });
@@ -168,10 +204,16 @@ switch (command) {
     writeFileSync(PID_FILE, String(child.pid));
     child.unref();
 
-    const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
     console.log(`claude-alive server started in background (PID: ${child.pid}).`);
-    console.log(`  Dashboard: http://localhost:${port}`);
+    console.log(`  Dashboard: ${url}`);
     console.log(`  Logs:      ${LOG_FILE}`);
+
+    if (!noOpen) {
+      // Wait briefly for the server to bind :3141 before opening the browser —
+      // otherwise the user sees a Chrome "site can't be reached" page and has
+      // to refresh. 800ms is enough for the bundled server on cold start.
+      setTimeout(() => openBrowser(url), 800);
+    }
     break;
   }
 
@@ -230,7 +272,8 @@ claude-alive — Unified Claude Code dashboard + prompt quality coach
 Usage:
   claude-alive install      Install Claude Code hooks (single-entry per event)
   claude-alive uninstall    Remove hooks (prompt data preserved at ~/.think-prompt/)
-  claude-alive start        Start the dashboard server (:3141) — hosts UI, prompt API, worker
+  claude-alive start        Start the dashboard server (:3141) and open the UI
+                            (pass --no-open to skip browser launch)
   claude-alive stop         Stop the server
   claude-alive status       Show server status
   claude-alive autostart    enable|disable|status — macOS launchd plist
