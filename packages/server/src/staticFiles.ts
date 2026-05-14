@@ -17,13 +17,35 @@ const MIME_TYPES: Record<string, string> = {
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-/** Default path: from server/dist/ -> ../../ui/dist, or env override for npm bundle */
-const DEFAULT_UI_DIST = process.env.__CLAUDE_ALIVE_UI_DIST ?? resolve(__dirname, '..', '..', 'ui', 'dist');
+/**
+ * Resolve the UI dist directory.
+ *
+ * Called at handler-construction time (not module-load time) so the env var
+ * override `__CLAUDE_ALIVE_UI_DIST` is read late. The npm bundle's server
+ * entry sets this var before importing the server, but ESM `import` hoisting
+ * means the import runs first when both live in a single esbuild bundle —
+ * a top-level `const X = process.env.FOO ?? ...` captured the wrong value
+ * and the dashboard 404'd on `/` (hitting the JSON router fallback instead
+ * of the static index.html).
+ */
+function resolveUiDistDir(override?: string): string {
+  if (override) return override;
+  if (process.env.__CLAUDE_ALIVE_UI_DIST) return process.env.__CLAUDE_ALIVE_UI_DIST;
+  return resolve(__dirname, '..', '..', 'ui', 'dist');
+}
 
 export function createStaticHandler(uiDistPath?: string) {
-  const distDir = uiDistPath ?? DEFAULT_UI_DIST;
+  // Resolve lazily on first request so npm-bundle env var assignments that run
+  // after the import chain (a side-effect of ESM hoisting in esbuild bundles)
+  // are still picked up. Cached after first hit — env doesn't change at runtime.
+  let cachedDistDir: string | null = null;
+  const getDistDir = (): string => {
+    if (cachedDistDir === null) cachedDistDir = resolveUiDistDir(uiDistPath);
+    return cachedDistDir;
+  };
 
   return async function serveStatic(pathname: string, res: ServerResponse): Promise<boolean> {
+    const distDir = getDistDir();
     const filePath = resolve(distDir, pathname === '/' ? 'index.html' : '.' + pathname);
     if (!filePath.startsWith(distDir)) return false; // directory traversal blocked
 
@@ -38,7 +60,7 @@ export function createStaticHandler(uiDistPath?: string) {
       // File not found — try SPA fallback (serve index.html)
       if (pathname !== '/' && pathname !== '/index.html') {
         try {
-          const indexData = await readFile(join(distDir, 'index.html'));
+          const indexData = await readFile(join(getDistDir(), 'index.html'));
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(indexData);
           return true;
