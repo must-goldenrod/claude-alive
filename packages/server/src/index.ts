@@ -1,6 +1,7 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
 import type { WebSocket } from 'ws';
+import { createPromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
 import { ClaudeTerminal } from './claudeTerminal.js';
@@ -13,6 +14,7 @@ import {
   removeProjectName,
 } from './projectNameStore.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
+import { startWorkerLoop } from './promptWorker.js';
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
@@ -22,6 +24,13 @@ const store = new SessionStore();
 // fallback for agents whose cwd isn't in projectNames yet.
 await loadNames();
 await loadProjectNames();
+
+// Absorbed think-prompt subsystem. Owns its own SQLite handle and a
+// Fastify instance mounted onto our shared http.Server below; no second
+// port, no separate daemon. `ingest` is called from onEvent() to fan the
+// same hook payload into the prompt-quality pipeline.
+const promptSubsystem = createPromptSubsystem();
+await promptSubsystem.fastify.ready();
 
 const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -35,6 +44,11 @@ function getSnapshot() {
 }
 
 function onEvent(payload: HookEventPayload): void {
+  // Fan the same hook payload into the prompt-quality pipeline. Errors
+  // there are isolated inside `ingest` (fail-open) so the UI broadcast
+  // path below is never blocked.
+  promptSubsystem.ingest(payload);
+
   const agent = store.processEvent(payload);
   if (!agent) return;
 
@@ -163,6 +177,9 @@ const httpServer = createHttpServer({
   getProjectNames,
   saveProjectName,
   removeProjectName,
+  promptRouter: (req, res) => {
+    promptSubsystem.fastify.routing(req, res);
+  },
   onProjectNamesChanged: () => {
     // Push the new map to every connected client so the sidebar & tabs update instantly.
     broadcaster.broadcast({ type: 'project:names', names: getProjectNames() });
@@ -271,6 +288,11 @@ metricsPoller.subscribe((snapshot) => {
 });
 metricsPoller.start();
 
+// Start the prompt-worker queue consumer in-process. No pidfile, no fork:
+// the worker shares the server process lifecycle. Errors inside the loop
+// are logged but never bubble up to take the server down.
+const stopWorkerLoop = startWorkerLoop();
+
 httpServer.listen(PORT, () => {
   console.log(`
   ╔══════════════════════════════════════╗
@@ -291,6 +313,9 @@ process.on('SIGINT', () => {
   for (const timer of despawnTimers.values()) clearTimeout(timer);
   despawnTimers.clear();
   metricsPoller.stop();
+  stopWorkerLoop();
+  promptSubsystem.fastify.close().catch(() => {});
+  promptSubsystem.close();
   broadcaster.close();
   httpServer.close();
   process.exit(0);
