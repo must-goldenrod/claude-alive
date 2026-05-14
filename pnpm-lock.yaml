@@ -26,9 +26,6 @@ importers:
       '@claude-alive/hooks':
         specifier: workspace:*
         version: link:../hooks
-      '@think-prompt/cli-internal':
-        specifier: workspace:*
-        version: link:../prompt-cli
     devDependencies:
       '@types/node':
         specifier: ^22
@@ -63,6 +60,9 @@ importers:
 
   packages/prompt-agent:
     dependencies:
+      '@claude-alive/core':
+        specifier: workspace:*
+        version: link:../core
       '@think-prompt/core':
         specifier: workspace:*
         version: link:../prompt-core
@@ -202,6 +202,12 @@ importers:
       '@claude-alive/core':
         specifier: workspace:*
         version: link:../core
+      '@think-prompt/agent':
+        specifier: workspace:*
+        version: link:../prompt-agent
+      '@think-prompt/worker':
+        specifier: workspace:*
+        version: link:../prompt-worker
       node-pty:
         specifier: 1.2.0-beta.11
         version: 1.2.0-beta.11

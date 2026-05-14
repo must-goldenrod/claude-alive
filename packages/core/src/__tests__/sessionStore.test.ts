@@ -85,30 +85,43 @@ describe('SessionStore', () => {
       expect(agent!.state).toBe('waiting');
     });
 
-    it('Notification with idle message does NOT trigger waiting', () => {
+    it('Notification with idle message also triggers waiting', () => {
+      // Any Notification means "Claude is blocked on the user" — including
+      // the idle-60s prompt — so all of them flip the agent to amber.
       store.processEvent(makePayload('SessionStart', 'sess-1'));
       store.processEvent(makePayload('Stop', 'sess-1'));
       const agent = store.processEvent(makePayload('Notification', 'sess-1', {
         message: 'Claude is waiting for your input',
       }));
-      expect(agent!.state).toBe('idle');
+      expect(agent!.state).toBe('waiting');
     });
 
-    it('Notification without message keeps current state', () => {
+    it('Notification without message still triggers waiting', () => {
       store.processEvent(makePayload('SessionStart', 'sess-1'));
       store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Read' }));
       const agent = store.processEvent(makePayload('Notification', 'sess-1'));
-      expect(agent!.state).toBe('active');
+      expect(agent!.state).toBe('waiting');
     });
 
-    it('PreToolUse after permission grant transitions waiting → active', () => {
+    it('PreToolUse after permission grant keeps waiting (sticky question marker)', () => {
+      // Sticky-amber policy: tool activity after a notification does NOT
+      // exit waiting. Only the user's next prompt overwrites the state.
       store.processEvent(makePayload('SessionStart', 'sess-1'));
       store.processEvent(makePayload('UserPromptSubmit', 'sess-1', { prompt: 'do thing' }));
       store.processEvent(makePayload('Notification', 'sess-1', {
         message: 'Claude needs your permission to use Bash',
       }));
       const agent = store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Bash' }));
-      expect(agent!.state).toBe('active');
+      expect(agent!.state).toBe('waiting');
+    });
+
+    it('UserPromptSubmit after notification overrides waiting → listening', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('Notification', 'sess-1', {
+        message: 'Claude needs your permission to use Bash',
+      }));
+      const agent = store.processEvent(makePayload('UserPromptSubmit', 'sess-1', { prompt: 'go ahead' }));
+      expect(agent!.state).toBe('listening');
     });
   });
 

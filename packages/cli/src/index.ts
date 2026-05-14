@@ -1,18 +1,6 @@
 #!/usr/bin/env node
 
 import { installHooks, uninstallHooks } from '@claude-alive/hooks';
-import { installCmd as promptInstall } from '@think-prompt/cli-internal/dist/commands/install.js';
-import { uninstallCmd as promptUninstall } from '@think-prompt/cli-internal/dist/commands/uninstall.js';
-import {
-  startCmd as promptStart,
-  stopCmd as promptStop,
-  statusCmd as promptStatus,
-} from '@think-prompt/cli-internal/dist/commands/daemon-cmds.js';
-import {
-  autostartEnableCmd as promptAutostartEnable,
-  autostartDisableCmd as promptAutostartDisable,
-  autostartStatusCmd as promptAutostartStatus,
-} from '@think-prompt/cli-internal/dist/commands/autostart.js';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync } from 'node:child_process';
@@ -46,24 +34,9 @@ function serverEntryPath(): string {
   return resolve(currentDir, '..', '..', 'server', 'dist', 'index.js');
 }
 
-/**
- * Wrap a prompt-cli function with the standard "log and continue" guard.
- * Absorption brought prompt-cli in-process, so a thrown exception would
- * otherwise crash the entire claude-alive CLI. Treat each invocation as
- * fail-open per think-prompt's D-028.
- */
-async function safe<T>(label: string, fn: () => Promise<T> | T): Promise<T | undefined> {
-  try {
-    return await fn();
-  } catch (err) {
-    console.warn(`  ⚠ ${label} failed: ${(err as Error).message}`);
-    return undefined;
-  }
-}
-
-// macOS launchd plist for the claude-alive server itself. The absorbed
-// prompt-cli `autostart` handles agent + worker; this handles the WebSocket
-// dashboard server only.
+// macOS launchd plist for the unified claude-alive server. As of D-048+
+// the absorbed think-prompt subsystem (prompt API + worker queue) runs
+// inside this same Node process, so one plist covers everything.
 
 const LAUNCHD_LABEL = 'com.claudealive.server';
 const LAUNCHD_FILE = `${homedir()}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist`;
@@ -163,11 +136,7 @@ switch (command) {
     const result = installHooks();
     console.log(`  ✓ hook script: ${result.hookScriptPath}`);
     console.log(`  ✓ settings:    ${result.settingsPath}`);
-
-    console.log('\nStarting think-prompt agent + worker (background capture)...');
-    await safe('think-prompt install', () => promptInstall());
-
-    console.log('\nDone! Claude Code will now stream events to claude-alive + think-prompt.');
+    console.log('\nDone! Claude Code will stream events to the unified claude-alive server.');
     console.log('Run "claude-alive start" to launch the dashboard on :3141.');
     break;
   }
@@ -177,13 +146,10 @@ switch (command) {
     uninstallHooks();
     console.log('  ✓ hooks removed from settings.json');
 
-    console.log('\nStopping think-prompt daemons...');
-    await safe('think-prompt uninstall', () => promptUninstall());
-
     if (process.platform === 'darwin' && existsSync(LAUNCHD_FILE)) {
       claudeAliveAutostart('disable');
     }
-    console.log('\nDone.');
+    console.log('\nDone. Prompt data is preserved at ~/.think-prompt/.');
     break;
   }
 
@@ -191,23 +157,21 @@ switch (command) {
     const existingPid = readPid();
     if (existingPid) {
       console.log(`claude-alive server is already running (PID: ${existingPid}).`);
-    } else {
-      mkdirSync(ALIVE_DIR, { recursive: true });
-      const logFd = openSync(LOG_FILE, 'a');
-      const child = spawn('node', [serverEntryPath()], {
-        detached: true,
-        stdio: ['ignore', logFd, logFd],
-      });
-      writeFileSync(PID_FILE, String(child.pid));
-      child.unref();
-
-      const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
-      console.log(`claude-alive server started in background (PID: ${child.pid}).`);
-      console.log(`  Dashboard: http://localhost:${port}`);
-      console.log(`  Logs:      ${LOG_FILE}`);
+      break;
     }
+    mkdirSync(ALIVE_DIR, { recursive: true });
+    const logFd = openSync(LOG_FILE, 'a');
+    const child = spawn('node', [serverEntryPath()], {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+    });
+    writeFileSync(PID_FILE, String(child.pid));
+    child.unref();
 
-    await safe('think-prompt start', () => promptStart());
+    const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
+    console.log(`claude-alive server started in background (PID: ${child.pid}).`);
+    console.log(`  Dashboard: http://localhost:${port}`);
+    console.log(`  Logs:      ${LOG_FILE}`);
     break;
   }
 
@@ -215,12 +179,11 @@ switch (command) {
     const pid = readPid();
     if (!pid) {
       console.log('claude-alive server is not running.');
-    } else {
-      process.kill(pid, 'SIGINT');
-      try { unlinkSync(PID_FILE); } catch {}
-      console.log(`claude-alive server stopped (PID: ${pid}).`);
+      break;
     }
-    await safe('think-prompt stop', () => promptStop());
+    process.kill(pid, 'SIGINT');
+    try { unlinkSync(PID_FILE); } catch {}
+    console.log(`claude-alive server stopped (PID: ${pid}).`);
     break;
   }
 
@@ -234,10 +197,7 @@ switch (command) {
     } catch {
       aliveStatus = { running: false };
     }
-    console.log('claude-alive:');
     console.log(JSON.stringify({ pid, ...((aliveStatus as Record<string, unknown>) ?? {}) }, null, 2));
-    console.log('\nthink-prompt:');
-    await safe('think-prompt status', () => promptStatus());
     break;
   }
 
@@ -247,15 +207,7 @@ switch (command) {
       console.error(`Unknown autostart subcommand "${sub}". Use enable|disable|status.`);
       process.exit(1);
     }
-    const action = sub as 'enable' | 'disable' | 'status';
-
-    console.log(`think-prompt autostart ${action}:`);
-    if (action === 'enable') await safe('autostart enable', () => promptAutostartEnable());
-    else if (action === 'disable') await safe('autostart disable', () => promptAutostartDisable());
-    else await safe('autostart status', () => promptAutostartStatus());
-
-    console.log(`\nclaude-alive server autostart ${action}:`);
-    claudeAliveAutostart(action);
+    claudeAliveAutostart(sub as 'enable' | 'disable' | 'status');
     break;
   }
 
@@ -273,15 +225,15 @@ switch (command) {
 
   default: {
     console.log(`
-claude-alive — Real-time animated UI for Claude Code + prompt quality coach
+claude-alive — Unified Claude Code dashboard + prompt quality coach
 
 Usage:
-  claude-alive install      Install hooks + start prompt agent + worker
-  claude-alive uninstall    Remove hooks + stop daemons (data preserved at ~/.think-prompt/)
-  claude-alive start        Start dashboard server (:3141) + ensure prompt daemons up
-  claude-alive stop         Stop everything (data preserved)
-  claude-alive status       Show status of both surfaces
-  claude-alive autostart    enable|disable|status — OS-level autostart (agent/worker + server)
+  claude-alive install      Install Claude Code hooks (single-entry per event)
+  claude-alive uninstall    Remove hooks (prompt data preserved at ~/.think-prompt/)
+  claude-alive start        Start the dashboard server (:3141) — hosts UI, prompt API, worker
+  claude-alive stop         Stop the server
+  claude-alive status       Show server status
+  claude-alive autostart    enable|disable|status — macOS launchd plist
   claude-alive logs         Show recent server logs
 `);
   }

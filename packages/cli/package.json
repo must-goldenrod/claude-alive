@@ -11,8 +11,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@claude-alive/hooks": "workspace:*",
-    "@think-prompt/cli-internal": "workspace:*"
+    "@claude-alive/hooks": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22"

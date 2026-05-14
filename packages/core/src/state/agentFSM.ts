@@ -41,8 +41,14 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     TaskCompleted: 'done',
   },
   waiting: {
-    PreToolUse: 'active',
-    PostToolUse: 'active',
+    // Sticky question state: once Claude asks the user for anything
+    // (permission, input, decision), the UI stays amber until the user
+    // explicitly responds with a new prompt or the session ends.
+    // Crucially this does NOT exit on PreToolUse/PostToolUse — those
+    // can fire moments after permission is granted, and exiting there
+    // would make the question flash by too fast to notice. The user
+    // chose this trade-off explicitly: keep the question marker
+    // visible until they prompt again, then overwrite from there.
     UserPromptSubmit: 'listening',
     Stop: 'idle',
     SessionEnd: 'despawning',

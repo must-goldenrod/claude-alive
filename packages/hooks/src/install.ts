@@ -16,10 +16,40 @@ interface HookEntry {
   matcher: string;
   hooks: Array<{
     type: string;
-    command: string;
-    async: boolean;
+    command?: string;
+    url?: string;
+    async?: boolean;
     timeout: number;
   }>;
+}
+
+/**
+ * Legacy hook entries from before claude-alive absorbed think-prompt
+ * (D-048+). The standalone think-prompt agent listened on
+ * 127.0.0.1:47823 and Claude Code posted to `/v1/hook/*` via `http`-type
+ * hooks. Those entries are now dead weight: the unified server on :3141
+ * receives all events through the single command-type wrapper and
+ * fans them out internally. installHooks() strips them on every run
+ * so existing installations migrate transparently.
+ */
+function isLegacyThinkPromptHook(entry: HookEntry): boolean {
+  return (
+    entry.hooks?.some(
+      (h) =>
+        h.type === 'http' &&
+        typeof h.url === 'string' &&
+        h.url.includes('/v1/hook/') &&
+        (h.url.includes('127.0.0.1') || h.url.includes('localhost'))
+    ) ?? false
+  );
+}
+
+function isClaudeAliveHook(entry: HookEntry): boolean {
+  return (
+    entry.hooks?.some(
+      (h) => typeof h.command === 'string' && h.command.includes('claude-alive')
+    ) ?? false
+  );
 }
 
 interface SettingsJson {
@@ -66,12 +96,14 @@ export function installHooks(): { installed: boolean; settingsPath: string; hook
 
   for (const event of HOOK_EVENTS_TO_REGISTER) {
     const existing = settings.hooks[event] ?? [];
-    const alreadyInstalled = existing.some((entry) =>
-      entry.hooks?.some((h) => typeof h.command === 'string' && h.command.includes('claude-alive'))
-    );
+    // Drop any legacy think-prompt http hooks that targeted the old
+    // standalone agent on :47823; the unified server fans events out
+    // internally now, so a single claude-alive entry per event suffices.
+    const pruned = existing.filter((entry) => !isLegacyThinkPromptHook(entry));
+    const alreadyInstalled = pruned.some(isClaudeAliveHook);
 
     if (!alreadyInstalled) {
-      existing.push({
+      pruned.push({
         matcher: '',
         hooks: [{
           type: 'command',
@@ -80,7 +112,14 @@ export function installHooks(): { installed: boolean; settingsPath: string; hook
           timeout: 5,
         }],
       });
-      settings.hooks[event] = existing;
+    }
+    settings.hooks[event] = pruned;
+  }
+
+  // Some events may now have only legacy entries; drop empty arrays.
+  for (const event of Object.keys(settings.hooks)) {
+    if ((settings.hooks[event] ?? []).length === 0) {
+      delete settings.hooks[event];
     }
   }
 
@@ -97,8 +136,8 @@ export function uninstallHooks(): void {
     const settings = JSON.parse(raw) as SettingsJson;
     if (settings.hooks) {
       for (const event of Object.keys(settings.hooks)) {
-        settings.hooks[event] = (settings.hooks[event] ?? []).filter((entry) =>
-          !entry.hooks?.some((h) => typeof h.command === 'string' && h.command.includes('claude-alive'))
+        settings.hooks[event] = (settings.hooks[event] ?? []).filter(
+          (entry) => !isClaudeAliveHook(entry) && !isLegacyThinkPromptHook(entry)
         );
         if (settings.hooks[event]!.length === 0) {
           delete settings.hooks[event];

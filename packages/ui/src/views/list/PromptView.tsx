@@ -1,223 +1,56 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PromptDashboardView } from './PromptDashboardView';
+import { PromptListView } from './PromptListView';
 
 /**
- * Prompt tab — surfaces think-prompt data (prompt quality coach) inside the
- * claude-alive UI. We talk to the think-prompt agent's JSON API on the same
- * machine (default :47823). The agent is the source of truth and the only
- * writer for the underlying SQLite DB — we never open it directly.
+ * Prompt tab shell — hosts two sub-tabs:
+ *   • dashboard (default): aggregate metrics, score trend, tier mix,
+ *     top improvement areas, and a card grid of recent prompts.
+ *   • prompts: the full list → detail experience with per-prompt
+ *     improvement suggestions surfaced from rule hits.
  *
- * If the agent isn't reachable (think-prompt not installed / not running),
- * we render an inline install hint instead of an error. The rest of the UI
- * keeps working — Prompt is an optional surface.
+ * Cards on the dashboard deep-link into the prompts sub-tab with the
+ * clicked row preselected (via the `pendingSelectId` lifted state).
+ *
+ * Reachability is owned here so each sub-view can stay focused on its
+ * own data without re-implementing the unreachable / loading states.
  */
 
-const TP_AGENT_BASE = `http://127.0.0.1:${(typeof window !== 'undefined' && (window as unknown as { THINK_PROMPT_PORT?: number }).THINK_PROMPT_PORT) || 47823}`;
-
-const TIER_COLOR: Record<string, string> = {
-  good: 'var(--accent-green)',
-  ok: 'var(--accent-blue)',
-  weak: 'var(--accent-amber)',
-  bad: 'var(--accent-red)',
-};
-
-const SEVERITY_COLOR: Record<number, string> = {
-  1: 'var(--accent-blue)',
-  2: 'var(--accent-blue)',
-  3: 'var(--accent-amber)',
-  4: 'var(--accent-amber)',
-  5: 'var(--accent-red)',
-};
-
-interface PromptListRow {
-  id: string;
-  session_id: string;
-  prompt: string;
-  char_len: number;
-  word_count: number;
-  created_at: string;
-  turn_index: number;
-  final_score: number | null;
-  rule_score: number | null;
-  usage_score: number | null;
-  tier: string | null;
-  /** D-046 (think-prompt 0.6+). Null on older databases (calibrating). */
-  efficiency_score?: number | null;
-  /** 'high' | 'medium' | 'low' | null. UI degrades gracefully when missing. */
-  confidence?: string | null;
-  /** final_score - user_baseline, once ≥50 samples accumulated. */
-  baseline_delta?: number | null;
-}
-
-interface PromptDetail {
-  prompt: PromptListRow & {
-    coach_context: string | null;
-    judge_score: number | null;
-    computed_at: string | null;
-    rules_version: number | null;
-  };
-  hits: Array<{ rule_id: string; severity: number; message: string; evidence: string | null }>;
-}
+type SubTab = 'dashboard' | 'prompts';
 
 interface PromptViewProps {
-  /** Parent toggles display: 'none' / 'block' instead of unmounting; we only poll while visible. */
   active: boolean;
-}
-
-function fmtTime(ts: string): string {
-  try {
-    const d = new Date(ts);
-    return d.toLocaleString();
-  } catch {
-    return ts;
-  }
-}
-
-function TierBadge({ tier }: { tier: string | null }) {
-  const color = tier ? TIER_COLOR[tier] : 'var(--text-secondary)';
-  return (
-    <span
-      style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: '0.06em',
-        padding: '2px 6px',
-        borderRadius: 4,
-        textTransform: 'uppercase',
-        color,
-        background: `${color}1a`,
-        border: `1px solid ${color}66`,
-      }}
-    >
-      {tier ?? 'n/a'}
-    </span>
-  );
-}
-
-/**
- * Confidence pill — D-046. Low confidence is explicitly marked so the user
- * has a hook to push back on the score ("the system admits it's uncertain
- * here"). Medium is the default and intentionally subtle. High shows when
- * baseline + scoring + judge all agree. Missing/null → render nothing so
- * older agent versions degrade silently.
- */
-function ConfidenceBadge({
-  confidence,
-  delta,
-}: {
-  confidence: string | null | undefined;
-  delta: number | null | undefined;
-}) {
-  const { t } = useTranslation();
-  if (!confidence) return null;
-  const colors: Record<string, string> = {
-    high: 'var(--accent-green)',
-    medium: 'var(--text-secondary)',
-    low: 'var(--accent-amber)',
-  };
-  const color = colors[confidence] ?? 'var(--text-secondary)';
-  const labelKey = `prompt.confidence.${confidence}`;
-  const label = t(labelKey, { defaultValue: confidence });
-  return (
-    <span
-      title={
-        delta != null
-          ? t('prompt.detail.baselineDelta', { defaultValue: '대비 {{delta}}', delta: delta > 0 ? `+${delta}` : `${delta}` })
-          : undefined
-      }
-      style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: 10,
-        padding: '2px 6px',
-        borderRadius: 4,
-        color,
-        background: `${color}14`,
-        border: `1px solid ${color}55`,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-      }}
-    >
-      <span style={{ opacity: 0.6 }}>·</span>
-      {label}
-      {delta != null && (
-        <span style={{ opacity: 0.75, fontWeight: 600 }}>
-          {delta > 0 ? `+${delta}` : delta}
-        </span>
-      )}
-    </span>
-  );
 }
 
 export function PromptView({ active }: PromptViewProps) {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<PromptListRow[] | null>(null);
+  const [subTab, setSubTab] = useState<SubTab>('dashboard');
   const [reachable, setReachable] = useState<boolean | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<PromptDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  // Probe /api/prompts/stats once per visit — cheap and proves the
+  // prompt subsystem is mounted on the unified server. If it fails we
+  // short-circuit to the unreachable state without each sub-view
+  // duplicating the check.
+  const probe = useCallback(async () => {
     try {
-      const res = await fetch(`${TP_AGENT_BASE}/api/prompts?limit=100`);
-      if (!res.ok) {
-        setReachable(false);
-        return;
-      }
-      const data = (await res.json()) as { prompts: PromptListRow[] };
-      setRows(data.prompts);
-      setReachable(true);
+      const res = await fetch('/api/prompts/stats');
+      setReachable(res.ok);
     } catch {
       setReachable(false);
     }
   }, []);
 
-  // Poll while the tab is visible. 5s cadence keeps server load negligible
-  // (the agent is on the same machine) while feeling live.
   useEffect(() => {
     if (!active) return;
-    refresh();
-    const id = setInterval(refresh, 5000);
-    return () => clearInterval(id);
-  }, [active, refresh]);
+    probe();
+  }, [active, probe]);
 
-  useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
-    let cancelled = false;
-    setDetailLoading(true);
-    fetch(`${TP_AGENT_BASE}/api/prompts/${encodeURIComponent(selectedId)}`)
-      .then(async (r) => (r.ok ? r.json() : null))
-      .then((data: PromptDetail | null) => {
-        if (cancelled) return;
-        setDetail(data);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setDetail(null);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
-
-  // Auto-select the first row when none is chosen yet, so the right pane isn't empty on first paint.
-  useEffect(() => {
-    if (selectedId || !rows || rows.length === 0) return;
-    setSelectedId(rows[0]!.id);
-  }, [rows, selectedId]);
-
-  const grouped = useMemo(() => {
-    if (!rows) return [];
-    return rows;
-  }, [rows]);
+  const handleSelectFromCard = useCallback((id: string) => {
+    setPendingSelectId(id);
+    setSubTab('prompts');
+  }, []);
 
   if (reachable === false) {
     return (
@@ -240,19 +73,6 @@ export function PromptView({ active }: PromptViewProps) {
         <div style={{ fontSize: 13, maxWidth: 480, lineHeight: 1.5 }}>
           {t('prompt.unreachable.body')}
         </div>
-        <pre
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 8,
-            padding: '8px 12px',
-            fontSize: 12,
-            fontFamily: 'var(--font-mono)',
-            color: 'var(--accent-blue)',
-          }}
-        >
-          claude-alive install
-        </pre>
       </div>
     );
   }
@@ -275,233 +95,88 @@ export function PromptView({ active }: PromptViewProps) {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-      {/* List pane */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+      {/* Sub-tab bar */}
       <div
         style={{
-          width: 420,
-          minWidth: 280,
-          maxWidth: '50%',
-          borderRight: '1px solid var(--border-color)',
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          background: 'var(--bg-secondary)',
+          gap: 4,
+          padding: '8px 16px 0',
+          borderBottom: '1px solid var(--border-color)',
+          background: 'var(--bg-primary)',
         }}
       >
+        <SubTabButton
+          label={t('prompt.subtab.dashboard', { defaultValue: '대시보드' })}
+          active={subTab === 'dashboard'}
+          onClick={() => setSubTab('dashboard')}
+        />
+        <SubTabButton
+          label={t('prompt.subtab.prompts', { defaultValue: '프롬프트' })}
+          active={subTab === 'prompts'}
+          onClick={() => setSubTab('prompts')}
+        />
+      </div>
+
+      {/* Sub-tab content — both mounted, visibility toggled, so polling
+          state persists when switching tabs back and forth. */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <div
           style={{
-            padding: '12px 16px',
-            borderBottom: '1px solid var(--border-color)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            display: subTab === 'dashboard' ? 'block' : 'none',
+            height: '100%',
           }}
         >
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            {t('prompt.listTitle')}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6 }}>
-            {grouped.length}
-          </div>
+          <PromptDashboardView
+            active={active && subTab === 'dashboard'}
+            onSelectPrompt={handleSelectFromCard}
+          />
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {grouped.length === 0 ? (
-            <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-              {t('prompt.empty')}
-            </div>
-          ) : (
-            grouped.map((row) => {
-              const isSelected = row.id === selectedId;
-              return (
-                <button
-                  key={row.id}
-                  onClick={() => setSelectedId(row.id)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 4,
-                    padding: '10px 16px',
-                    borderBottom: '1px solid var(--border-color)',
-                    background: isSelected ? 'rgba(88, 166, 255, 0.10)' : 'transparent',
-                    border: 'none',
-                    borderLeft: isSelected ? '2px solid var(--accent-blue)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'background 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        minWidth: 26,
-                      }}
-                    >
-                      {row.final_score ?? '—'}
-                    </span>
-                    <TierBadge tier={row.tier} />
-                    <ConfidenceBadge confidence={row.confidence} delta={row.baseline_delta} />
-                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.6, marginLeft: 'auto' }}>
-                      {fmtTime(row.created_at)}
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-secondary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {row.prompt}
-                  </div>
-                </button>
-              );
-            })
-          )}
+        <div
+          style={{
+            display: subTab === 'prompts' ? 'block' : 'none',
+            height: '100%',
+          }}
+        >
+          <PromptListView
+            active={active && subTab === 'prompts'}
+            requestedSelectId={pendingSelectId}
+            onSelectConsumed={() => setPendingSelectId(null)}
+          />
         </div>
-      </div>
-
-      {/* Detail pane */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 24, minWidth: 0 }}>
-        {!selectedId ? (
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {t('prompt.detail.empty')}
-          </div>
-        ) : detailLoading && !detail ? (
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('prompt.loading')}</div>
-        ) : !detail ? (
-          <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('prompt.detail.notFound')}</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 900 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 40,
-                  fontWeight: 700,
-                  lineHeight: 1,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {detail.prompt.final_score ?? '—'}
-              </span>
-              <TierBadge tier={detail.prompt.tier} />
-              <ConfidenceBadge
-                confidence={detail.prompt.confidence}
-                delta={detail.prompt.baseline_delta}
-              />
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6, marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>
-                {fmtTime(detail.prompt.created_at)}
-              </span>
-            </div>
-
-            <div
-              style={{
-                border: '1px solid var(--border-color)',
-                borderRadius: 12,
-                padding: 16,
-                background: 'var(--bg-secondary)',
-              }}
-            >
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                {t('prompt.detail.promptHeader')}
-              </div>
-              <pre
-                style={{
-                  margin: 0,
-                  fontSize: 13,
-                  lineHeight: 1.55,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                {detail.prompt.prompt}
-              </pre>
-              <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                <span>{detail.prompt.char_len} chars</span>
-                <span>{detail.prompt.word_count} words</span>
-                <span>turn #{detail.prompt.turn_index}</span>
-                {detail.prompt.efficiency_score != null && (
-                  <span>{t('prompt.detail.efficiencyShort', { defaultValue: 'efficiency' })} {detail.prompt.efficiency_score}</span>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                {t('prompt.detail.hitsHeader', { count: detail.hits.length })}
-              </div>
-              {detail.hits.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '12px 0' }}>
-                  {t('prompt.detail.hitsEmpty')}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {detail.hits.map((hit) => (
-                    <div
-                      key={hit.rule_id}
-                      style={{
-                        display: 'flex',
-                        gap: 12,
-                        padding: '10px 14px',
-                        border: '1px solid var(--border-color)',
-                        borderLeft: `3px solid ${SEVERITY_COLOR[hit.severity] ?? 'var(--text-secondary)'}`,
-                        borderRadius: 8,
-                        background: 'var(--bg-secondary)',
-                      }}
-                    >
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: SEVERITY_COLOR[hit.severity] ?? 'var(--text-secondary)', minWidth: 56 }}>
-                        {hit.rule_id}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.45 }}>
-                          {hit.message}
-                        </div>
-                        {hit.evidence && (
-                          <div style={{ marginTop: 4, fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', opacity: 0.7, wordBreak: 'break-word' }}>
-                            {hit.evidence}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: SEVERITY_COLOR[hit.severity] ?? 'var(--text-secondary)' }}>
-                        SEV {hit.severity}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {detail.prompt.coach_context && (
-              <div
-                style={{
-                  border: '1px solid var(--accent-amber)',
-                  borderRadius: 12,
-                  padding: 14,
-                  background: 'rgba(210, 153, 34, 0.08)',
-                }}
-              >
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-amber)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-                  {t('prompt.detail.coachHeader')}
-                </div>
-                <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                  {detail.prompt.coach_context}
-                </pre>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+function SubTabButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '8px 16px',
+        fontSize: 12,
+        fontWeight: 600,
+        color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active
+          ? '2px solid var(--accent-blue)'
+          : '2px solid transparent',
+        marginBottom: -1,
+        cursor: 'pointer',
+        transition: 'color 0.15s ease',
+      }}
+    >
+      {label}
+    </button>
   );
 }

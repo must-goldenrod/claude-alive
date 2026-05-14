@@ -74,6 +74,14 @@ export interface HttpRouterOptions {
   onProjectNamesChanged?: () => void;
   /** Path to the UI dist directory. Defaults to ../../ui/dist relative to server dist. */
   uiDistPath?: string;
+  /**
+   * Optional sub-router for paths owned by the absorbed think-prompt
+   * subsystem (`/api/prompts*`, `/api/sessions*`, `/v1/ingest/*`). When
+   * present, requests matching those prefixes are delegated to it before
+   * the built-in route table is consulted — Fastify mounted on the same
+   * http.Server with no second port.
+   */
+  promptRouter?: (req: IncomingMessage, res: ServerResponse) => void;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -144,16 +152,31 @@ export function createHttpServer(options: HttpRouterOptions) {
     removeProjectName,
     onProjectNamesChanged,
     uiDistPath,
+    promptRouter,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
   const server = createServer(async (req, res) => {
+    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
+
+    // Delegate prompt-subsystem paths to the mounted Fastify router first.
+    // These paths are exclusively owned by the absorbed think-prompt code
+    // (read-only JSON API + browser-extension ingest); the built-in router
+    // never registers them, so there is no overlap risk.
+    if (
+      promptRouter &&
+      (url.pathname.startsWith('/api/prompts') ||
+        url.pathname.startsWith('/api/sessions') ||
+        url.pathname.startsWith('/v1/ingest/'))
+    ) {
+      promptRouter(req, res);
+      return;
+    }
+
     if (req.method === 'OPTIONS') {
       sendJson(res, 204, null, req);
       return;
     }
-
-    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
     if (req.method === 'POST' && url.pathname === '/api/event') {
       try {
