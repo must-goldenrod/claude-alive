@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SSHErrorKind, TerminalSource } from '@claude-alive/core';
 
-export type TabStatus = 'idle' | 'active' | 'done';
+export type TabStatus = 'idle' | 'active' | 'waiting' | 'done';
 
 export interface Tab {
   id: string;
@@ -33,6 +33,10 @@ interface TerminalTabBarProps {
 function statusBackground(tab: Tab, isActive: boolean): string {
   if (tab.exited) {
     return isActive ? 'rgba(110, 118, 129, 0.18)' : 'transparent';
+  }
+  if (tab.status === 'waiting') {
+    // Orange sweep — Claude is blocked on a user prompt/permission.
+    return 'linear-gradient(90deg, rgba(255,159,67,0.08) 0%, rgba(255,159,67,0.55) 50%, rgba(255,159,67,0.08) 100%)';
   }
   if (tab.status === 'active') {
     return 'linear-gradient(90deg, rgba(46,160,67,0.05) 0%, rgba(46,160,67,0.32) 50%, rgba(46,160,67,0.05) 100%)';
@@ -133,19 +137,24 @@ export function TerminalTabBar({
               gap: 6,
               padding: '4px 10px',
               background: statusBackground(tab, isActive),
-              backgroundSize: tab.status === 'active' ? '200% 100%' : undefined,
+              backgroundSize:
+                tab.status === 'active' || tab.status === 'waiting' ? '200% 100%' : undefined,
               animation:
-                tab.status === 'active'
-                  ? 'claude-tab-sweep 1.8s linear infinite'
-                  : undefined,
+                tab.status === 'waiting'
+                  ? 'claude-tab-sweep 1.2s linear infinite'
+                  : tab.status === 'active'
+                    ? 'claude-tab-sweep 1.8s linear infinite'
+                    : undefined,
               borderLeft: sshBorder ? borderForSource(tab) : 'none',
               border: sshBorder ? undefined : 'none',
               borderRadius: 6,
               boxShadow: isDragTarget
                 ? 'inset 2px 0 0 0 var(--accent-blue)'
-                : isActive
-                  ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)'
-                  : undefined,
+                : tab.status === 'waiting'
+                  ? 'inset 0 0 0 1px rgba(255, 159, 67, 0.7)'
+                  : isActive
+                    ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)'
+                    : undefined,
               color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
               cursor: onReorder ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
               opacity: isDragging ? 0.5 : 1,

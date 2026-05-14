@@ -210,6 +210,41 @@ export default function App() {
     return m;
   }, [agents]);
 
+  // Set of Claude session IDs currently in the `waiting` state. Recomputed on every agent
+  // map change; the identity is stable when nothing changed (empty stays empty), so the
+  // downstream effect in ChatOverlay won't re-run spuriously.
+  const waitingSessionIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const [sid, a] of agents) {
+      if (a.state === 'waiting') s.add(sid);
+    }
+    return s;
+  }, [agents]);
+
+  // Tab-title heartbeat: when the dashboard tab IS focused (so no OS notification fires)
+  // but at least one agent is waiting, flash the document title between the base title
+  // and a "❗ N waiting" marker. Restores the base title on cleanup. This is the focused-
+  // tab counterpart to the `fireNotification` path that handles unfocused tabs.
+  useEffect(() => {
+    const waitingCount = waitingSessionIds.size;
+    const baseTitle = 'claude-alive';
+    if (waitingCount === 0) {
+      document.title = baseTitle;
+      return;
+    }
+    const marker = `❗ ${waitingCount} ${i18n.t('notifications.needsPermission')}`;
+    let showMarker = true;
+    document.title = marker;
+    const id = window.setInterval(() => {
+      showMarker = !showMarker;
+      document.title = showMarker ? marker : baseTitle;
+    }, 1200);
+    return () => {
+      window.clearInterval(id);
+      document.title = baseTitle;
+    };
+  }, [waitingSessionIds]);
+
   const subscribeRaw: RawMessageSubscribe = useCallback((handler) => {
     rawSubscribersRef.current.add(handler);
     return () => { rawSubscribersRef.current.delete(handler); };
@@ -382,6 +417,7 @@ export default function App() {
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}
           projectNames={projectNames}
+          waitingSessionIds={waitingSessionIds}
         />
       </div>
     </div>

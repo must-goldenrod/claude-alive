@@ -25,8 +25,8 @@ describe('agentFSM', () => {
       expect(transition('spawning', 'SessionEnd').newState).toBe('despawning');
     });
 
-    it('spawning stays spawning on unrecognized event', () => {
-      expect(transition('spawning', 'Notification').newState).toBe('spawning');
+    it('spawning → waiting on Notification (user attention)', () => {
+      expect(transition('spawning', 'Notification').newState).toBe('waiting');
     });
 
     // --- idle state ---
@@ -42,8 +42,20 @@ describe('agentFSM', () => {
       expect(transition('idle', 'TaskCompleted').newState).toBe('done');
     });
 
-    it('idle stays idle on Notification', () => {
-      expect(transition('idle', 'Notification').newState).toBe('idle');
+    it('idle → waiting on Notification (Claude needs attention)', () => {
+      expect(transition('idle', 'Notification').newState).toBe('waiting');
+    });
+
+    it('idle → waiting on PreToolUse(AskUserQuestion)', () => {
+      expect(transition('idle', 'PreToolUse', 'AskUserQuestion').newState).toBe('waiting');
+    });
+
+    it('active → waiting on PreToolUse(AskUserQuestion)', () => {
+      expect(transition('active', 'PreToolUse', 'AskUserQuestion').newState).toBe('waiting');
+    });
+
+    it('active → waiting on Notification', () => {
+      expect(transition('active', 'Notification').newState).toBe('waiting');
     });
 
     // --- listening state ---
