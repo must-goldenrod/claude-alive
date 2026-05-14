@@ -43,7 +43,9 @@ export interface SshSessionInfo {
   tabId: string;
   label: string;
   presetId?: string;
-  status: 'idle' | 'active' | 'done';
+  /** Mirrors Tab.status. `waiting` only ever applies to Claude tabs, never SSH, but the
+   *  type is widened to keep both surfaces in sync without a discriminated union. */
+  status: 'idle' | 'active' | 'waiting' | 'done';
   exited: boolean;
   hasError: boolean;
 }
@@ -90,6 +92,12 @@ interface ChatOverlayProps {
    * by looking up the tab's cwd in this map (fallback to pathBasename(cwd)).
    */
   projectNames?: Record<string, string>;
+  /**
+   * Set of Claude session IDs currently in the `waiting` agent state — i.e. Claude has asked
+   * the user a question / permission prompt and is blocked. Tabs matching one of these IDs
+   * render the orange "needs attention" tab background. Computed from the WS agent map by App.
+   */
+  waitingSessionIds?: Set<string>;
 }
 
 /**
@@ -282,7 +290,7 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
@@ -341,7 +349,13 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   /** Transition a tab to "active" and (re)schedule the idle timer. */
   const markTabActivity = useCallback((tabId: string) => {
     setTabs((prev) =>
-      prev.map((tab) => (tab.id === tabId && !tab.exited ? { ...tab, status: 'active' } : tab)),
+      prev.map((tab) => {
+        if (tab.id !== tabId || tab.exited) return tab;
+        // Don't overwrite the orange "waiting" state with green "active" — Claude is still
+        // blocked on a prompt even while emitting incidental output (e.g. spinner frames).
+        if (tab.status === 'waiting') return tab;
+        return { ...tab, status: 'active' };
+      }),
     );
     const existing = idleTimersRef.current.get(tabId);
     if (existing) clearTimeout(existing);
@@ -357,6 +371,30 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     }, ACTIVITY_IDLE_MS);
     idleTimersRef.current.set(tabId, timer);
   }, []);
+
+  // Project the WS-derived `waiting` agent set onto tab status. When a tab's claudeSessionId
+  // enters the set → mark it `waiting` (orange). When it leaves → if the tab is still in
+  // `waiting` (i.e. we set it, not the user via terminal output), drop back to `idle`. This
+  // does NOT touch tabs in `active` / `done` so terminal-driven transitions still work.
+  useEffect(() => {
+    setTabs((prev) => {
+      let changed = false;
+      const next = prev.map((tab) => {
+        if (tab.exited || !tab.claudeSessionId) return tab;
+        const shouldWait = waitingSessionIds?.has(tab.claudeSessionId) ?? false;
+        if (shouldWait && tab.status !== 'waiting') {
+          changed = true;
+          return { ...tab, status: 'waiting' as const };
+        }
+        if (!shouldWait && tab.status === 'waiting') {
+          changed = true;
+          return { ...tab, status: 'idle' as const };
+        }
+        return tab;
+      });
+      return changed ? next : prev;
+    });
+  }, [waitingSessionIds]);
 
   interface CreateTabOptions {
     cwd?: string;

@@ -69,6 +69,14 @@ html, body, #root {
   50% { box-shadow: 0 0 20px var(--accent-green)55; }
 }
 
+/* Sidebar agent dot — amber "needs attention" pulse for the waiting state.
+   Soft expand+contract glow at 1.4s to feel calmer than the tab-bar's 1.2s sweep
+   (the tab already screams; the sidebar dot just nudges). */
+@keyframes claude-waiting-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 159, 67, 0.55), 0 0 8px rgba(255, 159, 67, 0.45); }
+  50%      { box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.00), 0 0 14px rgba(255, 159, 67, 0.75); }
+}
+
 /* Terminal tab status: left-to-right sweeping green when a tab is active */
 @keyframes claude-tab-sweep {
   0%   { background-position: 200% 0; }
@@ -80,5 +88,9 @@ html, body, #root {
   [style*="claude-tab-sweep"] {
     animation: none !important;
     background: rgba(46, 160, 67, 0.22) !important;
+  }
+  [style*="claude-waiting-pulse"] {
+    animation: none !important;
+    box-shadow: 0 0 8px rgba(255, 159, 67, 0.55) !important;
   }
 }

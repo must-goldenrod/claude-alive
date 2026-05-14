@@ -11,6 +11,7 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   spawning: {
     UserPromptSubmit: 'listening',
     PreToolUse: 'active',
+    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
   },
@@ -19,12 +20,16 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     PreToolUse: 'active',
     PermissionRequest: 'waiting',
     SessionEnd: 'despawning',
-    Notification: 'idle',
+    // Claude Code fires `Notification` whenever it needs user attention
+    // (permission prompts, idle reminders, AskUserQuestion completion).
+    // Route to `waiting` so the tab turns orange instead of silently staying idle.
+    Notification: 'waiting',
     TaskCompleted: 'done',
   },
   listening: {
     PreToolUse: 'active',
     PermissionRequest: 'waiting',
+    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     TaskCompleted: 'done',
@@ -34,6 +39,7 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     PostToolUseFailure: 'error',
     PreToolUse: 'active',
     PermissionRequest: 'waiting',
+    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     SubagentStart: 'active',
@@ -59,6 +65,7 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     PreToolUse: 'active',
     UserPromptSubmit: 'listening',
     PermissionRequest: 'waiting',
+    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     TaskCompleted: 'done',
@@ -73,11 +80,25 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   removed: {},
 };
 
+/**
+ * Tools that, when invoked via PreToolUse, immediately put the agent into the
+ * `waiting` state — they exist specifically to block on user input. The FSM table
+ * routes PreToolUse → `active` by default, which is wrong for these tools because
+ * the tab would flash green instead of the intended orange "needs attention".
+ */
+const USER_INPUT_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
+
 export function transition(
   currentState: AgentState,
   event: HookEventName,
   toolName?: string,
 ): FSMTransitionResult {
+  // Special case: PreToolUse for a user-input tool jumps straight to `waiting`,
+  // overriding the table's PreToolUse → `active` mapping. Once the user responds,
+  // PostToolUse follows the normal table back to `active`.
+  if (event === 'PreToolUse' && toolName && USER_INPUT_TOOLS.has(toolName)) {
+    return { newState: 'waiting', toolAnimation: null, toolName };
+  }
   const stateTransitions = TRANSITIONS[currentState];
   const newState = stateTransitions?.[event] ?? currentState;
   const toolAnimation = (newState === 'active' && toolName)

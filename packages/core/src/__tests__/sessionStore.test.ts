@@ -115,6 +115,28 @@ describe('SessionStore', () => {
       expect(agent!.state).toBe('waiting');
     });
 
+    it('PreToolUse(AskUserQuestion) → waiting from active (Claude asks user)', () => {
+      // AskUserQuestion is a user-input tool: even though the default
+      // PreToolUse → active mapping applies, the FSM's USER_INPUT_TOOLS
+      // override sends us straight to amber so the tab doesn't flash
+      // green before the question is visible.
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      store.processEvent(makePayload('UserPromptSubmit', 'sess-1', { prompt: 'help me' }));
+      store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Read' }));
+      const agent = store.processEvent(
+        makePayload('PreToolUse', 'sess-1', { tool_name: 'AskUserQuestion' }),
+      );
+      expect(agent!.state).toBe('waiting');
+    });
+
+    it('PreToolUse(ExitPlanMode) → waiting (plan needs approval)', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1'));
+      const agent = store.processEvent(
+        makePayload('PreToolUse', 'sess-1', { tool_name: 'ExitPlanMode' }),
+      );
+      expect(agent!.state).toBe('waiting');
+    });
+
     it('UserPromptSubmit after notification overrides waiting → listening', () => {
       store.processEvent(makePayload('SessionStart', 'sess-1'));
       store.processEvent(makePayload('Notification', 'sess-1', {

@@ -169,7 +169,16 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
               borderRadius: '50%',
               background: stateColor,
               border: '2px solid var(--bg-secondary)',
-              boxShadow: agent.state === 'active' ? `0 0 8px ${stateColor}` : 'none',
+              boxShadow:
+                agent.state === 'waiting'
+                  ? `0 0 8px ${stateColor}`
+                  : agent.state === 'active'
+                    ? `0 0 8px ${stateColor}`
+                    : 'none',
+              animation:
+                agent.state === 'waiting'
+                  ? 'claude-waiting-pulse 1.4s ease-in-out infinite'
+                  : undefined,
             }}
           />
         </div>
@@ -433,7 +442,7 @@ function SidebarProjectGroup({
 interface SshPresenceEntry {
   tabId: string;
   label: string;
-  status: 'idle' | 'active' | 'done';
+  status: 'idle' | 'active' | 'waiting' | 'done';
   exited: boolean;
   hasError: boolean;
 }
