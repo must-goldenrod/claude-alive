@@ -29,9 +29,36 @@ function readPid(): number | null {
   }
 }
 
+/**
+ * Resolve the server entry-point script. This CLI runs in two layouts:
+ *
+ *   1. **Workspace / `npm link`** — `dist/index.js` sits in `packages/cli/dist/`,
+ *      so the sibling server lives at `../../server/dist/index.js`.
+ *   2. **Published npm bundle** — `cli.js` and `dist/server.js` are produced by
+ *      `scripts/build-npm.sh` and placed in the same package root; the layout is
+ *      `<root>/cli.js` + `<root>/dist/server.js`.
+ *
+ * Probe candidate paths in order and return the first that exists. Doing this
+ * at runtime is what lets a single CLI source serve both publish targets —
+ * the previous design duplicated the entire CLI in `npm/cli-entry.ts` and
+ * drifted on every edit (see PR #21/#22 fallout).
+ */
 function serverEntryPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  return resolve(currentDir, '..', '..', 'server', 'dist', 'index.js');
+  const candidates = [
+    // Workspace: packages/cli/dist/index.js → packages/server/dist/index.js
+    resolve(currentDir, '..', '..', 'server', 'dist', 'index.js'),
+    // npm bundle: <pkg>/cli.js → <pkg>/dist/server.js
+    resolve(currentDir, 'dist', 'server.js'),
+    // npm bundle alt: <pkg>/dist/cli.js → <pkg>/dist/server.js (sibling)
+    resolve(currentDir, 'server.js'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  // Last resort: return the workspace path so the resulting error message
+  // points to something a developer can debug.
+  return candidates[0]!;
 }
 
 // macOS launchd plist for the unified claude-alive server. As of D-048+

@@ -29,8 +29,13 @@ mkdir -p "$OUT/dist" "$OUT/scripts" "$OUT/ui"
 # defers loading to install-time `node_modules`.
 EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --external:pino --external:pino-* --external:thread-stream --external:sonic-boom --external:on-exit-leak-free --external:real-require --external:atomic-sleep --external:safe-stable-stringify --external:fast-redact --external:quick-format-unescaped --external:process-warning --external:fastify --external:@fastify/* --external:franc-min --external:trigram-utils --external:n-gram --external:collapse-white-space --external:commander --external:picocolors --external:zod"
 
+# Bundle the SAME CLI source the workspace uses (packages/cli/src/index.ts).
+# The CLI auto-detects whether the server entry lives at the workspace path
+# (../../server/dist/index.js) or alongside it as a sibling bundle (./server.js),
+# so a single source supports both `pnpm dev` link and the npm-published bundle.
+# Removes the prior duplication in npm/cli-entry.ts that caused PR #21 to leak.
 echo "[3/5] Bundling CLI..."
-npx esbuild "$ROOT/npm/cli-entry.ts" \
+npx esbuild "$ROOT/packages/cli/src/index.ts" \
   --bundle --platform=node --format=esm \
   --target=node20 --outfile="$OUT/dist/cli.js" \
   $EXTERNAL_FLAGS
