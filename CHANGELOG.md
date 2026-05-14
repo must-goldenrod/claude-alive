@@ -2,7 +2,9 @@
 
 All notable changes to claude-alive.
 
-## Unreleased (2026-05-14)
+
+
+## v0.5.1 (2026-05-14)
 
 ### New Features
 
@@ -40,7 +42,6 @@ All notable changes to claude-alive.
 
 -  파비콘 디자인 업데이트 / Update favicon design
 -  AgentTimelinePanel 제거 / Remove AgentTimelinePanel
-
 ## v0.3.1 (2026-03-04)
 
 ### New Features
