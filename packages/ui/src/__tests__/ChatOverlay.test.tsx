@@ -82,6 +82,31 @@ describe('ChatOverlay', () => {
     expect(screen.getByTitle('New tab')).toBeDefined();
   });
 
+  it('shows the CWD picker with Local and SSH tabs when opened', () => {
+    render(<ChatOverlay open={true} onToggle={() => {}} />);
+    expect(screen.getByText('terminal.tabLocal')).toBeDefined();
+    expect(screen.getByText('terminal.tabSsh')).toBeDefined();
+  });
+
+  it('defaults to the Local tab (shows the folder select button)', () => {
+    render(<ChatOverlay open={true} onToggle={() => {}} />);
+    expect(screen.getByText('terminal.selectHere')).toBeDefined();
+  });
+
+  it('switches to the SSH tab and hides local browse controls', () => {
+    render(<ChatOverlay open={true} onToggle={() => {}} />);
+    fireEvent.click(screen.getByText('terminal.tabSsh'));
+    expect(screen.getByText('terminal.menu.manageSsh')).toBeDefined();
+    expect(screen.queryByText('terminal.selectHere')).toBeNull();
+  });
+
+  it('keeps the skip-permissions toggle visible regardless of tab', () => {
+    render(<ChatOverlay open={true} onToggle={() => {}} />);
+    expect(screen.getByText('terminal.skipPermissions')).toBeDefined();
+    fireEvent.click(screen.getByText('terminal.tabSsh'));
+    expect(screen.getByText('terminal.skipPermissions')).toBeDefined();
+  });
+
   it('calls onSpawn when overlay opens for the first time', async () => {
     const onSpawn = vi.fn();
     render(<ChatOverlay open={true} onToggle={() => {}} onSpawn={onSpawn} />);

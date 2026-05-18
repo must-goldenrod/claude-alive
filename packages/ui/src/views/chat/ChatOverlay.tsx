@@ -318,6 +318,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   /** Tab id pending a close-confirmation. null = no dialog open. */
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
+  const [cwdTab, setCwdTab] = useState<'local' | 'ssh'>('local');
   const [customPath, setCustomPath] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(true);
   const [_browsePath, setBrowsePath] = useState('~');
@@ -1300,140 +1301,280 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
               </button>
             </div>
 
-            {/* SSH quick access — always visible so users can pivot without being trapped */}
-            <div style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {t('terminal.menu.sshPresets')}
-              </div>
-              {presets.length > 0 && (
-                <div style={{ overflowY: 'auto', maxHeight: 200 }}>
-                  {presets.map((preset) => (
-                    <button
-                      key={preset.id}
-                      onClick={() => {
-                        setCwdPickerOpen(false);
-                        launchPreset(preset);
-                      }}
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '7px 16px',
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'background 0.15s ease',
-                        color: 'var(--text-primary)',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(188, 140, 255, 0.08)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <span style={{ fontSize: 12, color: 'var(--accent-purple)' }}>🔗</span>
-                      <span style={{ fontSize: 12, fontWeight: 500 }}>{preset.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  setCwdPickerOpen(false);
-                  setSshDialogOpen(true);
-                }}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 16px 10px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'background 0.15s ease',
-                  color: 'var(--accent-purple)',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(188, 140, 255, 0.08)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <span style={{ fontSize: 12 }}>➕</span>
-                <span style={{ fontSize: 12, fontWeight: 500 }}>{t('terminal.menu.manageSsh')}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.5, color: 'var(--text-secondary)' }}>→</span>
-              </button>
+            {/* Tab bar: Local folder / SSH remote — separates the two
+                fundamentally different connection modes so they no longer
+                share one vertical scroll. */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)' }}>
+              {([
+                { id: 'local' as const, label: t('terminal.tabLocal') },
+                { id: 'ssh' as const, label: t('terminal.tabSsh') },
+              ]).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setCwdTab(tab.id)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 8px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: cwdTab === tab.id ? '2px solid var(--accent-blue)' : '2px solid transparent',
+                    color: cwdTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'color 0.15s ease, border-color 0.15s ease',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            {/* Local folder section label */}
-            <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: uniquePaths.length > 0 ? 'none' : undefined }}>
-              {t('terminal.menu.localFolder')}
-            </div>
+            {/* Tab content (scrollable region) */}
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+              {cwdTab === 'local' ? (
+                <>
+                  {/* Quick select: active projects + recent folders merged
+                      under one section so the same intent isn't split. */}
+                  {(() => {
+                    const activeSet = new Set(uniquePaths);
+                    const visibleRecent = recentFolders.filter((p) => !activeSet.has(p));
+                    if (uniquePaths.length === 0 && visibleRecent.length === 0) return null;
+                    return (
+                      <div style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {t('terminal.quickSelect')}
+                        </div>
+                        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+                          {uniquePaths.map((cwd) => (
+                            <button
+                              key={cwd}
+                              onClick={() => handlePickCwd(cwd)}
+                              style={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '7px 16px',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                                transition: 'background 0.15s ease',
+                                color: 'var(--text-primary)',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              <span style={{ fontSize: 12, opacity: 0.6 }}>&#9733;</span>
+                              <span style={{ fontSize: 12, fontWeight: 500 }}>{pathBasename(cwd)}</span>
+                              <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.4, marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>{cwd}</span>
+                            </button>
+                          ))}
+                          {visibleRecent.map((cwd) => (
+                            <div
+                              key={cwd}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                width: '100%',
+                                transition: 'background 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(63, 185, 80, 0.08)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              <button
+                                onClick={() => handlePickCwd(cwd)}
+                                title={cwd}
+                                style={{
+                                  flex: 1,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 8,
+                                  padding: '7px 16px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  color: 'var(--text-primary)',
+                                  minWidth: 0,
+                                }}
+                              >
+                                <span style={{ fontSize: 12, color: 'var(--accent-green)' }}>⟲</span>
+                                <span style={{ fontSize: 12, fontWeight: 500, flexShrink: 0 }}>{pathBasename(cwd)}</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.45, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{cwd}</span>
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRemoveRecentFolder(cwd); }}
+                                title={t('terminal.menu.removeRecentFolder')}
+                                aria-label={t('terminal.menu.removeRecentFolder')}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'var(--text-secondary)',
+                                  opacity: 0.4,
+                                  cursor: 'pointer',
+                                  fontSize: 12,
+                                  padding: '4px 12px',
+                                  flexShrink: 0,
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
-            {/* Active project shortcuts */}
-            {uniquePaths.length > 0 && (
-              <div style={{ borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  {t('agents.projects')}
-                </div>
-                <div style={{ overflowY: 'auto', maxHeight: 180 }}>
-                  {uniquePaths.map((cwd) => (
-                    <button
-                      key={cwd}
-                      onClick={() => handlePickCwd(cwd)}
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '7px 16px',
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'background 0.15s ease',
-                        color: 'var(--text-primary)',
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <span style={{ fontSize: 12, opacity: 0.6 }}>&#9733;</span>
-                      <span style={{ fontSize: 12, fontWeight: 500 }}>{pathBasename(cwd)}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.4, marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>{cwd}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Recently picked folders (LRU history from localStorage).
-                Filtered to drop folders already shown in the active-projects section
-                above so the same path isn't listed twice. */}
-            {(() => {
-              const activeSet = new Set(uniquePaths);
-              const visibleRecent = recentFolders.filter((p) => !activeSet.has(p));
-              if (visibleRecent.length === 0) return null;
-              return (
-                <div style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t('terminal.menu.recentFolders')}
-                  </div>
-                  <div style={{ overflowY: 'auto', maxHeight: 220 }}>
-                    {visibleRecent.map((cwd) => (
-                      <div
-                        key={cwd}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          width: '100%',
-                          transition: 'background 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(63, 185, 80, 0.08)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                      >
+                  {/* Browse: directory navigation + manual path entry */}
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {t('terminal.browseSection')}
+                    </div>
+                    {/* Current path bar + select button */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderBottom: '1px solid var(--border-color)' }}>
+                      {browseCurrentPath !== '/' && (
                         <button
-                          onClick={() => handlePickCwd(cwd)}
-                          title={cwd}
+                          onClick={() => {
+                            const parent = browseCurrentPath.replace(/\/[^/]+\/?$/, '') || '/';
+                            fetchBrowse(parent);
+                          }}
                           style={{
-                            flex: 1,
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            padding: '2px 6px',
+                            flexShrink: 0,
+                          }}
+                          title="Parent directory"
+                        >
+                          &#8592;
+                        </button>
+                      )}
+                      <div style={{
+                        flex: 1,
+                        fontSize: 11,
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        direction: 'rtl',
+                        textAlign: 'left',
+                      }}>
+                        <span dir="ltr">{browseCurrentPath}</span>
+                      </div>
+                      <button
+                        onClick={() => handlePickCwd(browseCurrentPath)}
+                        style={{
+                          padding: '4px 12px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: 'var(--accent-blue)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {t('terminal.selectHere')}
+                      </button>
+                    </div>
+
+                    {/* Directory listing */}
+                    <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, maxHeight: 320 }}>
+                      {browseLoading ? (
+                        <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)' }}>...</div>
+                      ) : browseDirs.length === 0 ? (
+                        <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', opacity: 0.5 }}>
+                          {t('terminal.emptyDir')}
+                        </div>
+                      ) : (
+                        browseDirs.map((dir) => (
+                          <button
+                            key={dir.path}
+                            onClick={() => fetchBrowse(dir.path)}
+                            onDoubleClick={() => handlePickCwd(dir.path)}
+                            style={{
+                              width: '100%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '6px 16px',
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'background 0.15s ease',
+                              color: 'var(--text-primary)',
+                              fontSize: 12,
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <span style={{ opacity: 0.5, fontSize: 11 }}>&#128193;</span>
+                            <span>{dir.name}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Manual path input */}
+                    <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-color)' }}>
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const val = customPath.trim();
+                          if (val) handlePickCwd(val);
+                        }}
+                      >
+                        <input
+                          type="text"
+                          value={customPath}
+                          onChange={(e) => setCustomPath(e.target.value)}
+                          placeholder={t('terminal.customPathPlaceholder')}
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 6,
+                            color: 'var(--text-primary)',
+                            fontSize: 11,
+                            fontFamily: 'var(--font-mono)',
+                            outline: 'none',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = 'var(--accent-blue)'; }}
+                          onBlur={(e) => { e.target.style.borderColor = 'var(--border-color)'; }}
+                        />
+                      </form>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* SSH remote tab: presets + management entry point */
+                <div>
+                  <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t('terminal.menu.sshPresets')}
+                  </div>
+                  {presets.length > 0 ? (
+                    <div>
+                      {presets.map((preset) => (
+                        <button
+                          key={preset.id}
+                          onClick={() => {
+                            setCwdPickerOpen(false);
+                            launchPreset(preset);
+                          }}
+                          style={{
+                            width: '100%',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
@@ -1442,167 +1583,55 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                             border: 'none',
                             cursor: 'pointer',
                             textAlign: 'left',
+                            transition: 'background 0.15s ease',
                             color: 'var(--text-primary)',
-                            minWidth: 0,
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(188, 140, 255, 0.08)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         >
-                          <span style={{ fontSize: 12, color: 'var(--accent-green)' }}>⟲</span>
-                          <span style={{ fontSize: 12, fontWeight: 500, flexShrink: 0 }}>{pathBasename(cwd)}</span>
-                          <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.45, fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{cwd}</span>
+                          <span style={{ fontSize: 12, color: 'var(--accent-purple)' }}>🔗</span>
+                          <span style={{ fontSize: 12, fontWeight: 500 }}>{preset.label}</span>
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleRemoveRecentFolder(cwd); }}
-                          title={t('terminal.menu.removeRecentFolder')}
-                          aria-label={t('terminal.menu.removeRecentFolder')}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-secondary)',
-                            opacity: 0.4,
-                            cursor: 'pointer',
-                            fontSize: 12,
-                            padding: '4px 12px',
-                            flexShrink: 0,
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.4'; }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Folder browser */}
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              {/* Current path bar + select button */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderBottom: '1px solid var(--border-color)' }}>
-                {browseCurrentPath !== '/' && (
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '12px 16px', fontSize: 12, color: 'var(--text-secondary)', opacity: 0.5 }}>
+                      {t('terminal.menu.noSshPresets')}
+                    </div>
+                  )}
                   <button
                     onClick={() => {
-                      const parent = browseCurrentPath.replace(/\/[^/]+\/?$/, '') || '/';
-                      fetchBrowse(parent);
+                      setCwdPickerOpen(false);
+                      setSshDialogOpen(true);
                     }}
                     style={{
-                      background: 'none',
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 16px 10px',
+                      background: 'transparent',
                       border: 'none',
-                      color: 'var(--text-secondary)',
                       cursor: 'pointer',
-                      fontSize: 14,
-                      padding: '2px 6px',
-                      flexShrink: 0,
+                      textAlign: 'left',
+                      transition: 'background 0.15s ease',
+                      color: 'var(--accent-purple)',
                     }}
-                    title="Parent directory"
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(188, 140, 255, 0.08)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
-                    &#8592;
+                    <span style={{ fontSize: 12 }}>➕</span>
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>{t('terminal.menu.manageSsh')}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.5, color: 'var(--text-secondary)' }}>→</span>
                   </button>
-                )}
-                <div style={{
-                  flex: 1,
-                  fontSize: 11,
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-primary)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  direction: 'rtl',
-                  textAlign: 'left',
-                }}>
-                  <span dir="ltr">{browseCurrentPath}</span>
                 </div>
-                <button
-                  onClick={() => handlePickCwd(browseCurrentPath)}
-                  style={{
-                    padding: '4px 12px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: 'var(--accent-blue)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                >
-                  {t('terminal.selectHere')}
-                </button>
-              </div>
-
-              {/* Directory listing */}
-              <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, maxHeight: 320 }}>
-                {browseLoading ? (
-                  <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)' }}>...</div>
-                ) : browseDirs.length === 0 ? (
-                  <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-secondary)', opacity: 0.5 }}>
-                    {t('terminal.emptyDir')}
-                  </div>
-                ) : (
-                  browseDirs.map((dir) => (
-                    <button
-                      key={dir.path}
-                      onClick={() => fetchBrowse(dir.path)}
-                      onDoubleClick={() => handlePickCwd(dir.path)}
-                      style={{
-                        width: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '6px 16px',
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'background 0.15s ease',
-                        color: 'var(--text-primary)',
-                        fontSize: 12,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                    >
-                      <span style={{ opacity: 0.5, fontSize: 11 }}>&#128193;</span>
-                      <span>{dir.name}</span>
-                    </button>
-                  ))
-                )}
-              </div>
+              )}
             </div>
 
-            {/* Manual path input */}
-            <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-color)' }}>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const val = customPath.trim();
-                  if (val) handlePickCwd(val);
-                }}
-              >
-                <input
-                  type="text"
-                  value={customPath}
-                  onChange={(e) => setCustomPath(e.target.value)}
-                  placeholder={t('terminal.customPathPlaceholder')}
-                  style={{
-                    width: '100%',
-                    padding: '6px 10px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 6,
-                    color: 'var(--text-primary)',
-                    fontSize: 11,
-                    fontFamily: 'var(--font-mono)',
-                    outline: 'none',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = 'var(--accent-blue)'; }}
-                  onBlur={(e) => { e.target.style.borderColor = 'var(--border-color)'; }}
-                />
-              </form>
-            </div>
-
-            {/* Skip permissions toggle */}
-            <div style={{ padding: '8px 16px', borderTop: '1px solid var(--border-color)' }}>
+            {/* Footer: skip permissions — global option that applies to
+                every selection (local or SSH), pinned outside the tabs so
+                its scope is unambiguous. */}
+            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)', flexShrink: 0 }}>
               <label
                 style={{
                   display: 'flex',
