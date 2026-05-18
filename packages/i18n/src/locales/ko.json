@@ -197,6 +197,10 @@
     "modeRight": "우측",
     "modeFullscreen": "전체화면",
     "selectHere": "선택",
+    "tabLocal": "로컬 폴더",
+    "tabSsh": "SSH 원격",
+    "quickSelect": "빠른 선택",
+    "browseSection": "탐색",
     "emptyDir": "하위 폴더 없음",
     "collapse": "최소화",
     "closeDialog": "닫기",
@@ -214,6 +218,7 @@
       "manageSsh": "새 SSH 프리셋…",
       "recentFolders": "최근 폴더",
       "noRecentFolders": "최근 선택한 폴더 없음",
+      "noSshPresets": "SSH 프리셋이 없습니다 — 아래에서 추가하세요",
       "removeRecentFolder": "최근 폴더에서 제거"
     },
     "ssh": {

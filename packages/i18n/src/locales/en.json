@@ -197,6 +197,10 @@
     "modeRight": "Right",
     "modeFullscreen": "Fullscreen",
     "selectHere": "Select",
+    "tabLocal": "Local folder",
+    "tabSsh": "SSH remote",
+    "quickSelect": "Quick select",
+    "browseSection": "Browse",
     "emptyDir": "No subdirectories",
     "collapse": "Minimize",
     "closeDialog": "Close",
@@ -214,6 +218,7 @@
       "manageSsh": "New SSH preset…",
       "recentFolders": "Recent folders",
       "noRecentFolders": "No recently used folders",
+      "noSshPresets": "No SSH presets yet — add one below",
       "removeRecentFolder": "Remove from recent"
     },
     "ssh": {
