@@ -258,6 +258,7 @@ export default function App() {
       mode: 'claude' | 'shell';
       source: 'local' | 'ssh';
       initialCommand?: string;
+      claudeVariant?: 'claude' | 'agents';
       claudeSessionId?: string;
       resumeSessionId?: string;
       displayName?: string;
@@ -270,6 +271,7 @@ export default function App() {
         mode: req.mode,
         source: req.source,
         initialCommand: req.initialCommand,
+        claudeVariant: req.claudeVariant,
         claudeSessionId: req.claudeSessionId,
         resumeSessionId: req.resumeSessionId,
         displayName: req.displayName,

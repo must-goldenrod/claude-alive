@@ -41,6 +41,8 @@ export type WSClientMessage =
       mode?: TerminalMode;
       source?: TerminalSource;
       initialCommand?: string;
+      /** Which Claude CLI entrypoint to run: `claude` (default) or `claude agents`. Only meaningful when mode is 'claude'. */
+      claudeVariant?: 'claude' | 'agents';
       /** UUID to pass via `claude --session-id` so the tab and Claude session are 1:1 matched. */
       claudeSessionId?: string;
       /** Pre-existing Claude session UUID to resume via `claude --resume`. Wins over claudeSessionId. */

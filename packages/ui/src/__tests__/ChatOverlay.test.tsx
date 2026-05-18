@@ -88,23 +88,30 @@ describe('ChatOverlay', () => {
     expect(screen.getByText('terminal.tabSsh')).toBeDefined();
   });
 
-  it('defaults to the Local tab (shows the folder select button)', () => {
+  it('shows the unified launch bar on the Local tab', () => {
     render(<ChatOverlay open={true} onToggle={() => {}} />);
-    expect(screen.getByText('terminal.selectHere')).toBeDefined();
+    // Command entrypoint toggle: claude vs claude agents
+    expect(screen.getByText('claude')).toBeDefined();
+    expect(screen.getByText('claude agents')).toBeDefined();
+    // Skip-permissions + primary start CTA live in the same bar
+    expect(screen.getByText('terminal.skipPermissions')).toBeDefined();
+    expect(screen.getByText(/terminal\.startHere/)).toBeDefined();
   });
 
-  it('switches to the SSH tab and hides local browse controls', () => {
+  it('lets the user switch the Claude entrypoint to "claude agents"', () => {
+    render(<ChatOverlay open={true} onToggle={() => {}} />);
+    const agentsBtn = screen.getByText('claude agents');
+    fireEvent.click(agentsBtn);
+    // Still present after selection (state updated without crashing)
+    expect(screen.getByText('claude agents')).toBeDefined();
+  });
+
+  it('hides the launch bar on the SSH tab (presets launch on click)', () => {
     render(<ChatOverlay open={true} onToggle={() => {}} />);
     fireEvent.click(screen.getByText('terminal.tabSsh'));
     expect(screen.getByText('terminal.menu.manageSsh')).toBeDefined();
-    expect(screen.queryByText('terminal.selectHere')).toBeNull();
-  });
-
-  it('keeps the skip-permissions toggle visible regardless of tab', () => {
-    render(<ChatOverlay open={true} onToggle={() => {}} />);
-    expect(screen.getByText('terminal.skipPermissions')).toBeDefined();
-    fireEvent.click(screen.getByText('terminal.tabSsh'));
-    expect(screen.getByText('terminal.skipPermissions')).toBeDefined();
+    expect(screen.queryByText(/terminal\.startHere/)).toBeNull();
+    expect(screen.queryByText('terminal.skipPermissions')).toBeNull();
   });
 
   it('calls onSpawn when overlay opens for the first time', async () => {

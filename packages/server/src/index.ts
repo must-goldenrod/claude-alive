@@ -233,6 +233,7 @@ const broadcaster = new WSBroadcaster({
           : undefined,
         cwd: msg.cwd,
         mode: msg.mode ?? 'claude',
+        claudeVariant: msg.claudeVariant ?? 'claude',
         skipPermissions: msg.skipPermissions,
         initialCommand: msg.initialCommand,
         detectSshErrors: isSsh,

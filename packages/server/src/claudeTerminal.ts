@@ -42,6 +42,8 @@ export interface SpawnOptions {
   onSshError?: (err: { kind: SSHErrorKind; line: string }) => void;
   cwd?: string;
   mode?: 'claude' | 'shell';
+  /** Claude CLI entrypoint: `claude` (default) or `claude agents`. */
+  claudeVariant?: 'claude' | 'agents';
   skipPermissions?: boolean;
   initialCommand?: string;
   detectSshErrors?: boolean;
@@ -86,6 +88,7 @@ export class ClaudeTerminal {
       onSshError,
       cwd,
       mode = 'claude',
+      claudeVariant = 'claude',
       skipPermissions,
       initialCommand,
       detectSshErrors = false,
@@ -118,7 +121,9 @@ export class ClaudeTerminal {
       if (skipPermissions) {
         args.push('--dangerously-skip-permissions');
       }
-      const claudeCmd = args.length > 0 ? `claude ${args.join(' ')}` : 'claude';
+      // `claude` vs `claude agents` — same flag set, only the entrypoint differs.
+      const base = claudeVariant === 'agents' ? 'claude agents' : 'claude';
+      const claudeCmd = args.length > 0 ? `${base} ${args.join(' ')}` : base;
       this.ptyProc = pty.spawn(shell, ['-l', '-c', claudeCmd], {
         name: 'xterm-256color',
         cols,

@@ -30,6 +30,8 @@ export interface SpawnRequest {
   mode: TerminalSpawnMode;
   source: TerminalSource;
   initialCommand?: string;
+  /** Claude CLI entrypoint: `claude` (default) or `claude agents`. */
+  claudeVariant?: 'claude' | 'agents';
   /** UUID passed via `claude --session-id` to 1:1 pair the tab with a Claude session. */
   claudeSessionId?: string;
   /** Pre-existing Claude session UUID to resume via `claude --resume`. Wins over claudeSessionId. */
@@ -319,6 +321,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [cwdTab, setCwdTab] = useState<'local' | 'ssh'>('local');
+  const [claudeVariant, setClaudeVariant] = useState<'claude' | 'agents'>('claude');
   const [customPath, setCustomPath] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(true);
   const [_browsePath, setBrowsePath] = useState('~');
@@ -403,6 +406,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     mode?: TerminalSpawnMode;
     source?: TerminalSource;
     initialCommand?: string;
+    claudeVariant?: 'claude' | 'agents';
     sshPresetId?: string;
     label?: string;
     /** If set, pass to `claude --resume <uuid>`. Wins over newly-generated claudeSessionId. */
@@ -483,6 +487,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           mode,
           source,
           initialCommand: opts.initialCommand,
+          claudeVariant: opts.claudeVariant ?? 'claude',
           claudeSessionId: opts.resumeSessionId ? undefined : claudeSessionId,
           resumeSessionId: opts.resumeSessionId,
           displayName: opts.displayName,
@@ -597,9 +602,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         // Record this folder as recently-used so the picker can surface it next time.
         setRecentFolders(pushRecentFolder(cwd));
       }
-      createTab({ cwd, dangerousSkip: skip, mode: 'claude', source: 'local' });
+      createTab({ cwd, dangerousSkip: skip, mode: 'claude', source: 'local', claudeVariant });
     },
-    [createTab, skipPermissions],
+    [createTab, skipPermissions, claudeVariant],
   );
 
   const handleRemoveRecentFolder = useCallback((cwd: string) => {
@@ -1435,7 +1440,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                     <div style={{ padding: '8px 16px 4px', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {t('terminal.browseSection')}
                     </div>
-                    {/* Current path bar + select button */}
+                    {/* Current path bar — navigation only; the launch action
+                        now lives in the unified footer bar below. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderBottom: '1px solid var(--border-color)' }}>
                       {browseCurrentPath !== '/' && (
                         <button
@@ -1470,22 +1476,6 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                       }}>
                         <span dir="ltr">{browseCurrentPath}</span>
                       </div>
-                      <button
-                        onClick={() => handlePickCwd(browseCurrentPath)}
-                        style={{
-                          padding: '4px 12px',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          background: 'var(--accent-blue)',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {t('terminal.selectHere')}
-                      </button>
                     </div>
 
                     {/* Directory listing */}
@@ -1628,29 +1618,83 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
               )}
             </div>
 
-            {/* Footer: skip permissions — global option that applies to
-                every selection (local or SSH), pinned outside the tabs so
-                its scope is unambiguous. */}
-            <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)', flexShrink: 0 }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  color: skipPermissions ? 'var(--accent-orange, #d29922)' : 'var(--text-secondary)',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={skipPermissions}
-                  onChange={(e) => setSkipPermissions(e.target.checked)}
-                  style={{ accentColor: 'var(--accent-orange, #d29922)' }}
-                />
-                {t('terminal.skipPermissions')}
-              </label>
-            </div>
+            {/* Footer: unified launch bar (Local tab only). Groups "what to
+                run" (claude vs claude agents) + "how" (skip permissions) +
+                "where" (current path) + the primary start action in one place.
+                The SSH tab has no footer — presets launch on click. */}
+            {cwdTab === 'local' && (
+              <div style={{ borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)', flexShrink: 0, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  {/* Claude entrypoint segmented toggle */}
+                  <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                    {([
+                      { id: 'claude' as const, label: 'claude' },
+                      { id: 'agents' as const, label: 'claude agents' },
+                    ]).map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => setClaudeVariant(v.id)}
+                        title={v.id === 'agents' ? t('terminal.variantAgentsHint') : t('terminal.variantClaudeHint')}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fontFamily: 'var(--font-mono)',
+                          border: 'none',
+                          cursor: 'pointer',
+                          background: claudeVariant === v.id ? 'var(--accent-blue)' : 'transparent',
+                          color: claudeVariant === v.id ? '#fff' : 'var(--text-secondary)',
+                          transition: 'background 0.15s ease, color 0.15s ease',
+                        }}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Skip permissions — applies to whichever entrypoint is chosen */}
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      fontSize: 11,
+                      marginLeft: 'auto',
+                      color: skipPermissions ? 'var(--accent-orange, #d29922)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={skipPermissions}
+                      onChange={(e) => setSkipPermissions(e.target.checked)}
+                      style={{ accentColor: 'var(--accent-orange, #d29922)' }}
+                    />
+                    {t('terminal.skipPermissions')}
+                  </label>
+                </div>
+                {/* Resolved target path */}
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'rtl', textAlign: 'left' }}>
+                  <span dir="ltr">{browseCurrentPath}</span>
+                </div>
+                {/* Primary CTA: start the chosen command in the current folder */}
+                <button
+                  onClick={() => handlePickCwd(browseCurrentPath)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: 'var(--accent-blue)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {t('terminal.startHere')} →
+                </button>
+              </div>
+            )}
           </div>
         </div>,
         document.body,
