@@ -66,6 +66,51 @@ function shellSingleQuote(value: string): string {
 /** Claude CLI session UUIDs must be v4 format. Validate defensively. */
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export interface ClaudeCommandOptions {
+  claudeVariant?: 'claude' | 'agents';
+  skipPermissions?: boolean;
+  claudeSessionId?: string;
+  resumeSessionId?: string;
+  displayName?: string;
+}
+
+/**
+ * Build the shell command string for the chosen Claude entrypoint.
+ *
+ * `claude` (root) and `claude agents` (background-agent manager) do NOT share
+ * the same flag set — verified against Claude Code CLI 2.1.x:
+ *   - `claude`        : --session-id, --resume, -n, --dangerously-skip-permissions
+ *   - `claude agents` : --dangerously-skip-permissions only (of the ones we emit)
+ * Passing --session-id/--resume/-n to `claude agents` fails with
+ * `error: unknown option '--session-id'`, so those are omitted for that variant.
+ */
+export function buildClaudeCommand(opts: ClaudeCommandOptions): string {
+  const { claudeVariant = 'claude', skipPermissions, claudeSessionId, resumeSessionId, displayName } = opts;
+
+  if (claudeVariant === 'agents') {
+    const args: string[] = [];
+    if (skipPermissions) {
+      args.push('--dangerously-skip-permissions');
+    }
+    return args.length > 0 ? `claude agents ${args.join(' ')}` : 'claude agents';
+  }
+
+  const args: string[] = [];
+  // --resume takes precedence over --session-id (resuming a past conversation).
+  if (resumeSessionId && UUID_V4.test(resumeSessionId)) {
+    args.push('--resume', resumeSessionId);
+  } else if (claudeSessionId && UUID_V4.test(claudeSessionId)) {
+    args.push('--session-id', claudeSessionId);
+  }
+  if (displayName && displayName.trim().length > 0) {
+    args.push('-n', shellSingleQuote(displayName.trim()));
+  }
+  if (skipPermissions) {
+    args.push('--dangerously-skip-permissions');
+  }
+  return args.length > 0 ? `claude ${args.join(' ')}` : 'claude';
+}
+
 export class ClaudeTerminal {
   private ptyProc: pty.IPty | null = null;
   private onData: ((data: string) => void) | null = null;
@@ -108,22 +153,13 @@ export class ClaudeTerminal {
     const cwdResolved = cwd || homedir();
 
     if (mode === 'claude') {
-      const args: string[] = [];
-      // --resume takes precedence over --session-id (resuming a past conversation).
-      if (resumeSessionId && UUID_V4.test(resumeSessionId)) {
-        args.push('--resume', resumeSessionId);
-      } else if (claudeSessionId && UUID_V4.test(claudeSessionId)) {
-        args.push('--session-id', claudeSessionId);
-      }
-      if (displayName && displayName.trim().length > 0) {
-        args.push('-n', shellSingleQuote(displayName.trim()));
-      }
-      if (skipPermissions) {
-        args.push('--dangerously-skip-permissions');
-      }
-      // `claude` vs `claude agents` — same flag set, only the entrypoint differs.
-      const base = claudeVariant === 'agents' ? 'claude agents' : 'claude';
-      const claudeCmd = args.length > 0 ? `${base} ${args.join(' ')}` : base;
+      const claudeCmd = buildClaudeCommand({
+        claudeVariant,
+        skipPermissions,
+        claudeSessionId,
+        resumeSessionId,
+        displayName,
+      });
       this.ptyProc = pty.spawn(shell, ['-l', '-c', claudeCmd], {
         name: 'xterm-256color',
         cols,
