@@ -5,6 +5,7 @@ import { createPromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
 import { ClaudeTerminal } from './claudeTerminal.js';
+import { buildSpawnPlaceholderEvent } from './spawnPlaceholder.js';
 import { loadNames, getNames, saveName, removeName } from './nameStore.js';
 import {
   loadProjectNames,
@@ -208,6 +209,12 @@ const broadcaster = new WSBroadcaster({
       // distinguish UI-spawned sessions from external CLI invocations.
       if (msg.claudeSessionId) managedSessionIds.add(msg.claudeSessionId);
       if (msg.resumeSessionId) managedSessionIds.add(msg.resumeSessionId);
+      // `claude agents` can't echo our session id back via --session-id, so no
+      // real SessionStart hook ever matches this tab. Register a placeholder
+      // agent now so the sidebar shows it grouped by project, consistent with
+      // the terminal session. (No-op for the normal `claude` variant.)
+      const placeholder = buildSpawnPlaceholderEvent(msg);
+      if (placeholder) onEvent(placeholder);
       // If the client didn't supply a displayName, fall back to the stored project name for this cwd.
       // This is what makes the Claude CLI /resume picker, sidebar, and tab label all share one name.
       const resolvedDisplayName =
