@@ -17,21 +17,26 @@ export interface SpawnPlaceholderInput {
  * linked to that agent via the session id we mint and pass to the CLI through
  * `claude --session-id <uuid>`.
  *
- * `claude agents` (background-agent manager) does NOT accept `--session-id`
- * (see buildClaudeCommand), so no real SessionStart ever reports our minted id.
- * The result was that starting a `claude agents` tab showed nothing in the
- * sidebar and the sidebar/terminal session info diverged.
+ * Empirically, Claude Code CLI does NOT reliably fire the `SessionStart` hook
+ * with the id we passed via `--session-id`:
+ *   - `claude agents`: rejects `--session-id` outright (no hook ever matches).
+ *   - `claude`        : even with `--session-id <uuid>`, the SessionStart hook
+ *     payload often doesn't echo that uuid back (verified on CLI 2.1.x — UI-
+ *     spawned `claude --session-id ...` processes never appeared in
+ *     `/api/agents` while external `claude` invocations did).
+ * In both cases the sidebar/animation stays empty for UI-spawned tabs.
  *
- * For that variant we register a placeholder agent under the minted session id +
- * tab cwd. Returns null when a placeholder is unnecessary (shell mode, or the
- * normal `claude` variant where a real `--session-id` SessionStart will arrive).
+ * Fix: for any UI-spawned claude tab, synthesize a placeholder SessionStart
+ * with the minted id + tab cwd. If the real SessionStart later arrives with the
+ * same id (the happy path for `claude`), `SessionStore.createAgent` is
+ * idempotent on (sessionId, cwd) and just refreshes the entry — no harm done.
+ * Shell mode (SSH presets / freeform terminals) is still a no-op since there
+ * is no Claude session to anchor on.
  */
 export function buildSpawnPlaceholderEvent(
   msg: SpawnPlaceholderInput,
 ): HookEventPayload | null {
   if ((msg.mode ?? 'claude') !== 'claude') return null;
-  // Only the `agents` variant cannot echo our session id back via the CLI.
-  if ((msg.claudeVariant ?? 'claude') !== 'agents') return null;
 
   const sessionId = msg.resumeSessionId || msg.claudeSessionId;
   if (!sessionId) return null;
