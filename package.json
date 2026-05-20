@@ -1,6 +1,6 @@
 {
   "name": "claude-alive",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "private": true,
   "description": "Real-time animated UI for Claude Code powered by hooks",
   "license": "MIT",

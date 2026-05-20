@@ -2,7 +2,17 @@
 
 All notable changes to claude-alive.
 
+## Unreleased (2026-05-20)
 
+### New Features
+
+-  claude agents 명령 선택 + 통합 실행 바 / Add claude agents entrypoint with unified launch bar (#25)
+
+### Bug Fixes
+
+-  기본 claude 변형에도 placeholder SessionStart 적용 / Apply placeholder SessionStart to default claude variant
+-  claude agents 사이드바 미표시/세션 불일치 수정 / Fix claude agents sidebar mismatch (#27)
+-  claude agents 에서 --session-id 옵션 오류 수정 / Fix unknown --session-id error for claude agents (#26)
 
 ## v0.5.1 (2026-05-14)
 
