@@ -531,6 +531,23 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     return () => window.removeEventListener('terminal:createTab', handler);
   }, [openLocalPicker]);
 
+  // Reload/close guard. Browsers nuke the xterm DOM + server PTYs when the page
+  // reloads, which is easy to trigger accidentally (Cmd-R). Show the native
+  // "Leave site?" prompt whenever there is at least one live tab. We count only
+  // tabs that haven't exited — closed tabs left in the bar are not worth a prompt.
+  // Note: per spec, modern browsers ignore the custom message and show their own.
+  const liveTabCount = tabs.filter((t) => !t.exited).length;
+  useEffect(() => {
+    if (liveTabCount === 0) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Required for legacy browsers; modern ones display a generic message.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [liveTabCount]);
+
   // Allow sidebar items (agents / SSH presence) to focus a specific terminal tab.
   // Detail accepts either { tabId } (direct match) or { sessionId } (matched via Tab.claudeSessionId).
   useEffect(() => {
