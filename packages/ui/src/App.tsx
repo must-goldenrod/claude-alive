@@ -3,7 +3,8 @@ import type { ReactNode, MutableRefObject } from 'react';
 import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
 import { HeaderBar } from './components/HeaderBar.tsx';
-import { useWebSocket, playErrorSound } from './views/dashboard/hooks/useWebSocket.ts';
+import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
+import { playErrorSound, playResourceAlertSound, installAudioUnlock } from './services/sound.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
@@ -87,6 +88,11 @@ export default function App() {
 
   // Snapshot of agents for label lookup in toasts (avoids useWebSocket callback identity churn)
   const agentsSnapshotRef = useRef<Map<string, { displayName: string | null }>>(new Map());
+
+  // Unlock audio on the first user interaction. Browsers block programmatic
+  // playback until the page has a user gesture, so event-driven notification
+  // sounds stay silent on a dashboard that's only watched. This primes them.
+  useEffect(() => installAudioUnlock(), []);
 
   // Project names (cwd → name) — single source of truth for project labels across sidebar/tabs/CLI.
   const [projectNames, setProjectNames] = useState<Record<string, string>>({});
@@ -187,13 +193,7 @@ export default function App() {
       (kind === 'memory' && alerts.memory.soundEnabled) ||
       (kind === 'both' && (alerts.cpu.soundEnabled || alerts.memory.soundEnabled));
     if (soundEnabled) {
-      try {
-        const audio = new Audio('/assets/error_sound.mp3');
-        audio.volume = settings.sound.error.volume;
-        audio.play().catch(() => {});
-      } catch {
-        // Audio unsupported — silently ignore
-      }
+      playResourceAlertSound(settings.sound.error.volume);
     }
   }, [systemMetrics, resourceAlert]);
 
