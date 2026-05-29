@@ -164,6 +164,25 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 }
                 onTest={() => playTestSound('error', settings.sound.error.volume)}
               />
+              <SoundSection
+                titleKey="settings.sound.waiting"
+                defaultTitle="Decision request sound"
+                enabled={settings.sound.waiting.enabled}
+                volume={settings.sound.waiting.volume}
+                onToggle={(enabled) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    sound: { ...prev.sound, waiting: { ...prev.sound.waiting, enabled } },
+                  }))
+                }
+                onVolume={(volume) =>
+                  setSettings(prev => ({
+                    ...prev,
+                    sound: { ...prev.sound, waiting: { ...prev.sound.waiting, volume } },
+                  }))
+                }
+                onTest={() => playTestSound('waiting', settings.sound.waiting.volume)}
+              />
             </>
           )}
 

@@ -22,6 +22,7 @@
     "sound": {
       "completion": { "title": "완료 사운드" },
       "error": { "title": "에러 사운드" },
+      "waiting": { "title": "의사결정 요청 사운드" },
       "volume": "볼륨",
       "test": "테스트"
     },
@@ -187,6 +188,7 @@
     "newTab": "새 탭",
     "tabLabel": "터미널 {{n}}",
     "exited": "종료됨",
+    "status": { "waiting": "대기중" },
     "selectWorkingDir": "작업 디렉토리 선택",
     "customPathPlaceholder": "~/path/to/project",
     "customPathHint": "경로를 입력하고 Enter를 누르거나, 위의 프로젝트를 선택하세요",

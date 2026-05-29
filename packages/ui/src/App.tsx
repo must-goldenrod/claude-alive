@@ -4,7 +4,7 @@ import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
 import { HeaderBar } from './components/HeaderBar.tsx';
 import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
-import { playErrorSound, playResourceAlertSound, installAudioUnlock } from './services/sound.ts';
+import { playErrorSound, playResourceAlertSound, playWaitingSound, installAudioUnlock } from './services/sound.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
@@ -89,6 +89,12 @@ export default function App() {
   // Snapshot of agents for label lookup in toasts (avoids useWebSocket callback identity churn)
   const agentsSnapshotRef = useRef<Map<string, { displayName: string | null }>>(new Map());
 
+  // Last broadcast state per session. Used to fire the decision-request sound only
+  // on the *transition* into `waiting`, not on every `waiting` re-broadcast — the
+  // FSM keeps an agent in the sticky `waiting` state across later tool events, so
+  // firing per-message would ring the chime repeatedly while Claude resumes work.
+  const prevStateRef = useRef<Map<string, string>>(new Map());
+
   // Unlock audio on the first user interaction. Browsers block programmatic
   // playback until the page has a user gesture, so event-driven notification
   // sounds stay silent on a dashboard that's only watched. This primes them.
@@ -119,8 +125,13 @@ export default function App() {
     if (msg.type === 'project:names') {
       setProjectNames(msg.names);
     }
+    if (msg.type === 'agent:despawn') {
+      prevStateRef.current.delete(msg.sessionId);
+    }
     if (msg.type === 'agent:state') {
       const label = agentsSnapshotRef.current.get(msg.sessionId)?.displayName || msg.sessionId.slice(0, 8);
+      const prevState = prevStateRef.current.get(msg.sessionId);
+      prevStateRef.current.set(msg.sessionId, msg.state);
       if (msg.state === 'waiting') {
         addToastRef.current('warning', label, 'notifications.needsPermission', `${msg.sessionId}:waiting`);
         // Native notification (only fires if permission granted, enabled, and tab unfocused).
@@ -130,6 +141,13 @@ export default function App() {
           tag: `${msg.sessionId}:waiting`,
           requireInteraction: true,
         });
+        // Audible cue so a decision request is noticed even when the dashboard
+        // is in the background. Fire only on the transition into `waiting` — the
+        // state is sticky and re-broadcasts on later tool events, which would
+        // otherwise replay the chime while Claude resumes work after the answer.
+        if (prevState !== 'waiting') {
+          playWaitingSound(msg.sessionId);
+        }
       } else if (msg.state === 'error') {
         addToastRef.current('error', label, 'notifications.errorOccurred', `${msg.sessionId}:error`);
         fireNotification({

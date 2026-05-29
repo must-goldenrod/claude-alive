@@ -22,11 +22,16 @@
 
 import { getSettings } from './settings';
 
-type SoundKind = 'completion' | 'error';
+type SoundKind = 'completion' | 'error' | 'waiting';
 
 const URLS: Record<SoundKind, string> = {
   completion: '/assets/complete_sound.mp3',
   error: '/assets/error_sound.mp3',
+  // No dedicated asset yet — reuse the (pleasant, attention-getting) completion
+  // chime as the "Claude needs your decision" tone. Kept as its own kind so it
+  // has an independent settings toggle and dedupe namespace, and so a bespoke
+  // asset can be dropped in here later without touching callers.
+  waiting: '/assets/complete_sound.mp3',
 };
 
 // Debounce window per dedupe key, to avoid double-firing when both
@@ -120,6 +125,7 @@ export function installAudioUnlock(): () => void {
       audioUnlocked = true;
       prime('completion');
       prime('error');
+      prime('waiting');
     }
     remove();
   };
@@ -168,6 +174,17 @@ export function playErrorSound(sessionId = 'global'): void {
   const cfg = getSettings().sound.error;
   if (!cfg.enabled) return;
   play('error', `error:${sessionId}`, cfg.volume);
+}
+
+/**
+ * Play the "needs your decision" tone when an agent enters `waiting` — Claude is
+ * asking the user a question, requesting permission, or waiting on plan approval.
+ * Gated by the user's settings; debounced per session like the other sounds.
+ */
+export function playWaitingSound(sessionId = 'global'): void {
+  const cfg = getSettings().sound.waiting;
+  if (!cfg.enabled) return;
+  play('waiting', `waiting:${sessionId}`, cfg.volume);
 }
 
 /**
