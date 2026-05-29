@@ -22,11 +22,16 @@
 
 import { getSettings } from './settings';
 
-type SoundKind = 'completion' | 'error';
+type SoundKind = 'completion' | 'error' | 'waiting';
 
 const URLS: Record<SoundKind, string> = {
   completion: '/assets/complete_sound.mp3',
   error: '/assets/error_sound.mp3',
+  // No dedicated asset yet — reuse the (pleasant, attention-getting) completion
+  // chime as the "Claude needs your decision" tone. Kept as its own kind so it
+  // has an independent settings toggle and dedupe namespace, and so a bespoke
+  // asset can be dropped in here later without touching callers.
+  waiting: '/assets/complete_sound.mp3',
 };
 
 // Debounce window per dedupe key, to avoid double-firing when both
@@ -120,6 +125,7 @@ export function installAudioUnlock(): () => void {
       audioUnlocked = true;
       prime('completion');
       prime('error');
+      prime('waiting');
     }
     remove();
   };
@@ -171,12 +177,40 @@ export function playErrorSound(sessionId = 'global'): void {
 }
 
 /**
+ * Play the "needs your decision" tone when an agent enters `waiting` — Claude is
+ * asking the user a question, requesting permission, or waiting on plan approval.
+ * Gated by the user's settings; debounced per session like the other sounds.
+ */
+export function playWaitingSound(sessionId = 'global'): void {
+  const cfg = getSettings().sound.waiting;
+  if (!cfg.enabled) return;
+  play('waiting', `waiting:${sessionId}`, cfg.volume);
+}
+
+/**
  * Play the error tone for a CPU/memory resource alert. Routed through the shared
  * error element so it benefits from the same unlock and debounce as agent errors.
  * The caller (resource-alert effect) owns its own enable/threshold/cooldown gating.
  */
 export function playResourceAlertSound(volume: number): void {
   play('error', 'alert:resource', volume);
+}
+
+/**
+ * Reset all module-level singleton state. TEST-ONLY.
+ *
+ * The test harness relies on `vi.resetModules()` for a clean module per test,
+ * but under shared worker pools (CI runs many files in one worker) the module
+ * registry isn't always re-executed, so the cached audio `elements`, dedupe map
+ * and unlock flag leak across tests — causing reused (cached) elements to be
+ * invisible to a per-test-reset `created` array. Calling this from the test
+ * loader makes state deterministic regardless of re-import. Never call in prod.
+ */
+export function __resetSoundStateForTests(): void {
+  for (const k of Object.keys(elements)) delete elements[k as SoundKind];
+  lastPlayedAt.clear();
+  audioUnlocked = false;
+  warnedBlocked = false;
 }
 
 /**

@@ -39,6 +39,10 @@ async function loadSound() {
   vi.resetModules();
   const settings = await import('../services/settings');
   const sound = await import('../services/sound');
+  // Force-clear module singletons. resetModules alone is unreliable under shared
+  // worker pools (CI), where cached audio elements leak across tests and read as
+  // 0 plays against the per-test `FakeAudio.created` reset.
+  sound.__resetSoundStateForTests();
   return { sound, settings };
 }
 
@@ -128,8 +132,8 @@ describe('sound service', () => {
     sound.installAudioUnlock();
     window.dispatchEvent(new Event('pointerdown'));
     expect(sound.isAudioUnlocked()).toBe(true);
-    // Priming plays both completion and error elements (muted) within the gesture.
-    expect(FakeAudio.created.filter(a => a.playCalls > 0).length).toBe(2);
+    // Priming plays the completion, error and waiting elements (muted) within the gesture.
+    expect(FakeAudio.created.filter(a => a.playCalls > 0).length).toBe(3);
   });
 
   it('does not re-unlock on subsequent gestures', async () => {
@@ -147,6 +151,25 @@ describe('sound service', () => {
     sound.playResourceAlertSound(0.5);
     expect(totalPlays()).toBe(1);
     expect(FakeAudio.created.find(a => a.playCalls > 0)!.volume).toBeCloseTo(0.5);
+  });
+
+  it('plays the waiting sound when enabled', async () => {
+    const { sound } = await loadSound();
+    sound.playWaitingSound('s1');
+    expect(totalPlays()).toBe(1);
+    const played = FakeAudio.created.find(a => a.playCalls > 0)!;
+    expect(played.volume).toBeCloseTo(0.7);
+    expect(played.muted).toBe(false);
+  });
+
+  it('does not play the waiting sound when disabled', async () => {
+    const { sound, settings } = await loadSound();
+    settings.setSettings(prev => ({
+      ...prev,
+      sound: { ...prev.sound, waiting: { enabled: false, volume: 0.7 } },
+    }));
+    sound.playWaitingSound('s1');
+    expect(totalPlays()).toBe(0);
   });
 
   it('test sound plays even when that sound type is disabled', async () => {

@@ -22,6 +22,7 @@
     "sound": {
       "completion": { "title": "Completion sound" },
       "error": { "title": "Error sound" },
+      "waiting": { "title": "Decision request sound" },
       "volume": "Volume",
       "test": "Test"
     },
@@ -187,6 +188,7 @@
     "newTab": "New tab",
     "tabLabel": "Terminal {{n}}",
     "exited": "Exited",
+    "status": { "waiting": "Waiting" },
     "selectWorkingDir": "Select working directory",
     "customPathPlaceholder": "~/path/to/project",
     "customPathHint": "Enter a path and press Enter, or select a project above",

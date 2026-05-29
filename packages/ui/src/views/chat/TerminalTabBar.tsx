@@ -90,6 +90,12 @@ export function TerminalTabBar({
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const icon = statusIcon(tab);
+        // Persistent textual status next to the tab name. Only the `waiting`
+        // state is surfaced as text — it's the sticky, user-blocking state
+        // ("Claude needs your decision") that must be unmistakable. `active`
+        // toggles too rapidly (per terminal output) to read as text, so it
+        // stays a colour sweep only.
+        const waitingLabel = !tab.exited && tab.status === 'waiting' ? t('terminal.status.waiting') : null;
         const sshBorder = tab.source === 'ssh';
         const isDragging = dragIndex === index;
         const isDragTarget = overIndex === index && dragIndex !== null && dragIndex !== index;
@@ -180,6 +186,18 @@ export function TerminalTabBar({
             )}
             <span style={{ opacity: tab.exited ? 0.65 : 1, display: 'flex', alignItems: 'center', gap: 4 }}>
               {tab.label}
+              {waitingLabel && (
+                <span
+                  style={{
+                    color: 'var(--accent-amber, #ff9f43)',
+                    fontWeight: 600,
+                    fontSize: 10,
+                    lineHeight: 1,
+                  }}
+                >
+                  ({waitingLabel})
+                </span>
+              )}
               {icon && (
                 <span style={{ color: statusIconColor(tab), fontSize: 10, lineHeight: 1 }}>
                   {icon}

@@ -213,6 +213,8 @@ export interface AppSettings {
   sound: {
     completion: { enabled: boolean; volume: number };
     error: { enabled: boolean; volume: number };
+    /** Plays when an agent enters the `waiting` state — Claude needs a decision/answer. */
+    waiting: { enabled: boolean; volume: number };
   };
   terminal: {
     themeId: string;
@@ -238,6 +240,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sound: {
     completion: { enabled: true, volume: 0.7 },
     error: { enabled: true, volume: 0.7 },
+    waiting: { enabled: true, volume: 0.7 },
   },
   terminal: {
     themeId: 'github-dark',
@@ -285,6 +288,10 @@ function sanitize(raw: unknown): AppSettings {
       error: {
         enabled: typeof sound.error?.enabled === 'boolean' ? sound.error.enabled : DEFAULT_SETTINGS.sound.error.enabled,
         volume: clamp(Number(sound.error?.volume ?? DEFAULT_SETTINGS.sound.error.volume), 0, 1),
+      },
+      waiting: {
+        enabled: typeof sound.waiting?.enabled === 'boolean' ? sound.waiting.enabled : DEFAULT_SETTINGS.sound.waiting.enabled,
+        volume: clamp(Number(sound.waiting?.volume ?? DEFAULT_SETTINGS.sound.waiting.volume), 0, 1),
       },
     },
     terminal: {
