@@ -9,6 +9,7 @@ import {
   DEFAULT_SETTINGS,
   type CursorStyle,
 } from '../services/settings';
+import { playTestSound } from '../services/sound';
 
 interface SettingsModalProps {
   open: boolean;
@@ -142,11 +143,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     sound: { ...prev.sound, completion: { ...prev.sound.completion, volume } },
                   }))
                 }
-                onTest={() => {
-                  const audio = new Audio('/assets/complete_sound.mp3');
-                  audio.volume = settings.sound.completion.volume;
-                  audio.play().catch(() => {});
-                }}
+                onTest={() => playTestSound('completion', settings.sound.completion.volume)}
               />
               <SoundSection
                 titleKey="settings.sound.error"
@@ -165,11 +162,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     sound: { ...prev.sound, error: { ...prev.sound.error, volume } },
                   }))
                 }
-                onTest={() => {
-                  const audio = new Audio('/assets/error_sound.mp3');
-                  audio.volume = settings.sound.error.volume;
-                  audio.play().catch(() => {});
-                }}
+                onTest={() => playTestSound('error', settings.sound.error.volume)}
               />
             </>
           )}
