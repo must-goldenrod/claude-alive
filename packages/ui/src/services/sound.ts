@@ -197,6 +197,23 @@ export function playResourceAlertSound(volume: number): void {
 }
 
 /**
+ * Reset all module-level singleton state. TEST-ONLY.
+ *
+ * The test harness relies on `vi.resetModules()` for a clean module per test,
+ * but under shared worker pools (CI runs many files in one worker) the module
+ * registry isn't always re-executed, so the cached audio `elements`, dedupe map
+ * and unlock flag leak across tests — causing reused (cached) elements to be
+ * invisible to a per-test-reset `created` array. Calling this from the test
+ * loader makes state deterministic regardless of re-import. Never call in prod.
+ */
+export function __resetSoundStateForTests(): void {
+  for (const k of Object.keys(elements)) delete elements[k as SoundKind];
+  lastPlayedAt.clear();
+  audioUnlocked = false;
+  warnedBlocked = false;
+}
+
+/**
  * Play a sound immediately for the Settings "Test" buttons. Bypasses the
  * enabled toggle and debounce because it always runs inside a user-gesture
  * click handler — its purpose is to preview the chosen volume.

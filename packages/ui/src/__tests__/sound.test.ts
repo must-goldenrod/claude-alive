@@ -39,6 +39,10 @@ async function loadSound() {
   vi.resetModules();
   const settings = await import('../services/settings');
   const sound = await import('../services/sound');
+  // Force-clear module singletons. resetModules alone is unreliable under shared
+  // worker pools (CI), where cached audio elements leak across tests and read as
+  // 0 plays against the per-test `FakeAudio.created` reset.
+  sound.__resetSoundStateForTests();
   return { sound, settings };
 }
 
