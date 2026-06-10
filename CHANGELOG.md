@@ -2,7 +2,19 @@
 
 All notable changes to claude-alive.
 
-## Unreleased (2026-05-20)
+## Unreleased (2026-06-10)
+
+### New Features
+
+-  의사결정 요청 알림 사운드 + 탭 대기중 상태 표시 / Add decision-request sound and waiting tab status (#30)
+
+### Bug Fixes
+
+-  주황색 대기 상태를 의사결정 요청에만 한정 / Limit amber waiting state to decision requests (#31)
+-  훅 fire-and-forget 로 인한 프롬프트 수집 유실 수정 / Fix prompt collection loss from fire-and-forget hook (#29)
+-  알림 사운드 자동재생 차단 해결 / Fix notification sounds blocked by autoplay policy (#28)
+
+## v0.5.7 (2026-05-20)
 
 ### New Features
 
@@ -13,7 +25,6 @@ All notable changes to claude-alive.
 -  기본 claude 변형에도 placeholder SessionStart 적용 / Apply placeholder SessionStart to default claude variant
 -  claude agents 사이드바 미표시/세션 불일치 수정 / Fix claude agents sidebar mismatch (#27)
 -  claude agents 에서 --session-id 옵션 오류 수정 / Fix unknown --session-id error for claude agents (#26)
-
 ## v0.5.1 (2026-05-14)
 
 ### New Features
