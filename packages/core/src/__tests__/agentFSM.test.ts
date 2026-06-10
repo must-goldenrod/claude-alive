@@ -25,8 +25,11 @@ describe('agentFSM', () => {
       expect(transition('spawning', 'SessionEnd').newState).toBe('despawning');
     });
 
-    it('spawning → waiting on Notification (user attention)', () => {
-      expect(transition('spawning', 'Notification').newState).toBe('waiting');
+    it('spawning stays spawning on Notification (no decision routing at FSM level)', () => {
+      // Raw Notification no longer forces waiting — decision-request
+      // classification happens in SessionStore, which remaps to
+      // PermissionRequest only for genuine blocked-on-user messages.
+      expect(transition('spawning', 'Notification').newState).toBe('spawning');
     });
 
     // --- idle state ---
@@ -42,8 +45,8 @@ describe('agentFSM', () => {
       expect(transition('idle', 'TaskCompleted').newState).toBe('done');
     });
 
-    it('idle → waiting on Notification (Claude needs attention)', () => {
-      expect(transition('idle', 'Notification').newState).toBe('waiting');
+    it('idle stays idle on Notification (idle-60s prompt is not a decision)', () => {
+      expect(transition('idle', 'Notification').newState).toBe('idle');
     });
 
     it('idle → waiting on PreToolUse(AskUserQuestion)', () => {
@@ -54,8 +57,8 @@ describe('agentFSM', () => {
       expect(transition('active', 'PreToolUse', 'AskUserQuestion').newState).toBe('waiting');
     });
 
-    it('active → waiting on Notification', () => {
-      expect(transition('active', 'Notification').newState).toBe('waiting');
+    it('active stays active on Notification (no decision routing at FSM level)', () => {
+      expect(transition('active', 'Notification').newState).toBe('active');
     });
 
     // --- listening state ---

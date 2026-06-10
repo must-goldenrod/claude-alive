@@ -85,22 +85,25 @@ describe('SessionStore', () => {
       expect(agent!.state).toBe('waiting');
     });
 
-    it('Notification with idle message also triggers waiting', () => {
-      // Any Notification means "Claude is blocked on the user" — including
-      // the idle-60s prompt — so all of them flip the agent to amber.
+    it('Notification with idle message does NOT trigger waiting', () => {
+      // The idle-60s prompt ("waiting for your input") is NOT a decision
+      // request — Claude is simply between turns, which the completion ring
+      // already signals. Amber `waiting` is reserved for blocked-on-decision.
       store.processEvent(makePayload('SessionStart', 'sess-1'));
       store.processEvent(makePayload('Stop', 'sess-1'));
       const agent = store.processEvent(makePayload('Notification', 'sess-1', {
         message: 'Claude is waiting for your input',
       }));
-      expect(agent!.state).toBe('waiting');
+      expect(agent!.state).toBe('idle');
     });
 
-    it('Notification without message still triggers waiting', () => {
+    it('Notification without message does NOT trigger waiting', () => {
+      // No decision keyword → treat as a non-blocking notification and keep
+      // the current state instead of forcing amber.
       store.processEvent(makePayload('SessionStart', 'sess-1'));
       store.processEvent(makePayload('PreToolUse', 'sess-1', { tool_name: 'Read' }));
       const agent = store.processEvent(makePayload('Notification', 'sess-1'));
-      expect(agent!.state).toBe('waiting');
+      expect(agent!.state).toBe('active');
     });
 
     it('PreToolUse after permission grant keeps waiting (sticky question marker)', () => {

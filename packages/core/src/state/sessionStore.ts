@@ -82,23 +82,27 @@ export class SessionStore {
     }
 
     let toolName = data.tool_name ?? undefined;
-    // Claude Code's `Notification` hook fires whenever Claude needs the
-    // user to do something — permission grants, idle-60s "waiting for
-    // input" prompts, decision pings. From the dashboard's perspective
-    // they all mean the same thing: the agent is blocked on the user.
-    // Remap every Notification to the synthetic `PermissionRequest`
-    // event so the FSM enters the sticky `waiting` (amber) state.
-    // (Previously this only matched messages containing "permission"
-    // or "needs your", which silently dropped idle-wait notifications
-    // and made the amber state feel flaky.)
+    // Claude Code's `Notification` hook is overloaded — it fires for two
+    // semantically different situations:
+    //   1. Decision requests — "Claude needs your permission to use X".
+    //      The task is BLOCKED until the user responds. This is what the
+    //      amber `waiting` state exists to surface.
+    //   2. Idle reminders — "Claude is waiting for your input" (the 60s
+    //      no-input prompt). Claude is simply between turns; no decision is
+    //      pending and the completion ring already signals this. Forcing
+    //      these to amber would dilute the "needs a decision" meaning.
+    // Only remap genuine decision requests to the synthetic
+    // `PermissionRequest` event; let idle/other notifications fall through
+    // to the FSM, which leaves the current state untouched.
     let effectiveEvent = event;
     if (event === 'Notification') {
-      effectiveEvent = 'PermissionRequest';
-      if (!toolName && data.message) {
-        const m =
-          data.message.match(/permission to use ([A-Za-z][\w-]*)/i) ??
-          data.message.match(/use ([A-Za-z][\w-]*)/i);
-        if (m) toolName = m[1];
+      const message = data.message ?? '';
+      const m =
+        message.match(/permission to use ([A-Za-z][\w-]*)/i) ??
+        message.match(/needs your (?:permission|approval|confirmation)(?: to use ([A-Za-z][\w-]*))?/i);
+      if (m) {
+        effectiveEvent = 'PermissionRequest';
+        if (!toolName && m[1]) toolName = m[1];
       }
     }
     const result = transition(agent.state, effectiveEvent, toolName);
