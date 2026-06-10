@@ -11,7 +11,6 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
   spawning: {
     UserPromptSubmit: 'listening',
     PreToolUse: 'active',
-    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
   },
@@ -20,16 +19,11 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     PreToolUse: 'active',
     PermissionRequest: 'waiting',
     SessionEnd: 'despawning',
-    // Claude Code fires `Notification` whenever it needs user attention
-    // (permission prompts, idle reminders, AskUserQuestion completion).
-    // Route to `waiting` so the tab turns orange instead of silently staying idle.
-    Notification: 'waiting',
     TaskCompleted: 'done',
   },
   listening: {
     PreToolUse: 'active',
     PermissionRequest: 'waiting',
-    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     TaskCompleted: 'done',
@@ -39,7 +33,6 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     PostToolUseFailure: 'error',
     PreToolUse: 'active',
     PermissionRequest: 'waiting',
-    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     SubagentStart: 'active',
@@ -47,25 +40,24 @@ const TRANSITIONS: Record<AgentState, Partial<Record<HookEventName, AgentState>>
     TaskCompleted: 'done',
   },
   waiting: {
-    // Sticky question state: once Claude asks the user for anything
-    // (permission, input, decision), the UI stays amber until the user
-    // explicitly responds with a new prompt or the session ends.
-    // Crucially this does NOT exit on PreToolUse/PostToolUse — those
-    // can fire moments after permission is granted, and exiting there
-    // would make the question flash by too fast to notice. The user
-    // chose this trade-off explicitly: keep the question marker
-    // visible until they prompt again, then overwrite from there.
+    // Sticky decision state: `waiting` (amber) means Claude is BLOCKED on a
+    // user decision (permission grant, AskUserQuestion, plan approval) and
+    // the task cannot proceed until the user responds. It is NOT a generic
+    // idle/between-turns marker — plain idleness stays `idle` and is already
+    // signalled by the completion ring. Once entered, the UI stays amber
+    // until the user explicitly responds with a new prompt or the session
+    // ends. Crucially this does NOT exit on PreToolUse/PostToolUse — those
+    // can fire moments after permission is granted, and exiting there would
+    // make the question flash by too fast to notice.
     UserPromptSubmit: 'listening',
     Stop: 'idle',
     SessionEnd: 'despawning',
-    Notification: 'waiting',
     TaskCompleted: 'done',
   },
   error: {
     PreToolUse: 'active',
     UserPromptSubmit: 'listening',
     PermissionRequest: 'waiting',
-    Notification: 'waiting',
     Stop: 'idle',
     SessionEnd: 'despawning',
     TaskCompleted: 'done',
