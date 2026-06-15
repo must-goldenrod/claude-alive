@@ -2,7 +2,9 @@
 
 All notable changes to claude-alive.
 
-## Unreleased (2026-06-10)
+
+
+## v0.5.8 (2026-06-10)
 
 ### New Features
 
@@ -13,7 +15,6 @@ All notable changes to claude-alive.
 -  주황색 대기 상태를 의사결정 요청에만 한정 / Limit amber waiting state to decision requests (#31)
 -  훅 fire-and-forget 로 인한 프롬프트 수집 유실 수정 / Fix prompt collection loss from fire-and-forget hook (#29)
 -  알림 사운드 자동재생 차단 해결 / Fix notification sounds blocked by autoplay policy (#28)
-
 ## v0.5.7 (2026-05-20)
 
 ### New Features
