@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import {
   composeFinalScore,
   computeConfidence,
@@ -31,7 +31,6 @@ function safeReadFile(path: string, maxBytes: number): string | null {
   const size = statSync(path).size;
   if (size <= maxBytes) return readFileSync(path, 'utf8');
   // tail
-  const { openSync, readSync, closeSync } = require('node:fs') as typeof import('node:fs');
   const fd = openSync(path, 'r');
   try {
     const start = size - maxBytes;
