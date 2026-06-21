@@ -6,3 +6,8 @@ npm-dist/
 .DS_Store
 .env
 .env.*
+
+# Efficio POC: 생성 데이터(사용자 비공개 세션 제목·프롬프트 포함) — 커밋 금지
+docs/poc/*.csv
+# 적대 검증 에이전트 산출물(임시)
+/output/
