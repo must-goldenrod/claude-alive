@@ -25,6 +25,7 @@ def extract_session(path: str) -> dict | None:
     usage: dict[str, dict] = {}      # message.id -> usage (insertion order = chronological)
     read_paths: list[str] = []
     edit_paths: list[str] = []
+    bash_cmds: list[str] = []
     turns = assistant_msgs = tool_calls = 0
     cwd = git_branch = ai_title = ""
     ts_first = ts_last = None
@@ -58,7 +59,7 @@ def extract_session(path: str) -> dict | None:
                         turns += 1
                 elif etype == "assistant":
                     assistant_msgs += 1
-                    tool_calls += _collect_assistant(entry, usage, read_paths, edit_paths)
+                    tool_calls += _collect_assistant(entry, usage, read_paths, edit_paths, bash_cmds)
     except OSError:
         return None
 
@@ -83,6 +84,7 @@ def extract_session(path: str) -> dict | None:
         "w2_raw": max(0, tokens["cache_creation"] - tokens["_first_cache_creation"]),
         "w3_raw": len(read_paths) - len(set(read_paths)),
         "wc_raw": len(edit_paths) - len(set(edit_paths)),
+        "bash_raw": len(bash_cmds) - len(set(bash_cmds)),  # 행동축: Bash 시행착오 반복(13.5)
     }
 
 
@@ -98,7 +100,7 @@ def _is_real_prompt(entry: dict) -> bool:
     return False
 
 
-def _collect_assistant(entry, usage, read_paths, edit_paths) -> int:
+def _collect_assistant(entry, usage, read_paths, edit_paths, bash_cmds) -> int:
     """assistant 메시지에서 usage/도구호출 수집. 반환: tool_use 수."""
     msg = entry.get("message", {})
     mid, u = msg.get("id"), msg.get("usage")
@@ -117,6 +119,8 @@ def _collect_assistant(entry, usage, read_paths, edit_paths) -> int:
             fp = inp.get("file_path") or inp.get("notebook_path")
             if fp:
                 edit_paths.append(fp)
+        elif name == "Bash" and inp.get("command"):
+            bash_cmds.append(inp["command"].strip()[:60])  # 정규화(앞 60자)
     return tool_uses
 
 

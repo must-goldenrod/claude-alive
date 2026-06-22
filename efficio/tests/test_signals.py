@@ -75,6 +75,29 @@ class TestExtractSession(unittest.TestCase):
         # input 5*5 + output 10*5 + cache_creation 1650 + cache_read 0
         self.assertEqual(rec["total_tokens"], 25 + 50 + 1650 + 0)
 
+    def test_bash_repeats(self):
+        def bash_asst(mid, cmd):
+            return {"type": "assistant", "message": {
+                "id": mid,
+                "usage": {"input_tokens": 1, "output_tokens": 1,
+                          "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+                "content": [{"type": "tool_use", "name": "Bash", "input": {"command": cmd}}]}}
+        path = _write_jsonl([
+            {"type": "user", "message": {"content": "p1"}},
+            bash_asst("m1", "ls -la"),
+            {"type": "user", "message": {"content": "p2"}},
+            bash_asst("m2", "ls -la"),       # dup
+            bash_asst("m3", "git status"),
+            {"type": "user", "message": {"content": "p3"}},
+            bash_asst("m4", "ls -la"),       # dup again
+        ])
+        try:
+            rec = signals.extract_session(path)
+            # ls -la ×3 + git status ×1 → 4 bash, 고유 2 → bash_raw = 2
+            self.assertEqual(rec["bash_raw"], 2)
+        finally:
+            os.remove(path)
+
     def test_below_threshold_returns_none(self):
         path = _write_jsonl([
             {"type": "user", "message": {"content": "only one"}},

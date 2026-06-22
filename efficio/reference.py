@@ -10,15 +10,16 @@ import numpy as np
 
 from .residual import percentile_rank, size_factor, theil_sen
 
-# 검증 상태별 축(13.2~13.4). 단일 '주축' 없음 — 두 기준(주관 H1 / 객관 rework)이 갈림.
-#   subj    = 주관 평정과 상관(H1)      obj-weak = 객관 rework와 약상관
-#   none    = 어느 기준에서도 미검증
+# 검증 상태·축군(13.2~13.5). 단일 '주축' 없음 — MTMM에서 2차원(체감/행동)이 갈림(13.5).
+#   cluster 체감 = 주관 라벨과 수렴(W2)   cluster 행동 = 객관 rework/Bash와 수렴(WC·Bash)
+#   status subj=주관검증 · obj-weak=객관약검증 · none=미검증
 AXES = [
-    {"key": "w2", "raw": "w2_raw", "label": "컨텍스트 재무효화", "status": "subj"},
-    {"key": "w3", "raw": "w3_raw", "label": "재탐색", "status": "none"},
-    {"key": "wc", "raw": "wc_raw", "label": "편집 반복", "status": "obj-weak"},
+    {"key": "w2", "raw": "w2_raw", "label": "컨텍스트 재무효화", "status": "subj", "cluster": "체감"},
+    {"key": "wc", "raw": "wc_raw", "label": "편집 반복", "status": "obj-weak", "cluster": "행동"},
+    {"key": "bash", "raw": "bash_raw", "label": "Bash 시행착오", "status": "obj-weak", "cluster": "행동"},
+    {"key": "w3", "raw": "w3_raw", "label": "재탐색", "status": "none", "cluster": "행동"},
 ]
-# 시계열·기본 표시 축(검증 우위 아님, 신호 밀도가 높은 주관축을 기본값으로).
+# 기본 표시 축(검증 우위 아님; 신호 밀도가 높은 체감축을 기본값으로).
 PRIMARY = "w2"
 
 

@@ -4,9 +4,9 @@ from efficio import profile
 from efficio.reference import fit_reference
 
 
-def _unit(sid, tokens, w2, w3=0, wc=0, ts=1.0):
+def _unit(sid, tokens, w2, w3=0, wc=0, bash=0, ts=1.0):
     return {"session_id": sid, "total_tokens": tokens, "w2_raw": w2,
-            "w3_raw": w3, "wc_raw": wc, "project": "p", "ai_title": sid,
+            "w3_raw": w3, "wc_raw": wc, "bash_raw": bash, "project": "p", "ai_title": sid,
             "turns": 5, "ts_first": ts}
 
 
@@ -24,11 +24,12 @@ class TestSessionProfile(unittest.TestCase):
         self.assertIsNotNone(prof)
         self.assertEqual(prof["primary"], "w2")
         keys = {a["key"] for a in prof["axes"]}
-        self.assertEqual(keys, {"w2", "w3", "wc"})
+        self.assertEqual(keys, {"w2", "w3", "wc", "bash"})
         w2_axis = next(a for a in prof["axes"] if a["key"] == "w2")
-        self.assertEqual(w2_axis["status"], "subj")     # 주관(H1) 검증
-        wc_axis = next(a for a in prof["axes"] if a["key"] == "wc")
-        self.assertEqual(wc_axis["status"], "obj-weak")  # 객관 rework 약검증
+        self.assertEqual(w2_axis["status"], "subj")        # 주관(H1) 검증
+        self.assertEqual(w2_axis["cluster"], "체감")
+        bash_axis = next(a for a in prof["axes"] if a["key"] == "bash")
+        self.assertEqual(bash_axis["cluster"], "행동")     # 객관 행동축
 
     def test_higher_w2_gets_higher_percentile(self):
         low = profile.session_profile(self.units, "low", self.model)

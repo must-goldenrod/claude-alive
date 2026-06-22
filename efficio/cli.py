@@ -99,15 +99,19 @@ def cmd_profile(args) -> int:
     print(f"=== 효율 프로파일: {prof['ai_title'] or prof['project']} ===")
     print(f"session={prof['session_id'][:8]} · turns={prof['turns']} · "
           f"tokens={prof['total_tokens']:,} · 기준모델 v{prof['model_version']}(n={prof['model_n']})")
-    print(f"{'축':16s} {'검증':8s} {'낭비백분위':>9s} {'잔차':>12s}")
-    for ax in prof["axes"]:
-        default = " ◀기본" if ax["key"] == prof["primary"] else ""
-        pct = "  (0=신호없음)" if ax["is_zero"] else ""
-        print(f"{ax['label']:16s} {_STATUS_MARK[ax['status']]:8s} "
-              f"{int(ax['waste_percentile']):>8}% {ax['residual']:>12.1f}{default}{pct}")
-    print("\n해석: 단일 '낭비' 축 없음 — W2는 주관 체감과 상관(H1 ρ≈0.57)·객관 rework와 무관, "
-          "WC는 객관 rework와 약상관(ρ≈0.19)·체감과 약함. 둘은 다른 차원이라 함께 본다. "
-          "방향 타당성은 측정 안 함. (파일럿 n 작음)")
+    print(f"{'축군':6s} {'축':16s} {'검증':8s} {'낭비백분위':>9s} {'잔차':>12s}")
+    for cluster in ("체감", "행동"):
+        for ax in prof["axes"]:
+            if ax.get("cluster") != cluster:
+                continue
+            default = " ◀기본" if ax["key"] == prof["primary"] else ""
+            pct = "  (0=신호없음)" if ax["is_zero"] else ""
+            print(f"{cluster:6s} {ax['label']:16s} {_STATUS_MARK[ax['status']]:8s} "
+                  f"{int(ax['waste_percentile']):>8}% {ax['residual']:>12.1f}{default}{pct}")
+    print("\n해석: '낭비'는 2차원(13.5 MTMM). **체감축**(W2)=사람이 헛수고로 느낀 것과 상관, "
+          "**행동축**(편집반복·Bash시행착오)=객관적 재작업과 수렴. 둘은 갈리며 심지어 반대일 수 있음"
+          "(매끄럽게 느낀 세션이 재작업 더 많기도). 어느 게 '진짜 낭비'인지는 가치판단. "
+          "방향 타당성 미측정. (파일럿 n 작음)")
     return 0
 
 

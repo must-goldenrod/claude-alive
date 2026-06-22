@@ -7,9 +7,9 @@ from efficio.residual import size_factor, theil_sen
 from efficio.store import Store
 
 
-def _unit(sid, tokens, w2, w3=0, wc=0):
+def _unit(sid, tokens, w2, w3=0, wc=0, bash=0):
     return {"session_id": sid, "total_tokens": tokens,
-            "w2_raw": w2, "w3_raw": w3, "wc_raw": wc,
+            "w2_raw": w2, "w3_raw": w3, "wc_raw": wc, "bash_raw": bash,
             "project": "p", "ai_title": sid, "turns": 5, "ts_first": 1.0}
 
 

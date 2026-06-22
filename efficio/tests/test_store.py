@@ -9,7 +9,7 @@ def _rec(sid, w2=100, tokens=1000, ts=1.0):
         "ai_title": "t", "ts_first": ts, "ts_last": ts + 1,
         "turns": 5, "assistant_msgs": 6, "tool_calls": 4, "reads": 2, "edits": 1,
         "input_tokens": 10, "output_tokens": 20, "cache_creation": 30, "cache_read": 40,
-        "total_tokens": tokens, "w2_raw": w2, "w3_raw": 1, "wc_raw": 0,
+        "total_tokens": tokens, "w2_raw": w2, "w3_raw": 1, "wc_raw": 0, "bash_raw": 0,
     }
 
 

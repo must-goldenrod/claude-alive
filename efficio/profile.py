@@ -22,6 +22,7 @@ def session_profile(units: list, session_id: str, model: dict):
             "key": k,
             "label": ax["label"],
             "status": ax["status"],
+            "cluster": ax.get("cluster", ""),
             "residual": round(applied[f"r_{k}"], 2),
             "waste_percentile": round(applied[f"pct_{k}"], 0),
             "is_zero": applied[f"is_zero_{k}"],

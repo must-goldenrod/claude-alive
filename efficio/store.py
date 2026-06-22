@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS work_units (
     w2_raw          REAL,
     w3_raw          REAL,
     wc_raw          REAL,
+    bash_raw        REAL,
     ingested_at     REAL
 );
 CREATE INDEX IF NOT EXISTS idx_wu_ts ON work_units(ts_first);
@@ -50,7 +51,7 @@ _COLUMNS = [
     "session_id", "project", "cwd", "git_branch", "ai_title", "ts_first", "ts_last",
     "turns", "assistant_msgs", "tool_calls", "reads", "edits",
     "input_tokens", "output_tokens", "cache_creation", "cache_read", "total_tokens",
-    "w2_raw", "w3_raw", "wc_raw", "ingested_at",
+    "w2_raw", "w3_raw", "wc_raw", "bash_raw", "ingested_at",
 ]
 
 
@@ -63,6 +64,15 @@ class Store:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """기존 DB에 누락 컬럼 추가(ADD COLUMN). 신규 신호 도입 시 하위호환."""
+        existing = {r[1] for r in self.conn.execute("PRAGMA table_info(work_units)")}
+        for col in ("bash_raw",):
+            if col not in existing:
+                self.conn.execute(f"ALTER TABLE work_units ADD COLUMN {col} REAL")
+        self.conn.commit()
 
     def upsert(self, rec: dict, ingested_at: float) -> None:
         """레코드 upsert. 동일 session_id는 최신 신호로 갱신(재현 가능)."""
