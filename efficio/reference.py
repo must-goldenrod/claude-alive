@@ -56,8 +56,11 @@ def apply_reference(model: dict, unit: dict) -> dict:
     out = {}
     for key, m in model["axes"].items():
         raw = unit[m["raw"]]
-        resid = raw - (m["intercept"] + m["slope"] * size)
+        baseline = m["intercept"] + m["slope"] * size   # 같은 크기의 '예상' 신호(반사실 기준선)
+        resid = raw - baseline                          # 회피가능 초과분 = 실제 − 기준선
         out[f"r_{key}"] = resid
+        out[f"base_{key}"] = baseline
+        out[f"raw_{key}"] = raw
         out[f"pct_{key}"] = percentile_rank(m["ref_residuals"], resid)
         out[f"is_zero_{key}"] = (raw == 0)
     return out

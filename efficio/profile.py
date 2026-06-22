@@ -24,6 +24,8 @@ def session_profile(units: list, session_id: str, model: dict):
             "status": ax["status"],
             "cluster": ax.get("cluster", ""),
             "residual": round(applied[f"r_{k}"], 2),
+            "baseline": round(applied[f"base_{k}"], 1),   # 같은 크기의 예상(반사실 기준선)
+            "actual": round(applied[f"raw_{k}"], 1),       # 실제 신호
             "waste_percentile": round(applied[f"pct_{k}"], 0),
             "is_zero": applied[f"is_zero_{k}"],
         })
