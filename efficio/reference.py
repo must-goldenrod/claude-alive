@@ -10,12 +10,15 @@ import numpy as np
 
 from .residual import percentile_rank, size_factor, theil_sen
 
-# H1 검증 상태별 축. raw=원시 신호 컬럼, status=기준타당도 검증 상태.
+# 검증 상태별 축(13.2~13.4). 단일 '주축' 없음 — 두 기준(주관 H1 / 객관 rework)이 갈림.
+#   subj    = 주관 평정과 상관(H1)      obj-weak = 객관 rework와 약상관
+#   none    = 어느 기준에서도 미검증
 AXES = [
-    {"key": "w2", "raw": "w2_raw", "label": "컨텍스트 재무효화", "status": "validated"},
-    {"key": "w3", "raw": "w3_raw", "label": "재탐색", "status": "experimental"},
-    {"key": "wc", "raw": "wc_raw", "label": "편집 반복", "status": "experimental"},
+    {"key": "w2", "raw": "w2_raw", "label": "컨텍스트 재무효화", "status": "subj"},
+    {"key": "w3", "raw": "w3_raw", "label": "재탐색", "status": "none"},
+    {"key": "wc", "raw": "wc_raw", "label": "편집 반복", "status": "obj-weak"},
 ]
+# 시계열·기본 표시 축(검증 우위 아님, 신호 밀도가 높은 주관축을 기본값으로).
 PRIMARY = "w2"
 
 

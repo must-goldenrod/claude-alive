@@ -26,7 +26,9 @@ class TestSessionProfile(unittest.TestCase):
         keys = {a["key"] for a in prof["axes"]}
         self.assertEqual(keys, {"w2", "w3", "wc"})
         w2_axis = next(a for a in prof["axes"] if a["key"] == "w2")
-        self.assertEqual(w2_axis["status"], "validated")
+        self.assertEqual(w2_axis["status"], "subj")     # 주관(H1) 검증
+        wc_axis = next(a for a in prof["axes"] if a["key"] == "wc")
+        self.assertEqual(wc_axis["status"], "obj-weak")  # 객관 rework 약검증
 
     def test_higher_w2_gets_higher_percentile(self):
         low = profile.session_profile(self.units, "low", self.model)

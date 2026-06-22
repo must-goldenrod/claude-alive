@@ -19,7 +19,7 @@ from .signals import extract_session, iter_sessions
 from .store import DEFAULT_DB, Store
 
 DEFAULT_PROJECTS = os.path.expanduser("~/.claude/projects")
-_STATUS_MARK = {"validated": "✓검증", "experimental": "·실험"}
+_STATUS_MARK = {"subj": "주관검증", "obj-weak": "객관약", "none": "미검증"}
 
 
 def cmd_collect(args) -> int:
@@ -99,14 +99,15 @@ def cmd_profile(args) -> int:
     print(f"=== 효율 프로파일: {prof['ai_title'] or prof['project']} ===")
     print(f"session={prof['session_id'][:8]} · turns={prof['turns']} · "
           f"tokens={prof['total_tokens']:,} · 기준모델 v{prof['model_version']}(n={prof['model_n']})")
-    print(f"{'축':16s} {'상태':6s} {'낭비백분위':>9s} {'잔차':>12s}")
+    print(f"{'축':16s} {'검증':8s} {'낭비백분위':>9s} {'잔차':>12s}")
     for ax in prof["axes"]:
-        primary = " ◀주축" if ax["key"] == prof["primary"] else ""
+        default = " ◀기본" if ax["key"] == prof["primary"] else ""
         pct = "  (0=신호없음)" if ax["is_zero"] else ""
-        print(f"{ax['label']:16s} {_STATUS_MARK[ax['status']]:6s} "
-              f"{int(ax['waste_percentile']):>8}% {ax['residual']:>12.1f}{primary}{pct}")
-    print("\n해석: 주축 W2(컨텍스트 재무효화)만 H1 검증됨(ρ≈0.5, n=30 파일럿). "
-          "W3·WC는 실험축. 방향 타당성은 측정 안 함.")
+        print(f"{ax['label']:16s} {_STATUS_MARK[ax['status']]:8s} "
+              f"{int(ax['waste_percentile']):>8}% {ax['residual']:>12.1f}{default}{pct}")
+    print("\n해석: 단일 '낭비' 축 없음 — W2는 주관 체감과 상관(H1 ρ≈0.57)·객관 rework와 무관, "
+          "WC는 객관 rework와 약상관(ρ≈0.19)·체감과 약함. 둘은 다른 차원이라 함께 본다. "
+          "방향 타당성은 측정 안 함. (파일럿 n 작음)")
     return 0
 
 
