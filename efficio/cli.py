@@ -13,7 +13,8 @@ import os
 import time
 from datetime import datetime, timezone
 
-from .profile import AXES, PRIMARY, session_profile, timeline
+from .profile import session_profile, timeline
+from .reference import AXES, PRIMARY, fit_reference
 from .signals import extract_session, iter_sessions
 from .store import DEFAULT_DB, Store
 
@@ -34,22 +35,48 @@ def cmd_collect(args) -> int:
         ingested += 1
     store.commit()
     total = store.count()
+    # 최초 1회만 자동 적합. 기존 모델이 있으면 유지(드리프트 방지) — 재적합은 명시적 `fit`.
+    note = ""
+    if store.load_reference() is None and total > 0:
+        version = store.save_reference(fit_reference(store.all_units(), fit_at=now))
+        note = f"\n기준 모델 없음 → 초기 적합(v{version}, n={total}). 이후 점수는 이 모델로 고정."
+    else:
+        note = "\n기존 기준 모델 유지(드리프트 방지). 재적합하려면 `efficio fit`."
     store.close()
     print(f"스캔 {scanned}개 · 수집(범위 통과) {ingested}개 · 저장소 누적 {total}개")
-    print(f"DB: {args.db}")
+    print(f"DB: {args.db}{note}")
+    return 0
+
+
+def cmd_fit(args) -> int:
+    store = Store(args.db)
+    units = store.all_units()
+    if not units:
+        store.close()
+        print("저장된 세션 없음. 먼저 `collect` 실행.")
+        return 1
+    version = store.save_reference(fit_reference(units, fit_at=time.time()))
+    store.close()
+    print(f"기준 모델 재적합 완료: v{version}, n={len(units)}")
+    print("이전 버전은 보존됨(옛 점수 재현 가능). 이후 채점은 v{0}로 고정.".format(version))
     return 0
 
 
 def cmd_timeline(args) -> int:
     store = Store(args.db)
     units = store.all_units()
+    model = store.load_reference()
     store.close()
     if not units:
         print("저장된 세션 없음. 먼저 `collect` 실행.")
         return 1
-    rows = timeline(units, axis=args.axis, last_n=args.last)
+    if model is None:
+        print("기준 모델 없음. 먼저 `efficio fit` 실행.")
+        return 1
+    rows = timeline(units, model, axis=args.axis, last_n=args.last)
     axis_label = next(a["label"] for a in AXES if a["key"] == args.axis)
-    print(f"=== {axis_label}({args.axis}) 잔차 시계열 — 최근 {len(rows)}개 (백분위↑=낭비↑) ===")
+    print(f"=== {axis_label}({args.axis}) 잔차 시계열 — 최근 {len(rows)}개 "
+          f"(백분위↑=낭비↑, 기준모델 v{model['model_version']}) ===")
     print(f"{'date':10s} {'pct':>4} {'resid':>12}  title")
     for r in rows:
         d = _fmt_date(r["ts_first"])
@@ -60,14 +87,18 @@ def cmd_timeline(args) -> int:
 def cmd_profile(args) -> int:
     store = Store(args.db)
     units = store.all_units()
+    model = store.load_reference()
     store.close()
-    prof = session_profile(units, args.session)
+    if model is None:
+        print("기준 모델 없음. 먼저 `efficio fit` 실행.")
+        return 1
+    prof = session_profile(units, args.session, model)
     if prof is None:
         print(f"세션 '{args.session}' 없음. `collect` 했는지, id 접두어가 맞는지 확인.")
         return 1
     print(f"=== 효율 프로파일: {prof['ai_title'] or prof['project']} ===")
     print(f"session={prof['session_id'][:8]} · turns={prof['turns']} · "
-          f"tokens={prof['total_tokens']:,} · 자기코퍼스 n={prof['n_corpus']}")
+          f"tokens={prof['total_tokens']:,} · 기준모델 v{prof['model_version']}(n={prof['model_n']})")
     print(f"{'축':16s} {'상태':6s} {'낭비백분위':>9s} {'잔차':>12s}")
     for ax in prof["axes"]:
         primary = " ◀주축" if ax["key"] == prof["primary"] else ""
@@ -90,9 +121,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--db", default=DEFAULT_DB, help=f"SQLite 경로 (기본 {DEFAULT_DB})")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    c = sub.add_parser("collect", help="세션 스캔 → 영속화")
+    c = sub.add_parser("collect", help="세션 스캔 → 영속화 (모델 없으면 초기 적합)")
     c.add_argument("--projects", default=DEFAULT_PROJECTS)
     c.set_defaults(func=cmd_collect)
+
+    f = sub.add_parser("fit", help="기준 모델 재적합(명시적, 드리프트 통제)")
+    f.set_defaults(func=cmd_fit)
 
     t = sub.add_parser("timeline", help="주축 잔차 시계열")
     t.add_argument("--axis", default=PRIMARY, choices=[a["key"] for a in AXES])
