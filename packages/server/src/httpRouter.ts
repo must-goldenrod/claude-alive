@@ -336,6 +336,14 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
+    // GET /api/efficio/profiles?last=60 — per-session 4-axis profiles + size (full dashboard)
+    if (req.method === 'GET' && url.pathname === '/api/efficio/profiles') {
+      const last = parseInt(url.searchParams.get('last') ?? '60', 10);
+      const profiles = efficio ? efficio.profiles(last) : { modelVersion: null, sessions: [] };
+      sendJson(res, 200, profiles, req);
+      return;
+    }
+
     if (req.method === 'GET' && url.pathname === '/health') {
       sendJson(res, 200, { ok: true }, req);
       return;

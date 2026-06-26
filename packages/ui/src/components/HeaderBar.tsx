@@ -99,6 +99,7 @@ const VIEW_MODES: { mode: ViewMode; labelKey: string }[] = [
   { mode: 'animation', labelKey: 'viewMode.animation' },
   { mode: 'list', labelKey: 'viewMode.list' },
   { mode: 'prompt', labelKey: 'viewMode.prompt' },
+  { mode: 'efficio', labelKey: 'viewMode.efficio' },
 ];
 
 export function HeaderBar({

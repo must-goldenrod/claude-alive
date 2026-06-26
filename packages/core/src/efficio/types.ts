@@ -56,3 +56,38 @@ export interface EfficioTimeline {
   axis: EfficioAxisKey;
   rows: EfficioTimelineRow[];
 }
+
+/**
+ * 한 축의 채점값(고정 기준모델 적용). server는 scores 테이블을 읽기만 하고
+ * 재계산하지 않는다 — actual/baseline/residual/wastePercentile 전부 efficio가 영속화한 값.
+ */
+export interface EfficioAxisScore {
+  /** 실제 신호값(크기 미보정 raw). */
+  actual: number;
+  /** 같은 크기 세션의 회귀 예상값(반사실 기준선). */
+  baseline: number;
+  /** actual − baseline (크기 보정 잔차). */
+  residual: number;
+  /** 0~100, 높을수록 낭비 의심(자기대비 백분위). */
+  wastePercentile: number;
+  /** raw 신호가 0(신호 없음) — 백분위 해석에서 구분. */
+  isZero: boolean;
+}
+
+/** 한 세션의 4축 동시 프로파일 + 크기 메타. 상세카드·산점도·분포·다축시계열의 단일 데이터원. */
+export interface EfficioSessionProfile {
+  sessionId: string;
+  title: string;
+  project: string | null;
+  /** epoch seconds. */
+  tsFirst: number;
+  turns: number;
+  totalTokens: number;
+  /** 축키 → 채점값. efficio가 4축 모두 채우므로 누락 축 없음. */
+  axes: Record<EfficioAxisKey, EfficioAxisScore>;
+}
+
+export interface EfficioProfiles {
+  modelVersion: number | null;
+  sessions: EfficioSessionProfile[];
+}

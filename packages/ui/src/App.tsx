@@ -25,7 +25,11 @@ const PromptView = lazy(() =>
   import('./views/list/PromptView.tsx').then(m => ({ default: m.PromptView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt';
+const EfficioView = lazy(() =>
+  import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
+);
+
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -415,6 +419,11 @@ export default function App() {
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'prompt' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
               <PromptView active={viewMode === 'prompt'} />
+            </Suspense>
+          </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'efficio' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <EfficioView active={viewMode === 'efficio'} />
             </Suspense>
           </div>
         </ErrorBoundary>
