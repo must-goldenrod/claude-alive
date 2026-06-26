@@ -20,9 +20,15 @@
       "alerts": "Alerts"
     },
     "sound": {
-      "completion": { "title": "Completion sound" },
-      "error": { "title": "Error sound" },
-      "waiting": { "title": "Decision request sound" },
+      "completion": {
+        "title": "Completion sound"
+      },
+      "error": {
+        "title": "Error sound"
+      },
+      "waiting": {
+        "title": "Decision request sound"
+      },
       "volume": "Volume",
       "test": "Test"
     },
@@ -44,8 +50,12 @@
       "lines": "lines"
     },
     "alerts": {
-      "cpu": { "title": "CPU usage alert" },
-      "memory": { "title": "Memory usage alert" },
+      "cpu": {
+        "title": "CPU usage alert"
+      },
+      "memory": {
+        "title": "Memory usage alert"
+      },
       "threshold": "Threshold",
       "sustain": "Sustain time before firing",
       "seconds": "s",
@@ -166,6 +176,34 @@
       "subj": "Subjective-validated (H1)",
       "obj-weak": "Weak objective correlation",
       "none": "Unvalidated (experimental)"
+    },
+    "view": {
+      "subtitle": "Size-adjusted waste signals across your sessions (0-token, deterministic)",
+      "caveat": "Two-dimensional waste (MTMM): perceived (W2) and behavioral (WC/Bash) axes diverge — sometimes oppose. Which is 'real' waste is a value judgment. Direction validity unmeasured.",
+      "model": "Reference model v{{version}}",
+      "last": "Last {{count}} sessions",
+      "tab": {
+        "sessions": "Sessions",
+        "scatter": "Size vs residual",
+        "timeline": "Multi-axis timeline",
+        "distribution": "Distribution"
+      },
+      "scatterX": "Session size (tokens)",
+      "scatterY": "Residual (size-adjusted)",
+      "scatterHint": "Above the line = more waste than size predicts",
+      "distHint": "Where each session sits in your own corpus",
+      "actual": "actual",
+      "expected": "expected",
+      "residual": "residual",
+      "turns": "{{count}} turns",
+      "tokens": "{{value}} tok",
+      "noSignal": "no signal",
+      "selectSession": "Click a session for its 4-axis detail",
+      "count": "{{count}} sessions"
+    },
+    "cluster": {
+      "perceived": "Perceived",
+      "behavioral": "Behavioral"
     }
   },
   "pixelOffice": {
@@ -209,7 +247,9 @@
     "newTab": "New tab",
     "tabLabel": "Terminal {{n}}",
     "exited": "Exited",
-    "status": { "waiting": "Waiting" },
+    "status": {
+      "waiting": "Waiting"
+    },
     "selectWorkingDir": "Select working directory",
     "customPathPlaceholder": "~/path/to/project",
     "customPathHint": "Enter a path and press Enter, or select a project above",
@@ -293,7 +333,8 @@
     "label": "View mode",
     "animation": "Animation",
     "list": "List",
-    "prompt": "Prompt"
+    "prompt": "Prompt",
+    "efficio": "Efficio"
   },
   "prompt": {
     "listTitle": "Recent prompts",

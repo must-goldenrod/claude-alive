@@ -19,4 +19,5 @@ export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';
 export type {
   EfficioAxisKey, EfficioAxisStatus, EfficioCluster, EfficioAxisMeta,
   EfficioStatus, EfficioTimelineRow, EfficioTimeline,
+  EfficioAxisScore, EfficioSessionProfile, EfficioProfiles,
 } from './efficio/types.js';

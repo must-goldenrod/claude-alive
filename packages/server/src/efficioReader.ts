@@ -14,7 +14,15 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { EFFICIO_PRIMARY_AXIS } from '@claude-alive/core';
-import type { EfficioAxisKey, EfficioStatus, EfficioTimeline, EfficioTimelineRow } from '@claude-alive/core';
+import type {
+  EfficioAxisKey,
+  EfficioAxisScore,
+  EfficioProfiles,
+  EfficioSessionProfile,
+  EfficioStatus,
+  EfficioTimeline,
+  EfficioTimelineRow,
+} from '@claude-alive/core';
 
 export const DEFAULT_EFFICIO_DB = join(homedir(), '.efficio', 'efficio.db');
 
@@ -33,6 +41,27 @@ export interface EfficioReader {
   readonly dbPath: string;
   status(): EfficioStatus;
   timeline(axis: string, last: number): EfficioTimeline;
+  /** 최근 last개 세션의 4축 동시 프로파일 + 크기. 상세카드·산점도·분포·다축시계열 단일 데이터원. */
+  profiles(last: number): EfficioProfiles;
+}
+
+const ALL_AXES: readonly EfficioAxisKey[] = ['w2', 'wc', 'bash', 'w3'];
+
+/** scores 한 행을 축 채점값으로. NULL은 0으로 방어(구버전 DB·결측). */
+function toAxisScore(row: {
+  actual: number | null;
+  baseline: number | null;
+  residual: number | null;
+  wastePercentile: number | null;
+  isZero: number | null;
+}): EfficioAxisScore {
+  return {
+    actual: row.actual ?? 0,
+    baseline: row.baseline ?? 0,
+    residual: row.residual ?? 0,
+    wastePercentile: row.wastePercentile ?? 0,
+    isZero: (row.isZero ?? 0) !== 0,
+  };
 }
 
 export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): EfficioReader {
@@ -103,5 +132,76 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
     }
   }
 
-  return { dbPath, status, timeline };
+  function profiles(last: number): EfficioProfiles {
+    const limit = Math.min(Math.max(1, Math.trunc(last) || 50), MAX_TIMELINE);
+    const db = open();
+    if (!db) return { modelVersion: null, sessions: [] };
+    try {
+      const model = db.prepare('SELECT MAX(id) AS v FROM reference_model').get() as { v: number | null };
+      if (model?.v == null) return { modelVersion: null, sessions: [] };
+
+      // 최근 limit개 세션을 크기 메타와 함께. (이후 각 세션의 4축 점수를 JOIN으로 채움)
+      const units = db
+        .prepare(
+          `SELECT w.session_id AS sessionId,
+                  COALESCE(w.ai_title, w.project, w.session_id) AS title,
+                  w.project AS project,
+                  w.ts_first AS tsFirst,
+                  w.turns AS turns,
+                  w.total_tokens AS totalTokens
+             FROM work_units w
+             JOIN scores s ON s.session_id = w.session_id AND s.model_version = ?
+            GROUP BY w.session_id
+            ORDER BY w.ts_first DESC
+            LIMIT ?`,
+        )
+        .all(model.v, limit) as unknown as Array<{
+        sessionId: string;
+        title: string;
+        project: string | null;
+        tsFirst: number;
+        turns: number;
+        totalTokens: number;
+      }>;
+
+      const scoreStmt = db.prepare(
+        `SELECT axis, actual, baseline, residual,
+                waste_percentile AS wastePercentile, is_zero AS isZero
+           FROM scores WHERE session_id = ? AND model_version = ?`,
+      );
+
+      const sessions: EfficioSessionProfile[] = units.map((u) => {
+        const scoreRows = scoreStmt.all(u.sessionId, model.v) as unknown as Array<{
+          axis: EfficioAxisKey;
+          actual: number | null;
+          baseline: number | null;
+          residual: number | null;
+          wastePercentile: number | null;
+          isZero: number | null;
+        }>;
+        const byAxis = new Map(scoreRows.map((r) => [r.axis, r]));
+        const empty = { actual: 0, baseline: 0, residual: 0, wastePercentile: 0, isZero: 0 };
+        const axes = Object.fromEntries(
+          ALL_AXES.map((k) => [k, toAxisScore(byAxis.get(k) ?? empty)]),
+        ) as Record<EfficioAxisKey, EfficioAxisScore>;
+        return {
+          sessionId: u.sessionId,
+          title: u.title,
+          project: u.project,
+          tsFirst: u.tsFirst,
+          turns: u.turns,
+          totalTokens: u.totalTokens,
+          axes,
+        };
+      });
+      sessions.reverse(); // 과거→현재(차트 좌→우)
+      return { modelVersion: model.v, sessions };
+    } catch {
+      return { modelVersion: null, sessions: [] };
+    } finally {
+      db.close();
+    }
+  }
+
+  return { dbPath, status, timeline, profiles };
 }

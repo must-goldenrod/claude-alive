@@ -20,9 +20,15 @@
       "alerts": "알림"
     },
     "sound": {
-      "completion": { "title": "완료 사운드" },
-      "error": { "title": "에러 사운드" },
-      "waiting": { "title": "의사결정 요청 사운드" },
+      "completion": {
+        "title": "완료 사운드"
+      },
+      "error": {
+        "title": "에러 사운드"
+      },
+      "waiting": {
+        "title": "의사결정 요청 사운드"
+      },
       "volume": "볼륨",
       "test": "테스트"
     },
@@ -44,8 +50,12 @@
       "lines": "줄"
     },
     "alerts": {
-      "cpu": { "title": "CPU 사용량 알림" },
-      "memory": { "title": "메모리 사용량 알림" },
+      "cpu": {
+        "title": "CPU 사용량 알림"
+      },
+      "memory": {
+        "title": "메모리 사용량 알림"
+      },
       "threshold": "임계값",
       "sustain": "발동 전 지속 시간",
       "seconds": "초",
@@ -166,6 +176,34 @@
       "subj": "주관검증 (H1)",
       "obj-weak": "객관 약상관",
       "none": "미검증 (실험축)"
+    },
+    "view": {
+      "subtitle": "세션별 크기보정 낭비 신호 (0 토큰·결정론적)",
+      "caveat": "낭비는 2차원(MTMM): 체감(W2)·행동(WC/Bash) 축이 갈리며 때로 반대. 어느 게 '진짜 낭비'인지는 가치판단. 방향 타당성 미측정.",
+      "model": "기준모델 v{{version}}",
+      "last": "최근 {{count}}세션",
+      "tab": {
+        "sessions": "세션",
+        "scatter": "크기 vs 잔차",
+        "timeline": "다축 시계열",
+        "distribution": "분포"
+      },
+      "scatterX": "세션 크기 (토큰)",
+      "scatterY": "잔차 (크기보정)",
+      "scatterHint": "회귀선 위 = 크기 예상보다 낭비 많음",
+      "distHint": "내 코퍼스에서 각 세션의 위치",
+      "actual": "실제",
+      "expected": "예상",
+      "residual": "잔차",
+      "turns": "{{count}}턴",
+      "tokens": "{{value}} tok",
+      "noSignal": "신호 없음",
+      "selectSession": "세션을 클릭하면 4축 상세",
+      "count": "세션 {{count}}개"
+    },
+    "cluster": {
+      "perceived": "체감",
+      "behavioral": "행동"
     }
   },
   "pixelOffice": {
@@ -209,7 +247,9 @@
     "newTab": "새 탭",
     "tabLabel": "터미널 {{n}}",
     "exited": "종료됨",
-    "status": { "waiting": "대기중" },
+    "status": {
+      "waiting": "대기중"
+    },
     "selectWorkingDir": "작업 디렉토리 선택",
     "customPathPlaceholder": "~/path/to/project",
     "customPathHint": "경로를 입력하고 Enter를 누르거나, 위의 프로젝트를 선택하세요",
@@ -293,7 +333,8 @@
     "label": "뷰 모드",
     "animation": "애니메이션",
     "list": "리스트",
-    "prompt": "프롬프트"
+    "prompt": "프롬프트",
+    "efficio": "Efficio"
   },
   "prompt": {
     "listTitle": "최근 프롬프트",
