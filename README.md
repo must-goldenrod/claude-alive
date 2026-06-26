@@ -52,6 +52,7 @@ claude-alive는 Claude Code 세션을 픽셀아트 오피스로 실시간 시각
 - **Node.js** ≥ 20
 - **pnpm** (install: `npm install -g pnpm`)
 - **Claude Code** installed and working
+- *(Optional)* **Python 3 + numpy** — only for the [Efficio](#efficio--waste-aware-self-evaluation--낭비-인지-자기평가) self-eval tool / Efficio 자기평가 도구를 쓸 때만
 
 ### Option A: npm install (recommended / 권장)
 
@@ -358,6 +359,74 @@ The terminal uses a **separate WebSocket endpoint** (`/ws/terminal`) from the mo
 
 ---
 
+## Efficio — Waste-Aware Self-Evaluation / 낭비 인지 자기평가
+
+**EN:** Efficio is a **separate, zero-token tool** that lives in this repo (`efficio/`). It reads your Claude Code session transcripts (`~/.claude/projects`) and reports how much **avoidable waste** (re-reading the same files, repeated edits, trial-and-error) a session contained — measured as a **size-corrected residual** so that large tasks are not unfairly penalized. It never calls an LLM, so measurement costs **0 tokens**, and all data stays **local** (`~/.efficio/efficio.db`). The claude-alive dashboard reads this DB read-only and shows an **Efficio panel/view**; if the DB is empty, the UI prompts you to run `collect`.
+
+**KO:** Efficio는 이 레포(`efficio/`)에 포함된 **별도의 0-토큰 도구**입니다. Claude Code 세션 기록(`~/.claude/projects`)을 읽어, 한 세션에 **안 해도 됐던 낭비**(같은 파일 반복 read, 반복 편집, 시행착오)가 얼마였는지를 **크기보정 잔차**로 보여줍니다(큰 작업이 불리하게 평가되지 않도록 세션 크기를 통제). LLM을 호출하지 않아 측정 비용이 **0 토큰**이고, 데이터는 전부 **로컬**(`~/.efficio/efficio.db`)에만 저장됩니다. claude-alive 대시보드는 이 DB를 읽기 전용으로 읽어 **Efficio 패널/뷰**로 표시하며, DB가 비어 있으면 UI가 `collect` 실행을 안내합니다.
+
+### Prerequisites / 필수 조건
+
+- **Python 3** (already on most macOS/Linux / 대부분의 macOS·Linux에 기본 탑재)
+- **numpy** — `pip3 install numpy`
+
+> Efficio is intentionally a separate product from the Node-based claude-alive (different runtime, persistent analytics store). They share only the same hook event source.
+> Efficio는 Node 기반 claude-alive와 **의도적으로 분리된 제품**입니다(런타임·영속 저장소가 다름). 둘은 동일한 훅 이벤트 소스만 공유합니다.
+
+### Usage / 사용법
+
+Run from the repo root (Option B / 소스 빌드 기준). All commands use **0 tokens** / 전 과정 0 토큰:
+
+```bash
+# 1. Scan sessions → ~/.efficio/efficio.db (first run also fits the baseline model)
+#    세션 스캔 → DB 영속화 (최초 1회는 기준 모델도 자동 적합)
+python3 -m efficio collect
+
+# 2. Waste timeline — self-vs-self percentile (↑ = more waste than your usual)
+#    낭비 시계열 — 자기 대비 백분위 (↑ = 평소보다 낭비 많음)
+python3 -m efficio timeline --last 20
+python3 -m efficio timeline --axis wc      # edit-thrash / 편집 반복
+python3 -m efficio timeline --axis bash    # bash trial-and-error / Bash 시행착오
+
+# 3. Per-session profile — actual vs expected baseline, by axis
+#    세션별 프로파일 — 축별 실제 vs 예상(기준선). id 접두어만 입력 가능
+python3 -m efficio profile <session_id>
+
+# 4. Re-fit the baseline explicitly (only when you intend to; old scores stay reproducible)
+#    기준 모델 명시적 재적합 (의도할 때만; 옛 점수는 보존되어 재현 가능)
+python3 -m efficio fit
+
+# Override the DB path / DB 경로 지정
+python3 -m efficio --db /path/to/x.db collect
+```
+
+| Command | Description | 설명 |
+|---------|-------------|------|
+| `efficio collect` | Scan sessions, persist signals/scores (initial fit on first run) | 세션 스캔·신호/점수 영속화 (최초 1회 초기 적합) |
+| `efficio timeline` | Size-residual percentile time series (`--axis`, `--last`) | 크기-잔차 백분위 시계열 |
+| `efficio profile <id>` | Multi-axis efficiency profile for one session | 한 세션의 다축 효율 프로파일 |
+| `efficio fit` | Explicitly re-fit the baseline model (drift control) | 기준 모델 명시적 재적합 (드리프트 통제) |
+
+### How to read the output / 결과 읽는 법
+
+- **Self-vs-self, never vs others** — percentile compares you to your *own* past sessions. Re-running `collect` does **not** change past scores (the baseline is frozen until you call `fit`).
+  **남이 아닌 자기 비교** — 백분위는 *자기* 과거 세션과의 비교입니다. `collect`를 다시 돌려도 과거 점수는 바뀌지 않습니다(`fit`을 부르기 전까지 기준선 고정).
+- **Not one score, but two clusters** — a "feel" axis (W2 context re-invalidation, correlates with subjectively-felt waste) and a "behavior" axis (edit-thrash / bash trial-and-error, converges with objective rework). They can diverge — *a session that felt smooth may have had the most rework.* Which is the "real" waste is a value judgment left to you.
+  **단일 점수 아님, 두 축군** — 체감축(W2, 사람이 느낀 낭비와 상관)과 행동축(편집반복·Bash 시행착오, 객관적 재작업과 수렴). 둘은 갈릴 수 있습니다 — *매끄럽게 느낀 세션이 재작업은 더 많기도.* 어느 게 "진짜 낭비"인지는 사용자 판단.
+- **Out of scope** — Efficio measures *how* you worked (execution efficiency), **not** whether the direction was right. A wrong-but-efficient session can still score well (false positive).
+  **측정 범위 밖** — Efficio는 *어떻게* 일했나(실행 효율)만 보며 방향의 옳고 그름은 보지 않습니다. 잘못된 방향을 효율적으로 한 세션도 점수가 좋을 수 있습니다(거짓양성).
+
+### Privacy / 프라이버시
+
+**EN:** Everything is stored locally in `~/.efficio/efficio.db`. Only aggregate signals plus session titles and project paths are stored — **no prompt text or code**. Because session titles/paths are present, **do not share this DB file**.
+
+**KO:** 모든 데이터는 `~/.efficio/efficio.db`(로컬)에만 저장됩니다. 집계 신호와 세션 제목·프로젝트 경로만 저장되며 **프롬프트 원문·코드는 저장하지 않습니다**. 세션 제목·경로가 들어 있으므로 이 DB 파일은 **공유하지 마세요**.
+
+> Design, formulas, and validation evidence: `efficio/README.md`, `docs/waste-aware-eval-design.md` (v0.2.1), `docs/efficio-paper-abstract.md`, `docs/poc/`.
+> 설계·산식·검증 근거: `efficio/README.md`, `docs/waste-aware-eval-design.md` (v0.2.1), `docs/efficio-paper-abstract.md`, `docs/poc/`.
+
+---
+
 ## Architecture / 아키텍처
 
 ### Project Structure / 프로젝트 구조
@@ -393,6 +462,11 @@ claude-alive/
 │           │   ├── TerminalPanel.tsx   # Multi-tab terminal UI
 │           │   └── useTerminalWS.ts    # Terminal WebSocket hook
 │           └── unified/        # Shared sidebar, right panel, layout
+├── efficio/        # Zero-token waste-aware self-eval tool (Python + numpy, separate product)
+│   ├── signals.py     # Deterministic per-session signal extraction
+│   ├── residual.py    # Theil–Sen size-residualization
+│   ├── reference.py   # Frozen baseline model (drift control)
+│   └── store.py       # SQLite persistence (~/.efficio/efficio.db)
 ├── npm/            # esbuild entry points for npm package
 ├── scripts/        # Build, release & changelog scripts
 ├── docs/           # Design documents & implementation plans

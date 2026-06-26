@@ -15,3 +15,7 @@ docs/poc/*.csv
 *.db
 __pycache__/
 *.pyc
+
+# Playwright MCP 캐시 + 일회성 E2E 증거 스크린샷
+.playwright-mcp/
+efficio-*.png
