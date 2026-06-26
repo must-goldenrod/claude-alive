@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
 import { listClaudeSessions } from './claudeSessionIndex.js';
+import type { EfficioReader } from './efficioReader.js';
 
 // --- Zod schemas for runtime input validation ---
 
@@ -74,6 +75,12 @@ export interface HttpRouterOptions {
   onProjectNamesChanged?: () => void;
   /** Path to the UI dist directory. Defaults to ../../ui/dist relative to server dist. */
   uiDistPath?: string;
+  /**
+   * Optional read-only bridge to the efficio SQLite store. When present,
+   * `/api/efficio/*` routes serve pre-computed efficiency scores. Absent or
+   * data-less → routes return `available:false` so the UI can guide `collect`.
+   */
+  efficio?: EfficioReader;
   /**
    * Optional sub-router for paths owned by the absorbed think-prompt
    * subsystem (`/api/prompts*`, `/api/sessions*`, `/v1/ingest/*`). When
@@ -153,6 +160,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     onProjectNamesChanged,
     uiDistPath,
     promptRouter,
+    efficio,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -307,6 +315,24 @@ export function createHttpServer(options: HttpRouterOptions) {
       } catch {
         sendJson(res, 500, { error: 'Failed to list sessions' }, req);
       }
+      return;
+    }
+
+    // GET /api/efficio/status — data availability + active reference model meta
+    if (req.method === 'GET' && url.pathname === '/api/efficio/status') {
+      const status = efficio
+        ? efficio.status()
+        : { available: false, sessionCount: 0, modelVersion: null, modelN: null, lastScoredAt: null };
+      sendJson(res, 200, status, req);
+      return;
+    }
+
+    // GET /api/efficio/timeline?axis=w2&last=20 — size-adjusted waste residual series
+    if (req.method === 'GET' && url.pathname === '/api/efficio/timeline') {
+      const axis = url.searchParams.get('axis') ?? 'w2';
+      const last = parseInt(url.searchParams.get('last') ?? '20', 10);
+      const timeline = efficio ? efficio.timeline(axis, last) : { axis: 'w2', rows: [] };
+      sendJson(res, 200, timeline, req);
       return;
     }
 

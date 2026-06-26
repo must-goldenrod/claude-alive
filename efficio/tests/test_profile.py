@@ -67,5 +67,36 @@ class TestTimeline(unittest.TestCase):
             self.assertIn("residual", r)
 
 
+class TestExportScores(unittest.TestCase):
+    def setUp(self):
+        self.units = [_unit(f"s{i}", 1_000_000, w2=1000 * i, wc=i, ts=float(i))
+                      for i in range(5)]
+        self.model = fit_reference(self.units, fit_at=1.0)
+
+    def test_one_row_per_session_per_axis(self):
+        rows = profile.export_scores(self.units, self.model)
+        self.assertEqual(len(rows), 5 * 4)              # 세션 5 × 축 4
+        for r in rows:
+            self.assertEqual(
+                set(r), {"session_id", "axis", "actual", "baseline",
+                         "residual", "waste_percentile", "is_zero"})
+
+    def test_matches_apply_reference(self):
+        # export는 profile/timeline과 동일한 고정 모델 계산이어야 한다(드리프트 단일출처)
+        rows = profile.export_scores(self.units, self.model)
+        prof = profile.session_profile(self.units, "s3", self.model)
+        w2_axis = next(a for a in prof["axes"] if a["key"] == "w2")
+        w2_row = next(r for r in rows if r["session_id"] == "s3" and r["axis"] == "w2")
+        self.assertEqual(w2_row["residual"], w2_axis["residual"])
+        self.assertEqual(w2_row["waste_percentile"], w2_axis["waste_percentile"])
+        self.assertEqual(w2_row["baseline"], w2_axis["baseline"])
+
+    def test_full_session_ids_preserved(self):
+        # 시계열 조인을 위해 export는 8자 접두어가 아닌 full id를 보존해야 한다
+        rows = profile.export_scores(self.units, self.model)
+        self.assertTrue(all(r["session_id"] in {u["session_id"] for u in self.units}
+                            for r in rows))
+
+
 if __name__ == "__main__":
     unittest.main()

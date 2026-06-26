@@ -42,6 +42,29 @@ def session_profile(units: list, session_id: str, model: dict):
     }
 
 
+def export_scores(units: list, model: dict) -> list:
+    """전 세션×전 축의 채점 결과를 평탄한 행 목록으로(영속화·읽기 브리지용).
+
+    profile/timeline과 동일한 고정 모델 계산(apply_reference)을 재사용하므로
+    server는 통계를 재계산하지 않고 이 결과를 읽기만 한다. 각 행은 store.scores 컬럼과 정렬.
+    """
+    rows = []
+    for u in units:
+        applied = apply_reference(model, u)
+        for ax in AXES:
+            k = ax["key"]
+            rows.append({
+                "session_id": u["session_id"],
+                "axis": k,
+                "actual": round(applied[f"raw_{k}"], 1),
+                "baseline": round(applied[f"base_{k}"], 1),
+                "residual": round(applied[f"r_{k}"], 2),
+                "waste_percentile": round(applied[f"pct_{k}"], 0),
+                "is_zero": applied[f"is_zero_{k}"],
+            })
+    return rows
+
+
 def timeline(units: list, model: dict, axis: str = PRIMARY, last_n: int = 20) -> list:
     """축 잔차를 시간순으로(고정 모델 적용). 자기대비 백분위 추세 확인용."""
     ordered = sorted(

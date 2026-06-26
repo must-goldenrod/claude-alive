@@ -4,6 +4,7 @@ import { ActivityPulse } from '../dashboard/components/ActivityPulse.tsx';
 import { EventStream } from '../dashboard/components/EventStream.tsx';
 import { CompletionLog } from '../dashboard/components/CompletionLog.tsx';
 import { AgentStats } from '../dashboard/components/AgentStats.tsx';
+import { EfficioPanel } from '../dashboard/components/EfficioPanel.tsx';
 
 const MIN_WIDTH = 280;
 const MAX_WIDTH = 600;
@@ -93,6 +94,11 @@ export function RightPanel({ events, agents, completedSessions, stats, collapsed
           <CompletionLog completedSessions={completedSessions} />
         </div>
       )}
+
+      {/* Efficio — size-adjusted waste residual (read from ~/.efficio/efficio.db) */}
+      <div className="shrink-0 p-3 pb-0">
+        <EfficioPanel />
+      </div>
 
       {/* Event Stream - fills remaining space */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0 p-3 pt-3">

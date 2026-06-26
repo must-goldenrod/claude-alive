@@ -16,6 +16,9 @@ import {
 } from './projectNameStore.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
+import { createEfficioReader } from './efficioReader.js';
+import { watch, existsSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
@@ -34,6 +37,11 @@ const promptSubsystem = createPromptSubsystem();
 await promptSubsystem.fastify.ready();
 
 const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// Read-only bridge to efficio's SQLite store (~/.efficio/efficio.db). The
+// server never computes statistics — efficio (Python) writes pre-scored rows;
+// we only read them. Absent/empty DB degrades gracefully to available:false.
+const efficio = createEfficioReader();
 
 function getSnapshot() {
   return {
@@ -178,6 +186,7 @@ const httpServer = createHttpServer({
   getProjectNames,
   saveProjectName,
   removeProjectName,
+  efficio,
   promptRouter: (req, res) => {
     promptSubsystem.fastify.routing(req, res);
   },
@@ -296,6 +305,26 @@ metricsPoller.subscribe((snapshot) => {
 });
 metricsPoller.start();
 
+// Watch ~/.efficio for DB changes and push fresh status to clients. efficio
+// `collect`/`fit` rewrites the SQLite store (multiple fs events) → debounce.
+// Directory watch (not file) so we also catch first-time DB creation.
+const efficioDir = dirname(efficio.dbPath);
+let efficioWatcher: ReturnType<typeof watch> | null = null;
+if (existsSync(efficioDir)) {
+  let efficioDebounce: ReturnType<typeof setTimeout> | null = null;
+  try {
+    efficioWatcher = watch(efficioDir, (_event, filename) => {
+      if (filename && !filename.startsWith('efficio.db')) return;
+      if (efficioDebounce) clearTimeout(efficioDebounce);
+      efficioDebounce = setTimeout(() => {
+        broadcaster.broadcast({ type: 'efficio:update', status: efficio.status() });
+      }, 400);
+    });
+  } catch {
+    // fs.watch unsupported on this platform/path — UI still works via HTTP polling on demand.
+  }
+}
+
 // Start the prompt-worker queue consumer in-process. No pidfile, no fork:
 // the worker shares the server process lifecycle. Errors inside the loop
 // are logged but never bubble up to take the server down.
@@ -321,6 +350,7 @@ process.on('SIGINT', () => {
   for (const timer of despawnTimers.values()) clearTimeout(timer);
   despawnTimers.clear();
   metricsPoller.stop();
+  efficioWatcher?.close();
   stopWorkerLoop();
   promptSubsystem.fastify.close().catch(() => {});
   promptSubsystem.close();

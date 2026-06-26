@@ -47,5 +47,29 @@ class TestStore(unittest.TestCase):
         self.assertEqual(units[1]["session_id"], "late")
 
 
+    def test_replace_scores_roundtrip(self):
+        rows = [
+            {"session_id": "s1", "axis": "w2", "actual": 10.0, "baseline": 8.0,
+             "residual": 2.0, "waste_percentile": 75.0, "is_zero": False},
+            {"session_id": "s1", "axis": "wc", "actual": 0.0, "baseline": 1.0,
+             "residual": -1.0, "waste_percentile": 20.0, "is_zero": True},
+        ]
+        n = self.store.replace_scores(model_version=1, rows=rows, scored_at=5.0)
+        self.assertEqual(n, 2)
+        w2 = self.store.scores_for("w2", 1)
+        self.assertEqual(len(w2), 1)
+        self.assertEqual(w2[0]["residual"], 2.0)
+        self.assertEqual(w2[0]["is_zero"], 0)          # bool → 0/1 정규화
+        wc = self.store.scores_for("wc", 1)
+        self.assertEqual(wc[0]["is_zero"], 1)
+
+    def test_replace_scores_is_idempotent_per_version(self):
+        rows = [{"session_id": "s1", "axis": "w2", "actual": 1.0, "baseline": 1.0,
+                 "residual": 0.0, "waste_percentile": 50.0, "is_zero": False}]
+        self.store.replace_scores(1, rows, scored_at=1.0)
+        self.store.replace_scores(1, rows, scored_at=2.0)   # 같은 버전 재기록 → 중복 없음
+        self.assertEqual(len(self.store.scores_for("w2", 1)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

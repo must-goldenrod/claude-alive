@@ -15,3 +15,8 @@ export type {
   SSHErrorKind,
 } from './protocol/wsProtocol.js';
 export { parseTranscriptTokens } from './transcript/parser.js';
+export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';
+export type {
+  EfficioAxisKey, EfficioAxisStatus, EfficioCluster, EfficioAxisMeta,
+  EfficioStatus, EfficioTimelineRow, EfficioTimeline,
+} from './efficio/types.js';

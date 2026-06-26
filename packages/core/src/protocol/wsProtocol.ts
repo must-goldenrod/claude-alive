@@ -1,5 +1,6 @@
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation } from '../events/types.js';
 import type { AgentStats, EventLogEntry } from '../state/sessionStore.js';
+import type { EfficioStatus } from '../efficio/types.js';
 
 export type TerminalMode = 'claude' | 'shell';
 export type TerminalSource = 'local' | 'ssh';
@@ -28,7 +29,8 @@ export type WSServerMessage =
   | { type: 'terminal:output'; tabId: string; data: string }
   | { type: 'terminal:exited'; tabId: string; exitCode: number }
   | { type: 'terminal:ssh-error'; tabId: string; kind: SSHErrorKind; line: string }
-  | { type: 'project:names'; names: Record<string, string> };
+  | { type: 'project:names'; names: Record<string, string> }
+  | { type: 'efficio:update'; status: EfficioStatus };
 
 export type WSClientMessage =
   | { type: 'ping' }
