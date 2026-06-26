@@ -43,6 +43,20 @@ html, body, #root {
   background: rgba(139, 148, 158, 0.35);
 }
 
+/*
+ * xterm v6 replaced the always-visible native viewport scrollbar with a VS Code-style
+ * overlay scrollbar that fades to opacity:0 when idle, and exposes no option to disable
+ * the auto-hide. Force the terminal's scrollback scrollbar to stay visible and grabbable.
+ * The slider color comes from the theme's scrollbarSlider* keys (set in ChatOverlay).
+ */
+.xterm .xterm-scrollable-element > .scrollbar {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+.xterm .xterm-scrollable-element > .scrollbar.fade {
+  transition: none !important;
+}
+
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }

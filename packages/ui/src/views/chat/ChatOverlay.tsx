@@ -114,13 +114,54 @@ function buildTermOptions(s: AppSettings) {
     fontSize: t.fontSize,
     lineHeight: t.lineHeight,
     letterSpacing: t.letterSpacing,
-    theme: getThemeById(t.themeId),
+    theme: {
+      ...getThemeById(t.themeId),
+      // xterm v6 renders a VS Code-style overlay scrollbar whose slider color comes
+      // from these theme keys. The defaults (foreground @ 20%) are barely visible, so
+      // bump them — paired with the always-visible CSS override in index.css this keeps
+      // the scrollback scrollbar discoverable and grabbable.
+      scrollbarSliderBackground: 'rgba(139, 148, 158, 0.35)',
+      scrollbarSliderHoverBackground: 'rgba(139, 148, 158, 0.55)',
+      scrollbarSliderActiveBackground: 'rgba(139, 148, 158, 0.75)',
+    },
     cursorBlink: t.cursorBlink,
     cursorStyle: t.cursorStyle,
     cursorWidth: t.cursorWidth,
     allowTransparency: true,
     scrollback: t.scrollback,
   };
+}
+
+/**
+ * Wire system-clipboard copy/paste into an xterm instance. xterm v6 does not copy
+ * on selection and does not handle paste shortcuts itself — it forwards every key
+ * to the PTY — so the host page must intercept the clipboard shortcuts. We treat
+ * Cmd+C/Cmd+V (macOS) and Ctrl+Shift+C/Ctrl+Shift+V (Linux/Windows) as copy/paste.
+ * Plain Ctrl+C is deliberately left untouched so it still sends SIGINT to the
+ * running program (e.g. interrupting Claude). Copy only fires when text is selected,
+ * so an empty Cmd+C falls through to the terminal instead of swallowing the key.
+ */
+function attachClipboardKeys(term: Terminal): void {
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.type !== 'keydown') return true;
+    const combo = e.metaKey || (e.ctrlKey && e.shiftKey);
+    if (!combo) return true;
+    const key = e.key.toLowerCase();
+    if (key === 'c' && term.hasSelection()) {
+      navigator.clipboard?.writeText(term.getSelection()).catch(() => {});
+      return false;
+    }
+    if (key === 'v') {
+      navigator.clipboard
+        ?.readText()
+        .then((text) => {
+          if (text) term.paste(text);
+        })
+        .catch(() => {});
+      return false;
+    }
+    return true;
+  });
 }
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
@@ -468,6 +509,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         const fit = new FitAddon();
         term.loadAddon(fit);
         term.open(container);
+        attachClipboardKeys(term);
         termsRef.current.set(tabId, { term, fit });
 
         requestAnimationFrame(() => {
