@@ -147,6 +147,27 @@
     "empty": "No completed sessions yet",
     "sessionCompleted": "Session completed"
   },
+  "efficio": {
+    "title": "Efficio — Size-adjusted Waste",
+    "refresh": "Refresh",
+    "loading": "Loading…",
+    "empty": "No efficio data yet. Run the collector to score past sessions:",
+    "noData": "No sessions in range",
+    "sessions": "{{count}} sessions",
+    "lastUpdated": "Last collected",
+    "percentile": "Waste percentile",
+    "axis": {
+      "w2": "Context invalidation",
+      "wc": "Edit churn",
+      "bash": "Bash trial-and-error",
+      "w3": "Re-exploration"
+    },
+    "status": {
+      "subj": "Subjective-validated (H1)",
+      "obj-weak": "Weak objective correlation",
+      "none": "Unvalidated (experimental)"
+    }
+  },
   "pixelOffice": {
     "title": "Pixel Office"
   },

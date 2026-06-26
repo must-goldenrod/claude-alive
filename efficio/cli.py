@@ -13,7 +13,7 @@ import os
 import time
 from datetime import datetime, timezone
 
-from .profile import session_profile, timeline
+from .profile import export_scores, session_profile, timeline
 from .reference import AXES, PRIMARY, fit_reference
 from .signals import extract_session, iter_sessions
 from .store import DEFAULT_DB, Store
@@ -42,10 +42,25 @@ def cmd_collect(args) -> int:
         note = f"\n기준 모델 없음 → 초기 적합(v{version}, n={total}). 이후 점수는 이 모델로 고정."
     else:
         note = "\n기존 기준 모델 유지(드리프트 방지). 재적합하려면 `efficio fit`."
+    n_scored = _persist_scores(store, now)
     store.close()
     print(f"스캔 {scanned}개 · 수집(범위 통과) {ingested}개 · 저장소 누적 {total}개")
     print(f"DB: {args.db}{note}")
+    if n_scored:
+        print(f"점수 영속화: {n_scored}행 (제품 읽기 브리지용)")
     return 0
+
+
+def _persist_scores(store, now: float) -> int:
+    """활성 기준 모델로 전 세션을 채점해 scores 테이블에 영속화. 반환: 기록 행 수.
+
+    server는 이 결과를 읽기만 하므로 통계는 efficio에서만 계산된다(드리프트 단일출처).
+    """
+    model = store.load_reference()
+    if model is None:
+        return 0
+    rows = export_scores(store.all_units(), model)
+    return store.replace_scores(model["model_version"], rows, scored_at=now)
 
 
 def cmd_fit(args) -> int:
@@ -55,10 +70,14 @@ def cmd_fit(args) -> int:
         store.close()
         print("저장된 세션 없음. 먼저 `collect` 실행.")
         return 1
-    version = store.save_reference(fit_reference(units, fit_at=time.time()))
+    now = time.time()
+    version = store.save_reference(fit_reference(units, fit_at=now))
+    n_scored = _persist_scores(store, now)
     store.close()
     print(f"기준 모델 재적합 완료: v{version}, n={len(units)}")
     print("이전 버전은 보존됨(옛 점수 재현 가능). 이후 채점은 v{0}로 고정.".format(version))
+    if n_scored:
+        print(f"점수 영속화: {n_scored}행 (model v{version})")
     return 0
 
 

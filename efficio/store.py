@@ -45,6 +45,20 @@ CREATE TABLE IF NOT EXISTS reference_model (
     n        INTEGER,
     payload  TEXT
 );
+
+CREATE TABLE IF NOT EXISTS scores (
+    session_id        TEXT,
+    axis              TEXT,
+    model_version     INTEGER,
+    actual            REAL,
+    baseline          REAL,
+    residual          REAL,
+    waste_percentile  REAL,
+    is_zero           INTEGER,
+    scored_at         REAL,
+    PRIMARY KEY (session_id, axis, model_version)
+);
+CREATE INDEX IF NOT EXISTS idx_scores_axis ON scores(axis, model_version);
 """
 
 _COLUMNS = [
@@ -52,6 +66,11 @@ _COLUMNS = [
     "turns", "assistant_msgs", "tool_calls", "reads", "edits",
     "input_tokens", "output_tokens", "cache_creation", "cache_read", "total_tokens",
     "w2_raw", "w3_raw", "wc_raw", "bash_raw", "ingested_at",
+]
+
+_SCORE_COLUMNS = [
+    "session_id", "axis", "model_version",
+    "actual", "baseline", "residual", "waste_percentile", "is_zero", "scored_at",
 ]
 
 
@@ -104,6 +123,36 @@ class Store:
         )
         self.conn.commit()
         return cur.lastrowid
+
+    def replace_scores(self, model_version: int, rows: list[dict], scored_at: float) -> int:
+        """한 기준모델 버전의 점수를 통째로 교체(재현 가능). 반환: 기록 행 수.
+
+        server(읽기 브리지)가 통계를 재계산하지 않도록 efficio가 미리 채점해 둔다.
+        같은 model_version은 전체 삭제 후 재기록(부분 갱신 아님 → 일관성).
+        """
+        self.conn.execute("DELETE FROM scores WHERE model_version=?", (model_version,))
+        placeholders = ", ".join("?" for _ in _SCORE_COLUMNS)
+        payload = []
+        for r in rows:
+            rec = {k: r.get(k) for k in _SCORE_COLUMNS}
+            rec["model_version"] = model_version
+            rec["scored_at"] = scored_at
+            rec["is_zero"] = 1 if r.get("is_zero") else 0
+            payload.append([rec[c] for c in _SCORE_COLUMNS])
+        self.conn.executemany(
+            f"INSERT INTO scores ({', '.join(_SCORE_COLUMNS)}) VALUES ({placeholders})",
+            payload,
+        )
+        self.conn.commit()
+        return len(payload)
+
+    def scores_for(self, axis: str, model_version: int) -> list[dict]:
+        """한 축·기준모델의 점수 행(검증·테스트용)."""
+        cur = self.conn.execute(
+            "SELECT * FROM scores WHERE axis=? AND model_version=?",
+            (axis, model_version),
+        )
+        return [dict(r) for r in cur.fetchall()]
 
     def load_reference(self):
         """최신(활성) 기준 모델 로드. 없으면 None. model_version 키 포함."""
