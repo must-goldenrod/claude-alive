@@ -12,7 +12,7 @@
 |---|---|---|
 | Pilot-0 | 부분 완료 | attribution 실측(오귀속 55.7%)·신호밀도 1차 측정 완료. 임계 확정·재현은 미완 |
 | **M0 코어** | 구현 완료 | 단일세션 결정론, SQLite, profile/timeline. **제품(TS) 통합 완료** — scores export → server 읽기 브리지 → RightPanel EfficioPanel 시계열. 입력원 transcript 파싱 |
-| **M0 제품 통합** | 완료 | DB 읽기 브리지(node:sqlite read-only, 의존성 0 추가). `/api/efficio/{status,timeline}` + WS efficio:update. 다축 프로파일 카드·실시간 WS 반영은 백로그 |
+| **M0 제품 통합** | 완료 | DB 읽기 브리지(node:sqlite read-only, 의존성 0 추가). `/api/efficio/{status,timeline,profiles}` + WS efficio:update. **전용 Efficio 탭(다축 프로파일 카드·산점도·분포·다축시계열) 완료.** 실시간 WS 자동 새로고침만 백로그 |
 | M1 | 미착수 | 게이트 명세 + 난이도 보정 + SLO 계측 |
 | M2 | 미착수 | T2 LLM 판별 |
 | M3 | 미착수 | 팀 집계 (k-익명성 기술강제 선결) |
@@ -31,7 +31,7 @@
 
 - [x] **M0-1 제품 통합** — **DB 읽기 브리지** 채택. efficio가 `collect`/`fit` 시 `scores` 테이블에 축별 점수 영속화(`profile.export_scores`) → server가 `node:sqlite` read-only로 읽어 `GET /api/efficio/{status,timeline}` + WS `efficio:update`(fs.watch) → UI `RightPanel`의 `EfficioPanel`. **server는 통계를 재계산하지 않음**(드리프트 단일출처=efficio Python). 의존성 0개 추가. End-to-end 검증: 실 DB 230세션·920점수행, 브라우저 렌더 확인.
 - [ ] **M0-2 입력원 정합** — 문서 M0 스펙은 "OTel/훅 수집"이나 현재는 `~/.claude/projects` transcript 직접 파싱. `packages/hooks`(17 이벤트) 연계 여부 미설계. (통합과 무관하게 잔존)
-- [~] **M0-3 UX** — `EfficioPanel`에 축 선택(W2/WC/Bash/W3) + 잔차 시계열 스파크라인(백분위↑=낭비↑) + 데이터 없을 시 `collect` 안내 노출. **다축 프로파일 카드(세션 클릭 시 상세)·실시간 WS 반영은 백로그.**
+- [x] **M0-3 UX** — (1) RightPanel `EfficioPanel`(축 선택 + 잔차 시계열 스파크라인 + `collect` 안내), (2) **HeaderBar 'Efficio' 전용 탭** `EfficioView`: 세션 리스트 + 4뷰(SessionDetailCard 4축 상세·크기vs잔차 산점도·다축 시계열·분포 히스토그램), `GET /api/efficio/profiles` 데이터원. End-to-end 브라우저 렌더 검증(231세션). **실시간 WS 자동 새로고침만 백로그.**
 - [ ] **M0-4 추가 결정론 신호** (open Q #3) — W2/W3/WC/Bash 외 신규 신호 후보 탐색.
 
 ## 2. 검증 부채 (데이터·라벨 필요 — **사용자 차단**)
@@ -65,7 +65,7 @@ Pilot-0(부분) → M0(완료, 제품 통합 완료) → M1(게이트·난이도
 
 - **M1 진입**은 게이트 명세(5.2)가 선결.
 - **H1 정식 검증**은 평정자·라벨 없이는 진행 불가(차단).
-- 제품 통합(§1 M0-1)이 완료되어, **사용자 입력 없이 코드로 전진 가능한 다음 항목**은 §3 M1 게이트 명세 + §1 M0-3 다축 프로파일 카드(백로그)다.
+- 제품 통합(§1 M0-1·M0-3)이 완료되어, **사용자 입력 없이 코드로 전진 가능한 다음 항목**은 §3 M1 게이트 명세 + 실시간 WS 자동 새로고침·efficio 테스트(백로그)다.
 
 ## 6. 산출물 인덱스
 
@@ -75,7 +75,9 @@ Pilot-0(부분) → M0(완료, 제품 통합 완료) → M1(게이트·난이도
 | 제품 통합 — 점수 export | `efficio/store.py`(scores 테이블·replace_scores), `efficio/profile.py`(export_scores), `efficio/cli.py`(_persist_scores) |
 | 제품 통합 — server 브리지 | `packages/server/src/efficioReader.ts`(node:sqlite read-only), `httpRouter.ts`(`/api/efficio/*`), `index.ts`(fs.watch→WS) |
 | 제품 통합 — core 타입 | `packages/core/src/efficio/types.ts`, `protocol/wsProtocol.ts`(efficio:update) |
-| 제품 통합 — UI | `packages/ui/src/views/dashboard/components/EfficioPanel.tsx`, `views/unified/RightPanel.tsx`, i18n en/ko `efficio.*` |
+| 제품 통합 — UI (RightPanel) | `packages/ui/src/views/dashboard/components/EfficioPanel.tsx`, `views/unified/RightPanel.tsx`, i18n en/ko `efficio.*` |
+| 제품 통합 — 전용 뷰 | `packages/ui/src/views/efficio/` (EfficioView·SessionDetailCard·ScatterPlot·MultiAxisTimeline·DistributionHistogram·axes), HeaderBar 탭, server `efficioReader.profiles()` + `GET /api/efficio/profiles` |
+| 외부 공유 요약 | `docs/efficio-paper-abstract.md` (초록급) |
 | 설계 | `docs/waste-aware-eval-design.md` (v0.2.1) |
 | 방법론 문헌대조 | `docs/methodology-review.md` |
 | 라운드3 사전등록 | `docs/round3-preregistration.md` |
