@@ -52,6 +52,13 @@ cp -r "$ROOT/packages/ui/dist/." "$OUT/ui/"
 cp "$ROOT/LICENSE" "$OUT/"
 cp "$ROOT/README.md" "$OUT/"
 
+# Bundle efficio (pure-stdlib python — no numpy). The server spawns
+# `python3 -m efficio collect` from the package root on session end, so the
+# package needs the source tree (sources only; tests/__pycache__ excluded).
+mkdir -p "$OUT/efficio"
+cp "$ROOT"/efficio/*.py "$OUT/efficio/"
+cp "$ROOT/efficio/README.md" "$OUT/efficio/"
+
 # Create package.json for npm
 cat > "$OUT/package.json" << PKGJSON
 {
@@ -68,6 +75,7 @@ cat > "$OUT/package.json" << PKGJSON
     "dist/",
     "scripts/",
     "ui/",
+    "efficio/",
     "LICENSE",
     "README.md"
   ],

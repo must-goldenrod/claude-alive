@@ -1,6 +1,6 @@
+import math
+import random
 import unittest
-
-import numpy as np
 
 from efficio import reference
 from efficio.residual import size_factor, theil_sen
@@ -14,13 +14,13 @@ def _unit(sid, tokens, w2, w3=0, wc=0, bash=0):
 
 
 def _corpus(n, seed=0):
-    rng = np.random.RandomState(seed)
+    rng = random.Random(seed)
     units = []
     for i in range(n):
-        tok = int(np.exp(rng.uniform(10, 18)))
-        size = np.log(tok + 1)
-        w2 = max(0, int(5000 * size + rng.normal(0, 3000)))  # 크기 종속 + 노이즈
-        units.append(_unit(f"s{i}", tok, w2, w3=rng.randint(0, 4), wc=rng.randint(0, 3)))
+        tok = int(math.exp(rng.uniform(10, 18)))
+        size = math.log(tok + 1)
+        w2 = max(0, int(5000 * size + rng.gauss(0, 3000)))  # 크기 종속 + 노이즈
+        units.append(_unit(f"s{i}", tok, w2, w3=rng.randrange(0, 4), wc=rng.randrange(0, 3)))
     return units
 
 
@@ -29,7 +29,7 @@ class TestFitApply(unittest.TestCase):
         units = _corpus(30)
         model = reference.fit_reference(units, fit_at=100.0)
         size = size_factor([u["total_tokens"] for u in units])
-        raw = np.array([u["w2_raw"] for u in units], float)
+        raw = [float(u["w2_raw"]) for u in units]
         a, b = theil_sen(size, raw)
         # 기준집합 자기 자신에 적용한 잔차 == 직접 계산 잔차
         for i, u in enumerate(units):

@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-import numpy as np
+import math
 
 from .residual import percentile_rank, size_factor, theil_sen
 
@@ -23,12 +23,15 @@ AXES = [
 PRIMARY = "w2"
 
 
-def fit_reference(units: list, fit_at: float, axes=AXES) -> dict:
+def fit_reference(units: list, fit_at: float, axes: list | None = None) -> dict:
     """기준집합 units로 축별 (intercept, slope) + 기준 잔차 분포를 적합한다.
 
     반환은 JSON 직렬화 가능한 모델 dict. 이 모델은 이후 불변으로 취급한다.
+    결측 신호(마이그레이션으로 추가된 컬럼이 NULL)는 0으로 보정 — None 혼입 시
+    median 비교가 깨지거나 NaN으로 분포가 오염되는 것을 막는다.
     """
-    size = size_factor([u["total_tokens"] for u in units]) if units else np.array([])
+    axes = axes if axes is not None else AXES
+    size = size_factor([u["total_tokens"] for u in units]) if units else []
     model = {
         "fit_at": fit_at,
         "n": len(units),
@@ -36,9 +39,9 @@ def fit_reference(units: list, fit_at: float, axes=AXES) -> dict:
         "axes": {},
     }
     for ax in axes:
-        raw = np.array([u[ax["raw"]] for u in units], dtype=float)
+        raw = [float(u.get(ax["raw"]) or 0.0) for u in units]
         intercept, slope = theil_sen(size, raw)
-        residuals = (raw - (intercept + slope * size)).tolist() if len(raw) else []
+        residuals = [raw[i] - (intercept + slope * size[i]) for i in range(len(raw))]
         model["axes"][ax["key"]] = {
             "raw": ax["raw"],
             "label": ax["label"],
@@ -52,10 +55,10 @@ def fit_reference(units: list, fit_at: float, axes=AXES) -> dict:
 
 def apply_reference(model: dict, unit: dict) -> dict:
     """고정 모델을 한 세션에 적용 → 축별 잔차/백분위/0여부. 코퍼스와 무관(불변)."""
-    size = float(np.log(unit["total_tokens"] + 1.0))
+    size = math.log(float(unit["total_tokens"]) + 1.0)
     out = {}
     for key, m in model["axes"].items():
-        raw = unit[m["raw"]]
+        raw = float(unit.get(m["raw"]) or 0.0)  # 결측(NULL)·None은 0 보정 — TypeError 방지
         baseline = m["intercept"] + m["slope"] * size   # 같은 크기의 '예상' 신호(반사실 기준선)
         resid = raw - baseline                          # 회피가능 초과분 = 실제 − 기준선
         out[f"r_{key}"] = resid

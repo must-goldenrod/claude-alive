@@ -17,6 +17,7 @@ import {
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createEfficioReader } from './efficioReader.js';
+import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
 import { watch, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -42,6 +43,16 @@ const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // server never computes statistics — efficio (Python) writes pre-scored rows;
 // we only read them. Absent/empty DB degrades gracefully to available:false.
 const efficio = createEfficioReader();
+
+// Auto-collect: when a session ends, trigger `efficio collect` (debounced). The
+// existing ~/.efficio watcher then broadcasts efficio:update so the UI refreshes.
+// Disabled if efficio source isn't found or CLAUDE_ALIVE_AUTO_COLLECT=0.
+const efficioCollector = createEfficioCollector({
+  efficioRoot: process.env.CLAUDE_ALIVE_AUTO_COLLECT === '0' ? null : resolveEfficioRoot(),
+  python: process.env.EFFICIO_PYTHON ?? 'python3',
+  debounceMs: 60_000,
+  onLog: (m) => console.log(m),
+});
 
 function getSnapshot() {
   return {
@@ -95,6 +106,10 @@ function onEvent(payload: HookEventPayload): void {
     } else {
       broadcaster.broadcast({ type: 'agent:despawn', sessionId: agent.sessionId });
     }
+
+    // Session ended → transcript is complete. Trigger a debounced efficio collect
+    // so the dashboard's efficiency scores stay current without manual CLI runs.
+    efficioCollector.schedule();
 
     // Async transcript parsing (non-blocking)
     if (agent.transcriptPath) {
@@ -350,6 +365,7 @@ process.on('SIGINT', () => {
   for (const timer of despawnTimers.values()) clearTimeout(timer);
   despawnTimers.clear();
   metricsPoller.stop();
+  efficioCollector.stop();
   efficioWatcher?.close();
   stopWorkerLoop();
   promptSubsystem.fastify.close().catch(() => {});
