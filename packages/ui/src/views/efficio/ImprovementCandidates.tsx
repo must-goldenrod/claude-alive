@@ -24,8 +24,8 @@ function aggregate(
     for (const r of pick(s)) {
       const cur = map.get(r.item);
       if (cur) {
-        cur.totalCount += r.count;
-        cur.sessionCount += 1;
+        // 불변 갱신 — Map 내부 객체를 in-place 변이하지 않는다(렌더 중 부작용 방지).
+        map.set(r.item, { ...cur, totalCount: cur.totalCount + r.count, sessionCount: cur.sessionCount + 1 });
       } else {
         map.set(r.item, { item: r.item, totalCount: r.count, sessionCount: 1, sampleId: s.sessionId });
       }
@@ -51,8 +51,8 @@ export function ImprovementCandidates({ sessions, onSelect }: ImprovementCandida
       <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
         {t('efficio.view.candHint')}
       </p>
-      <CandList title={t('efficio.view.candBash')} rows={bash} onSelect={onSelect} t={t} />
-      <CandList title={t('efficio.view.candEdits')} rows={edits} onSelect={onSelect} t={t} />
+      <CandList title={t('efficio.view.candBash')} rows={bash} onSelect={onSelect} />
+      <CandList title={t('efficio.view.candEdits')} rows={edits} onSelect={onSelect} />
     </div>
   );
 }
@@ -61,10 +61,10 @@ interface CandListProps {
   title: string;
   rows: Aggregated[];
   onSelect: (id: string) => void;
-  t: (k: string, o?: Record<string, unknown>) => string;
 }
 
-function CandList({ title, rows, onSelect, t }: CandListProps) {
+function CandList({ title, rows, onSelect }: CandListProps) {
+  const { t } = useTranslation();
   return (
     <div>
       <div className="text-[12px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>

@@ -82,9 +82,13 @@ export function SessionDetailCard({ session }: SessionDetailCardProps) {
             {t('efficio.view.repeats')}
           </div>
           <div className="flex flex-col gap-1">
-            {[...session.topBash, ...session.topEdits].map((r) => (
-              <div key={r.item} className="flex items-center gap-2">
-                <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: wasteColor(80), fontFamily: 'var(--font-mono)' }}>
+            {[
+              // bash/edit 키 네임스페이스 분리 — 동일 문자열(예: ./build.sh)이 양쪽에 있어도 key 충돌 없음
+              ...session.topBash.map((r) => ({ ...r, k: `b:${r.item}` })),
+              ...session.topEdits.map((r) => ({ ...r, k: `e:${r.item}` })),
+            ].map((r) => (
+              <div key={r.k} className="flex items-center gap-2">
+                <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: 'var(--accent-red, #f85149)', fontFamily: 'var(--font-mono)' }}>
                   ×{r.count}
                 </span>
                 <code className="flex-1 min-w-0 truncate text-[10px]" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }} title={r.item}>
