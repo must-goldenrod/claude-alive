@@ -187,7 +187,8 @@
         "scatter": "크기 vs 잔차",
         "timeline": "다축 시계열",
         "distribution": "분포",
-        "candidates": "개선 후보"
+        "candidates": "개선 후보",
+        "reports": "리포트"
       },
       "scatterX": "세션 크기 (토큰)",
       "scatterY": "잔차 (크기보정)",
@@ -212,6 +213,24 @@
     "cluster": {
       "perceived": "체감",
       "behavioral": "행동"
+    },
+    "report": {
+      "noData": "범위 내 데이터 없음",
+      "nSessions": "{{count}}개 세션",
+      "trendTitle": "추세",
+      "trendDesc": "최근 세션들의 낭비 백분위 선형 추세(선택 축 기준). 상승은 악화를 뜻함.",
+      "trendRising": "상승 +{{slope}}/세션",
+      "trendFalling": "하락 -{{slope}}/세션",
+      "trendFlat": "평탄",
+      "trendAlert": "악화 중",
+      "projectTitle": "프로젝트별",
+      "projectDesc": "프로젝트별 평균 낭비 백분위 — 크기 대비 어느 프로젝트가 비효율적인지.",
+      "cacheTitle": "캐시 효율",
+      "cacheDesc": "캐시 재사용 = read / (read + creation). 높을수록 컨텍스트를 재무효화 않고 재사용.",
+      "cacheReuse": "read {{read}} · 생성 {{creation}} ({{count}}개 세션)",
+      "weeklyTitle": "주간 요약",
+      "weeklyDesc": "주별 평균 낭비와 해당 주 낭비 상위 세션.",
+      "weekAvg": "평균 {{pct}}%"
     }
   },
   "pixelOffice": {

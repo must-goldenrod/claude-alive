@@ -12,14 +12,15 @@ import { MultiAxisTimeline } from './MultiAxisTimeline.tsx';
 import { DistributionHistogram } from './DistributionHistogram.tsx';
 import { SessionDetailCard } from './SessionDetailCard.tsx';
 import { ImprovementCandidates } from './ImprovementCandidates.tsx';
+import { Reports } from './Reports.tsx';
 import type { RawMessageSubscribe } from '../../App.tsx';
 
 // Same origin convention as App.tsx / EfficioPanel: server serves UI and proxies in dev.
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 const LAST = 80;
 
-type Tab = 'sessions' | 'candidates' | 'scatter' | 'timeline' | 'distribution';
-const TABS: Tab[] = ['sessions', 'candidates', 'scatter', 'timeline', 'distribution'];
+type Tab = 'sessions' | 'reports' | 'candidates' | 'scatter' | 'timeline' | 'distribution';
+const TABS: Tab[] = ['sessions', 'reports', 'candidates', 'scatter', 'timeline', 'distribution'];
 
 const EMPTY_STATUS: EfficioStatus = {
   available: false,
@@ -207,6 +208,9 @@ export function EfficioView({ active, subscribeRaw }: EfficioViewProps) {
                 )}
                 {tab === 'candidates' && (
                   <ImprovementCandidates sessions={sessions} onSelect={setSelectedId} />
+                )}
+                {tab === 'reports' && (
+                  <Reports sessions={sessions} axis={axis} onSelect={setSelectedId} />
                 )}
                 {tab === 'sessions' && <SessionDetailCard session={selected} />}
               </div>

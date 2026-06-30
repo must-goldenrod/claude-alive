@@ -94,6 +94,10 @@ export interface EfficioSessionProfile {
   tsFirst: number;
   turns: number;
   totalTokens: number;
+  /** 캐시 생성 토큰(컨텍스트 재무효화 비용의 원천). 캐시 효율 리포트용. */
+  cacheCreation: number;
+  /** 캐시 읽기 토큰(재사용된 컨텍스트). 캐시 효율 리포트용. */
+  cacheRead: number;
   /** 축키 → 채점값. efficio가 4축 모두 채우므로 누락 축 없음. */
   axes: Record<EfficioAxisKey, EfficioAxisScore>;
   /** 2회 이상 반복한 Bash 명령 top-3(개선 후보). 반복 없으면 빈 배열. */

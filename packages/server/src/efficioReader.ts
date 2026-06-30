@@ -164,6 +164,8 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
                   w.ts_first AS tsFirst,
                   w.turns AS turns,
                   w.total_tokens AS totalTokens,
+                  w.cache_creation AS cacheCreation,
+                  w.cache_read AS cacheRead,
                   w.top_bash AS topBash,
                   w.top_edits AS topEdits
              FROM work_units w
@@ -179,6 +181,8 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
         tsFirst: number;
         turns: number;
         totalTokens: number;
+        cacheCreation: number | null;
+        cacheRead: number | null;
         topBash: string | null;
         topEdits: string | null;
       }>;
@@ -210,6 +214,8 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
           tsFirst: u.tsFirst,
           turns: u.turns,
           totalTokens: u.totalTokens,
+          cacheCreation: u.cacheCreation ?? 0,
+          cacheRead: u.cacheRead ?? 0,
           axes,
           topBash: parseRepeats(u.topBash),
           topEdits: parseRepeats(u.topEdits),
