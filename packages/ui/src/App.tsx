@@ -442,6 +442,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
+          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}

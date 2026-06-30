@@ -186,7 +186,8 @@
         "sessions": "세션",
         "scatter": "크기 vs 잔차",
         "timeline": "다축 시계열",
-        "distribution": "분포"
+        "distribution": "분포",
+        "candidates": "개선 후보"
       },
       "scatterX": "세션 크기 (토큰)",
       "scatterY": "잔차 (크기보정)",
@@ -199,7 +200,14 @@
       "tokens": "{{value}} tok",
       "noSignal": "신호 없음",
       "selectSession": "세션을 클릭하면 4축 상세",
-      "count": "세션 {{count}}개"
+      "count": "세션 {{count}}개",
+      "candHint": "백분위(평가)가 아니라 실제로 반복한 명령/파일입니다. 여러 세션에 걸쳐 반복될수록 CLAUDE.md 규칙 후보 가치가 큽니다.",
+      "candBash": "반복된 Bash 명령",
+      "candEdits": "반복 편집한 파일",
+      "candNone": "범위 내 반복 없음",
+      "candSessions": "{{count}}개 세션",
+      "candAcross": "{{sessions}}개 세션에서 총 {{total}}회 반복",
+      "repeats": "이 세션의 반복"
     },
     "cluster": {
       "perceived": "체감",
@@ -259,6 +267,7 @@
     "modeBottom": "하단",
     "modeRight": "우측",
     "modeFullscreen": "전체화면",
+    "modeFullscreenDisabled": "프롬프트/Efficio 뷰에서는 전체화면을 쓸 수 없습니다",
     "selectHere": "선택",
     "tabLocal": "로컬 폴더",
     "tabSsh": "SSH 원격",

@@ -186,7 +186,8 @@
         "sessions": "Sessions",
         "scatter": "Size vs residual",
         "timeline": "Multi-axis timeline",
-        "distribution": "Distribution"
+        "distribution": "Distribution",
+        "candidates": "Improvement candidates"
       },
       "scatterX": "Session size (tokens)",
       "scatterY": "Residual (size-adjusted)",
@@ -199,7 +200,14 @@
       "tokens": "{{value}} tok",
       "noSignal": "no signal",
       "selectSession": "Click a session for its 4-axis detail",
-      "count": "{{count}} sessions"
+      "count": "{{count}} sessions",
+      "candHint": "Not a percentile — concrete commands/files you repeated. Repeats across multiple sessions are the strongest CLAUDE.md rule candidates.",
+      "candBash": "Repeated Bash commands",
+      "candEdits": "Repeatedly edited files",
+      "candNone": "No repeats in range",
+      "candSessions": "{{count}} sessions",
+      "candAcross": "In {{sessions}} sessions, {{total}} repeats total",
+      "repeats": "Repeated in this session"
     },
     "cluster": {
       "perceived": "Perceived",
@@ -259,6 +267,7 @@
     "modeBottom": "Bottom",
     "modeRight": "Right",
     "modeFullscreen": "Fullscreen",
+    "modeFullscreenDisabled": "Fullscreen is unavailable in Prompt/Efficio view",
     "selectHere": "Select",
     "tabLocal": "Local folder",
     "tabSsh": "SSH remote",

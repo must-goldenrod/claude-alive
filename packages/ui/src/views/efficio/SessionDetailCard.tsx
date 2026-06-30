@@ -74,6 +74,27 @@ export function SessionDetailCard({ session }: SessionDetailCardProps) {
           );
         })}
       </div>
+
+      {/* 개선 후보(L1): 이 세션이 반복한 구체 명령/파일 — 규칙 후보의 사실 근거 */}
+      {(session.topBash.length > 0 || session.topEdits.length > 0) && (
+        <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
+          <div className="text-[10px] font-semibold mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+            {t('efficio.view.repeats')}
+          </div>
+          <div className="flex flex-col gap-1">
+            {[...session.topBash, ...session.topEdits].map((r) => (
+              <div key={r.item} className="flex items-center gap-2">
+                <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-secondary)', color: wasteColor(80), fontFamily: 'var(--font-mono)' }}>
+                  ×{r.count}
+                </span>
+                <code className="flex-1 min-w-0 truncate text-[10px]" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }} title={r.item}>
+                  {r.item}
+                </code>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

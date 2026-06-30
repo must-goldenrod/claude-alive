@@ -85,7 +85,20 @@ def extract_session(path: str) -> dict | None:
         "w3_raw": len(read_paths) - len(set(read_paths)),
         "wc_raw": len(edit_paths) - len(set(edit_paths)),
         "bash_raw": len(bash_cmds) - len(set(bash_cmds)),  # 행동축: Bash 시행착오 반복(13.5)
+        # 개선 후보(L1): 반복 카운트가 아닌 *무엇을* 반복했는지. 백분위(평가)가 아닌
+        # 사실이라 CLAUDE.md 규칙 후보로 직접 쓰인다. JSON 문자열로 영속.
+        "top_bash": json.dumps(_top_repeats(bash_cmds), ensure_ascii=False),
+        "top_edits": json.dumps(_top_repeats(edit_paths), ensure_ascii=False),
     }
+
+
+def _top_repeats(items: list[str], n: int = 3) -> list[list]:
+    """2회 이상 반복된 항목을 [항목, 횟수]로 상위 n개. 반복 없으면 빈 목록."""
+    from collections import Counter
+
+    counts = Counter(items)
+    repeated = [[item, c] for item, c in counts.most_common() if c >= 2]
+    return repeated[:n]
 
 
 def _is_real_prompt(entry: dict) -> bool:

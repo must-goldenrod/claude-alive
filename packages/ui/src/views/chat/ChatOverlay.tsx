@@ -78,6 +78,13 @@ interface ChatOverlayProps {
    * change and CSS transitions produce the "sliding" animation.
    */
   listViewActive?: boolean;
+  /**
+   * True while a view that renders its own full body-area content (Prompt / Efficio) is active.
+   * The fullscreen terminal would cover those views, so when one opens we demote the terminal
+   * from 'fullscreen' to the minimized 'popup' mode, then restore the prior mode when the user
+   * returns to a view that does not conflict (Animation / List).
+   */
+  contentViewActive?: boolean;
   /** Pixel width of the visible left sidebar. Used to compute the list-view left inset. */
   listLeftInset?: number;
   /** Called whenever the set of SSH tabs changes. Enables App/Sidebar to show a presence indicator. */
@@ -292,11 +299,32 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
   const [mode, setMode] = useState<TerminalMode>('popup');
+  // Mode to restore when the user leaves a content view (Prompt/Efficio) after we demoted
+  // a covering fullscreen terminal. Null when there is nothing to restore.
+  const restoreModeRef = useRef<TerminalMode | null>(null);
+
+  // Demote fullscreen → popup when a content view opens (the fullscreen terminal would otherwise
+  // cover Prompt/Efficio), and restore the prior mode when returning to Animation/List. Runs only
+  // when contentViewActive flips, so the user's mode choices inside a content view are left intact.
+  useEffect(() => {
+    if (contentViewActive) {
+      setMode(prev => {
+        if (prev === 'fullscreen') {
+          restoreModeRef.current = prev;
+          return 'popup';
+        }
+        return prev;
+      });
+    } else if (restoreModeRef.current) {
+      setMode(restoreModeRef.current);
+      restoreModeRef.current = null;
+    }
+  }, [contentViewActive]);
   const [bottomHeight, setBottomHeight] = useState<number | undefined>(undefined);
   const [rightWidth, setRightWidth] = useState<number | undefined>(undefined);
   const resizingRef = useRef<'bottom' | 'right' | null>(null);
@@ -1083,30 +1111,35 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
         {!isListView && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {/* Mode toggle buttons */}
-            {MODES.map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                title={t(MODE_I18N[m])}
-                style={{
-                  width: 28,
-                  height: 28,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: mode === m ? 'rgba(88, 166, 255, 0.15)' : 'transparent',
-                  border: 'none',
-                  borderRadius: 6,
-                  color: mode === m ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  opacity: mode === m ? 1 : 0.6,
-                }}
-              >
-                <ModeIcon mode={m} />
-              </button>
-            ))}
+            {/* Mode toggle buttons. Fullscreen is disabled while a content view (Prompt/Efficio)
+                is active, since it would cover that view. */}
+            {MODES.map((m) => {
+              const disabled = contentViewActive && m === 'fullscreen';
+              return (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  disabled={disabled}
+                  title={disabled ? t('terminal.modeFullscreenDisabled') : t(MODE_I18N[m])}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: mode === m ? 'rgba(88, 166, 255, 0.15)' : 'transparent',
+                    border: 'none',
+                    borderRadius: 6,
+                    color: mode === m ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.15s ease',
+                    opacity: disabled ? 0.25 : mode === m ? 1 : 0.6,
+                  }}
+                >
+                  <ModeIcon mode={m} />
+                </button>
+              );
+            })}
 
             <div style={{ width: 1, height: 16, background: 'var(--border-color)', margin: '0 6px' }} />
 
