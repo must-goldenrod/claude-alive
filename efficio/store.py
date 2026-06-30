@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS work_units (
     w3_raw          REAL,
     wc_raw          REAL,
     bash_raw        REAL,
+    top_bash        TEXT,
+    top_edits       TEXT,
     ingested_at     REAL
 );
 CREATE INDEX IF NOT EXISTS idx_wu_ts ON work_units(ts_first);
@@ -65,7 +67,7 @@ _COLUMNS = [
     "session_id", "project", "cwd", "git_branch", "ai_title", "ts_first", "ts_last",
     "turns", "assistant_msgs", "tool_calls", "reads", "edits",
     "input_tokens", "output_tokens", "cache_creation", "cache_read", "total_tokens",
-    "w2_raw", "w3_raw", "wc_raw", "bash_raw", "ingested_at",
+    "w2_raw", "w3_raw", "wc_raw", "bash_raw", "top_bash", "top_edits", "ingested_at",
 ]
 
 _SCORE_COLUMNS = [
@@ -91,6 +93,9 @@ class Store:
         for col in ("bash_raw",):
             if col not in existing:
                 self.conn.execute(f"ALTER TABLE work_units ADD COLUMN {col} REAL")
+        for col in ("top_bash", "top_edits"):  # 개선 후보(L1) — 반복 항목 식별자
+            if col not in existing:
+                self.conn.execute(f"ALTER TABLE work_units ADD COLUMN {col} TEXT")
         self.conn.commit()
 
     def upsert(self, rec: dict, ingested_at: float) -> None:

@@ -14,6 +14,7 @@ vi.mock('react-i18next', () => ({
         'terminal.modeBottom': 'Bottom',
         'terminal.modeRight': 'Right',
         'terminal.modeFullscreen': 'Fullscreen',
+        'terminal.modeFullscreenDisabled': 'Fullscreen unavailable',
         'terminal.collapse': 'Minimize',
       };
       if (key === 'terminal.tabLabel' && opts?.n != null) return `Terminal ${opts.n}`;
@@ -112,6 +113,44 @@ describe('ChatOverlay', () => {
     expect(screen.getByText('terminal.menu.manageSsh')).toBeDefined();
     expect(screen.queryByText(/terminal\.startHere/)).toBeNull();
     expect(screen.queryByText('terminal.skipPermissions')).toBeNull();
+  });
+
+  it('demotes fullscreen to popup and disables the fullscreen button when a content view opens', () => {
+    const { rerender } = render(<ChatOverlay open={true} onToggle={() => {}} />);
+    // User switches the terminal to fullscreen.
+    fireEvent.click(screen.getByTitle('Fullscreen'));
+    // A content view (Prompt/Efficio) becomes active — fullscreen would cover it.
+    rerender(<ChatOverlay open={true} onToggle={() => {}} contentViewActive={true} />);
+    // Fullscreen button is disabled (its title switches to the disabled hint).
+    const fsBtn = screen.getByTitle('Fullscreen unavailable') as HTMLButtonElement;
+    expect(fsBtn.disabled).toBe(true);
+    // Mode was demoted to popup → the popup button is now the active one.
+    const popupBtn = screen.getByTitle('Popup') as HTMLButtonElement;
+    expect(popupBtn.style.opacity).toBe('1');
+  });
+
+  it('restores the prior fullscreen mode when leaving the content view', () => {
+    const { rerender } = render(<ChatOverlay open={true} onToggle={() => {}} />);
+    fireEvent.click(screen.getByTitle('Fullscreen'));
+    // Enter a content view (demotes to popup) ...
+    rerender(<ChatOverlay open={true} onToggle={() => {}} contentViewActive={true} />);
+    // ... then return to Animation/List (contentViewActive false).
+    rerender(<ChatOverlay open={true} onToggle={() => {}} contentViewActive={false} />);
+    const fsBtn = screen.getByTitle('Fullscreen') as HTMLButtonElement;
+    expect(fsBtn.disabled).toBe(false);
+    // Fullscreen is the active mode again.
+    expect(fsBtn.style.opacity).toBe('1');
+  });
+
+  it('leaves the mode untouched when entering a content view without fullscreen', () => {
+    const { rerender } = render(<ChatOverlay open={true} onToggle={() => {}} />);
+    // Default mode is popup (not fullscreen).
+    rerender(<ChatOverlay open={true} onToggle={() => {}} contentViewActive={true} />);
+    // Popup stays active; nothing was demoted or stashed for restore.
+    const popupBtn = screen.getByTitle('Popup') as HTMLButtonElement;
+    expect(popupBtn.style.opacity).toBe('1');
+    rerender(<ChatOverlay open={true} onToggle={() => {}} contentViewActive={false} />);
+    expect((screen.getByTitle('Popup') as HTMLButtonElement).style.opacity).toBe('1');
   });
 
   it('calls onSpawn when overlay opens for the first time', async () => {

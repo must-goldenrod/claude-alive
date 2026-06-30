@@ -18,6 +18,7 @@ import type {
   EfficioAxisKey,
   EfficioAxisScore,
   EfficioProfiles,
+  EfficioRepeat,
   EfficioSessionProfile,
   EfficioStatus,
   EfficioTimeline,
@@ -62,6 +63,20 @@ function toAxisScore(row: {
     wastePercentile: row.wastePercentile ?? 0,
     isZero: (row.isZero ?? 0) !== 0,
   };
+}
+
+/** efficio가 JSON 문자열로 영속한 [item, count][]를 EfficioRepeat[]로. 구버전 NULL은 빈 배열. */
+function parseRepeats(json: string | null): EfficioRepeat[] {
+  if (!json) return [];
+  try {
+    const arr = JSON.parse(json) as unknown;
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((e): e is [string, number] => Array.isArray(e) && typeof e[0] === 'string' && typeof e[1] === 'number')
+      .map(([item, count]) => ({ item, count }));
+  } catch {
+    return [];
+  }
 }
 
 export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): EfficioReader {
@@ -148,7 +163,9 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
                   w.project AS project,
                   w.ts_first AS tsFirst,
                   w.turns AS turns,
-                  w.total_tokens AS totalTokens
+                  w.total_tokens AS totalTokens,
+                  w.top_bash AS topBash,
+                  w.top_edits AS topEdits
              FROM work_units w
              JOIN scores s ON s.session_id = w.session_id AND s.model_version = ?
             GROUP BY w.session_id
@@ -162,6 +179,8 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
         tsFirst: number;
         turns: number;
         totalTokens: number;
+        topBash: string | null;
+        topEdits: string | null;
       }>;
 
       const scoreStmt = db.prepare(
@@ -192,6 +211,8 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
           turns: u.turns,
           totalTokens: u.totalTokens,
           axes,
+          topBash: parseRepeats(u.topBash),
+          topEdits: parseRepeats(u.topEdits),
         };
       });
       sessions.reverse(); // 과거→현재(차트 좌→우)

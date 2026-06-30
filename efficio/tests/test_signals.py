@@ -95,6 +95,9 @@ class TestExtractSession(unittest.TestCase):
             rec = signals.extract_session(path)
             # ls -la ×3 + git status ×1 → 4 bash, 고유 2 → bash_raw = 2
             self.assertEqual(rec["bash_raw"], 2)
+            # 개선 후보(L1): 2회 이상 반복한 실제 명령만 [명령, 횟수]로. git status(×1) 제외.
+            self.assertEqual(json.loads(rec["top_bash"]), [["ls -la", 3]])
+            self.assertEqual(json.loads(rec["top_edits"]), [])
         finally:
             os.remove(path)
 
