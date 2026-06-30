@@ -12,6 +12,7 @@ import { MultiAxisTimeline } from './MultiAxisTimeline.tsx';
 import { DistributionHistogram } from './DistributionHistogram.tsx';
 import { SessionDetailCard } from './SessionDetailCard.tsx';
 import { ImprovementCandidates } from './ImprovementCandidates.tsx';
+import type { RawMessageSubscribe } from '../../App.tsx';
 
 // Same origin convention as App.tsx / EfficioPanel: server serves UI and proxies in dev.
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
@@ -30,9 +31,11 @@ const EMPTY_STATUS: EfficioStatus = {
 
 interface EfficioViewProps {
   active: boolean;
+  /** App의 WS raw 메시지 구독. 서버의 efficio:update(자동 collect 후) 수신 → 자동 갱신. */
+  subscribeRaw: RawMessageSubscribe;
 }
 
-export function EfficioView({ active }: EfficioViewProps) {
+export function EfficioView({ active, subscribeRaw }: EfficioViewProps) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<EfficioStatus>(EMPTY_STATUS);
   const [profiles, setProfiles] = useState<EfficioProfiles>({ modelVersion: null, sessions: [] });
@@ -64,6 +67,15 @@ export function EfficioView({ active }: EfficioViewProps) {
   useEffect(() => {
     if (active && !loaded) void refresh();
   }, [active, loaded, refresh]);
+
+  // Auto-refresh when the server reports the efficio DB changed (e.g. after an
+  // auto-collect run on session end). Only refetch once data is already loaded —
+  // an unopened tab loads fresh on first activation anyway.
+  useEffect(() => {
+    return subscribeRaw((msg) => {
+      if (msg.type === 'efficio:update' && loaded) void refresh();
+    });
+  }, [subscribeRaw, loaded, refresh]);
 
   const sessions = profiles.sessions;
   const selected = useMemo(

@@ -423,7 +423,7 @@ export default function App() {
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'efficio' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
-              <EfficioView active={viewMode === 'efficio'} />
+              <EfficioView active={viewMode === 'efficio'} subscribeRaw={subscribeRaw} />
             </Suspense>
           </div>
         </ErrorBoundary>
