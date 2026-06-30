@@ -187,7 +187,8 @@
         "scatter": "Size vs residual",
         "timeline": "Multi-axis timeline",
         "distribution": "Distribution",
-        "candidates": "Improvement candidates"
+        "candidates": "Improvement candidates",
+        "reports": "Reports"
       },
       "scatterX": "Session size (tokens)",
       "scatterY": "Residual (size-adjusted)",
@@ -212,6 +213,24 @@
     "cluster": {
       "perceived": "Perceived",
       "behavioral": "Behavioral"
+    },
+    "report": {
+      "noData": "No data in range",
+      "nSessions": "{{count}} sessions",
+      "trendTitle": "Trend",
+      "trendDesc": "Linear trend of waste percentile over recent sessions (for the selected axis). Rising means getting worse.",
+      "trendRising": "Rising +{{slope}}/session",
+      "trendFalling": "Falling -{{slope}}/session",
+      "trendFlat": "Flat",
+      "trendAlert": "worsening",
+      "projectTitle": "By project",
+      "projectDesc": "Average waste percentile per project — which project is inefficient for its size.",
+      "cacheTitle": "Cache efficiency",
+      "cacheDesc": "Cache reuse = read / (read + creation). Higher means context is reused rather than re-invalidated.",
+      "cacheReuse": "{{read}} read · {{creation}} created across {{count}} sessions",
+      "weeklyTitle": "Weekly summary",
+      "weeklyDesc": "Per-week average waste and that week's top sessions.",
+      "weekAvg": "avg {{pct}}%"
     }
   },
   "pixelOffice": {
