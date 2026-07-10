@@ -85,7 +85,7 @@
     "activeSlash": "{{active}} active / ",
     "hideInactive": "hide inactive",
     "inactiveCount": "+{{count}} inactive",
-    "clickToRename": "Click to rename",
+    "clickToRename": "Double-click to rename",
     "clickToRenameProject": "Click to rename this project",
     "events": "events",
     "tools": "tools",

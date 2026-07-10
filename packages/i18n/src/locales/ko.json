@@ -85,7 +85,7 @@
     "activeSlash": "{{active}}개 활성 / ",
     "hideInactive": "비활성 숨기기",
     "inactiveCount": "+{{count}}개 비활성",
-    "clickToRename": "클릭하여 이름 변경",
+    "clickToRename": "더블클릭하여 이름 변경",
     "clickToRenameProject": "클릭하여 프로젝트 이름 변경",
     "events": "이벤트",
     "tools": "도구",

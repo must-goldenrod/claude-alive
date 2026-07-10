@@ -89,14 +89,43 @@ interface CompactCardProps {
   /** When provided, overrides `agent.source === 'external'` — set by the sidebar based on
    *  whether the agent's root session is currently open as a chat tab. */
   isExternal?: boolean;
+  /**
+   * Rename handler. Renaming from a card edits the SAME cwd→name mapping the project
+   * header uses, so the name stays unified across the sidebar card, terminal tab, and
+   * dashboard. Double-click the card name to edit.
+   */
+  onProjectNameChange?: (cwd: string, name: string | null) => void;
 }
 
-function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, isExternal: isExternalProp }: CompactCardProps) {
+function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, isExternal: isExternalProp, onProjectNameChange }: CompactCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
   const stateColor = STATE_COLORS[agent.state] ?? 'var(--text-secondary)';
   const isExternal = isExternalProp ?? agent.source === 'external';
+
+  // Inline rename state. Only offered when a rename handler and a cwd are present.
+  const canRename = !!onProjectNameChange && !!agent.cwd;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (editing) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [editing]);
+  const startRename = () => {
+    if (!canRename) return;
+    setDraft(agent.displayName || agent.projectName || '');
+    setEditing(true);
+  };
+  const commitRename = () => {
+    const trimmed = draft.trim();
+    onProjectNameChange?.(agent.cwd, trimmed.length > 0 ? trimmed : null);
+    setEditing(false);
+  };
+  const cancelRename = () => setEditing(false);
 
   const handleClick = () => {
     if (isExternal) {
@@ -186,12 +215,40 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
         {/* Text content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <div
-              className="text-sm font-medium truncate"
-              style={{ color: 'var(--text-primary)', lineHeight: 1.4 }}
-            >
-              {displayLabel}
-            </div>
+            {editing ? (
+              <input
+                ref={nameInputRef}
+                className="text-sm font-medium rounded-md px-1 py-0.5 outline-none flex-1 min-w-0"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--accent-blue)',
+                  lineHeight: 1.4,
+                }}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename();
+                  else if (e.key === 'Escape') cancelRename();
+                }}
+                placeholder={agent.projectName || t('agents.generalAgent')}
+              />
+            ) : (
+              <div
+                className="text-sm font-medium truncate"
+                style={{ color: 'var(--text-primary)', lineHeight: 1.4, cursor: canRename ? 'text' : undefined }}
+                onDoubleClick={(e) => {
+                  if (!canRename) return;
+                  e.stopPropagation();
+                  startRename();
+                }}
+                title={canRename ? t('agents.clickToRename', { defaultValue: 'Double-click to rename' }) : undefined}
+              >
+                {displayLabel}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1.5">
             {isExternal && (
@@ -427,6 +484,7 @@ function SidebarProjectGroup({
                   ? !internalSessionIds.has(agent.sessionId)
                   : agent.source === 'external'
               }
+              onProjectNameChange={onProjectNameChange}
             />
           ))}
         </div>
