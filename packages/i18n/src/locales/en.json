@@ -433,5 +433,24 @@
     "listening": "Listening!",
     "done": "Done! Good work~",
     "idle": "Standing by..."
+  },
+  "dashboard": {
+    "title": "Sessions",
+    "subtitle": "Live and resumable Claude sessions. Click a card to open, focus, or resume.",
+    "empty": "No sessions yet. Start a new chat from the sidebar.",
+    "section": {
+      "live": "Live · {{n}}",
+      "dormant": "Resumable · {{n}}"
+    },
+    "action": {
+      "focus": "Open",
+      "resume": "Resume"
+    },
+    "time": {
+      "now": "just now",
+      "minutesAgo": "{{n}}m ago",
+      "hoursAgo": "{{n}}h ago",
+      "daysAgo": "{{n}}d ago"
+    }
   }
 }

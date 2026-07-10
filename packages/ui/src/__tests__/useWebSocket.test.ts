@@ -100,7 +100,7 @@ describe('useWebSocket', () => {
         type: 'snapshot',
         agents: [mockAgent('snap-1'), mockAgent('snap-2')],
         recentEvents: [],
-        completedSessions: [], stats: emptyStats,
+        completedSessions: [], stats: emptyStats, resumableSessions: [],
       });
     });
 
@@ -115,7 +115,7 @@ describe('useWebSocket', () => {
 
     const ws = MockWebSocket.instances[0]!;
     act(() => {
-      ws.simulateMessage({ type: 'snapshot', agents: [], recentEvents: [], completedSessions: [], stats: emptyStats });
+      ws.simulateMessage({ type: 'snapshot', agents: [], recentEvents: [], completedSessions: [], stats: emptyStats, resumableSessions: [] });
     });
     act(() => {
       ws.simulateMessage({ type: 'agent:spawn', agent: mockAgent('new-1') });
@@ -135,7 +135,7 @@ describe('useWebSocket', () => {
         type: 'snapshot',
         agents: [mockAgent('del-1')],
         recentEvents: [],
-        completedSessions: [], stats: emptyStats,
+        completedSessions: [], stats: emptyStats, resumableSessions: [],
       });
     });
     expect(result.current.agents.size).toBe(1);
@@ -156,7 +156,7 @@ describe('useWebSocket', () => {
         type: 'snapshot',
         agents: [mockAgent('state-1')],
         recentEvents: [],
-        completedSessions: [], stats: emptyStats,
+        completedSessions: [], stats: emptyStats, resumableSessions: [],
       });
     });
 
@@ -188,7 +188,7 @@ describe('useWebSocket', () => {
         type: 'snapshot',
         agents: [mockAgent('prompt-1')],
         recentEvents: [],
-        completedSessions: [], stats: emptyStats,
+        completedSessions: [], stats: emptyStats, resumableSessions: [],
       });
     });
 
@@ -213,7 +213,7 @@ describe('useWebSocket', () => {
         type: 'snapshot',
         agents: [mockAgent('name-1')],
         recentEvents: [],
-        completedSessions: [], stats: emptyStats,
+        completedSessions: [], stats: emptyStats, resumableSessions: [],
       });
     });
 
@@ -234,7 +234,7 @@ describe('useWebSocket', () => {
 
     const ws = MockWebSocket.instances[0]!;
     act(() => {
-      ws.simulateMessage({ type: 'snapshot', agents: [mockAgent('ev-1')], recentEvents: [], completedSessions: [], stats: emptyStats });
+      ws.simulateMessage({ type: 'snapshot', agents: [mockAgent('ev-1')], recentEvents: [], completedSessions: [], stats: emptyStats, resumableSessions: [] });
     });
 
     act(() => {
@@ -258,7 +258,7 @@ describe('useWebSocket', () => {
         type: 'snapshot',
         agents: [mockAgent('tools-1')],
         recentEvents: [],
-        completedSessions: [], stats: emptyStats,
+        completedSessions: [], stats: emptyStats, resumableSessions: [],
       });
     });
 
@@ -292,7 +292,7 @@ describe('useWebSocket', () => {
 
     const ws = MockWebSocket.instances[0]!;
     act(() => {
-      ws.simulateMessage({ type: 'snapshot', agents: [], recentEvents: [], completedSessions: [], stats: emptyStats });
+      ws.simulateMessage({ type: 'snapshot', agents: [], recentEvents: [], completedSessions: [], stats: emptyStats, resumableSessions: [] });
     });
     act(() => {
       ws.simulateMessage({

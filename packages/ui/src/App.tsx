@@ -169,7 +169,7 @@ export default function App() {
     }
   }, []);
 
-  const { agents, events, completedSessions, stats, systemMetrics, send } = useWebSocket(WS_URL, stableOnRaw);
+  const { agents, events, completedSessions, stats, systemMetrics, resumableSessions, connected, send } = useWebSocket(WS_URL, stableOnRaw);
 
   // Resource alert: fires when CPU or memory stays above the configured threshold for
   // `sustainSeconds`. After dismiss we apply a 30s cooldown to avoid spam loops.
@@ -314,6 +314,10 @@ export default function App() {
     send({ type: 'terminal:close', tabId });
   }, [send]);
 
+  const handleTerminalAttach = useCallback((tabId: string) => {
+    send({ type: 'terminal:attach', tabId });
+  }, [send]);
+
   /** Save or clear a project name for a cwd. Server broadcasts the new map back over WS. */
   const handleProjectNameChange = useCallback((cwd: string, name: string | null) => {
     fetch(`${API_BASE}/api/projects/names`, {
@@ -413,6 +417,7 @@ export default function App() {
                 onProjectNameChange={handleProjectNameChange}
                 selectedSessionId={selectedSessionId}
                 chatClaudeSessionIds={chatClaudeSessionIds}
+                resumableSessions={resumableSessions}
               />
             </Suspense>
           </div>
@@ -448,6 +453,8 @@ export default function App() {
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}
           projectNames={projectNames}
           waitingSessionIds={waitingSessionIds}
+          connected={connected}
+          onAttach={handleTerminalAttach}
         />
       </div>
     </div>

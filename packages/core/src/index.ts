@@ -13,6 +13,7 @@ export type {
   TerminalMode,
   TerminalSource,
   SSHErrorKind,
+  ResumableSession,
 } from './protocol/wsProtocol.js';
 export { parseTranscriptTokens } from './transcript/parser.js';
 export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';

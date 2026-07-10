@@ -433,5 +433,24 @@
     "listening": "듣고 있어요!",
     "done": "작업 끝! 수고하셨습니다~",
     "idle": "작업완료 후 대기중"
+  },
+  "dashboard": {
+    "title": "세션",
+    "subtitle": "실행 중이거나 재개 가능한 Claude 세션. 카드를 클릭해 열기·포커스·재개하세요.",
+    "empty": "아직 세션이 없습니다. 사이드바에서 새 채팅을 시작하세요.",
+    "section": {
+      "live": "실행 중 · {{n}}",
+      "dormant": "재개 가능 · {{n}}"
+    },
+    "action": {
+      "focus": "열기",
+      "resume": "재개"
+    },
+    "time": {
+      "now": "방금",
+      "minutesAgo": "{{n}}분 전",
+      "hoursAgo": "{{n}}시간 전",
+      "daysAgo": "{{n}}일 전"
+    }
   }
 }

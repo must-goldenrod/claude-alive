@@ -17,6 +17,8 @@ import {
 } from './sshPresets.ts';
 import type { SSHPreset, SSHPresetDraft } from './sshPresets.ts';
 import { loadRecentFolders, pushRecentFolder, removeRecentFolder } from './recentFolders.ts';
+import { loadOpenTabs, saveOpenTabs } from './openTabsStore.ts';
+import type { PersistedTab } from './openTabsStore.ts';
 import { getSettings, getThemeById, getFontFamily, subscribeSettings } from '../../services/settings.ts';
 import type { AppSettings } from '../../services/settings.ts';
 
@@ -107,6 +109,13 @@ interface ChatOverlayProps {
    * render the orange "needs attention" tab background. Computed from the WS agent map by App.
    */
   waitingSessionIds?: Set<string>;
+  /**
+   * WS connection state. On each false→true transition every live tab is
+   * reattached to its server-owned pty (resubscribe + scrollback replay).
+   */
+  connected?: boolean;
+  /** Reattach a tab to its server-owned terminal (sends `terminal:attach`). */
+  onAttach?: (tabId: string) => void;
 }
 
 /**
@@ -299,7 +308,7 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds, connected = false, onAttach }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
@@ -336,12 +345,23 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const onCloseRef = useRef(onClose);
   const onSshSessionsChangeRef = useRef(onSshSessionsChange);
   const onChatClaudeSessionsChangeRef = useRef(onChatClaudeSessionsChange);
+  const onAttachRef = useRef(onAttach);
+  const connectedRef = useRef(connected);
   onSpawnRef.current = onSpawn;
   onInputRef.current = onInput;
   onResizeRef.current = onResize;
   onCloseRef.current = onClose;
   onSshSessionsChangeRef.current = onSshSessionsChange;
   onChatClaudeSessionsChangeRef.current = onChatClaudeSessionsChange;
+  onAttachRef.current = onAttach;
+  connectedRef.current = connected;
+
+  // Tabs that have been (re)attached to their server pty in the current WS
+  // connection epoch. Reset on disconnect so a reconnect reattaches everything.
+  const attachedRef = useRef<Set<string>>(new Set());
+  // Live mirrors for use inside the stable terminal-event handler closure.
+  const tabsRef = useRef<Tab[]>([]);
+  const skipPermissionsRef = useRef(true);
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
@@ -352,6 +372,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const [claudeVariant, setClaudeVariant] = useState<'claude' | 'agents'>('claude');
   const [customPath, setCustomPath] = useState('');
   const [skipPermissions, setSkipPermissions] = useState(true);
+  tabsRef.current = tabs;
+  skipPermissionsRef.current = skipPermissions;
   const [_browsePath, setBrowsePath] = useState('~');
   const [browseDirs, setBrowseDirs] = useState<{ name: string; path: string }[]>([]);
   const [browseCurrentPath, setBrowseCurrentPath] = useState('');
@@ -443,6 +465,41 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     displayName?: string;
   }
 
+  // Allocate an xterm instance for `tabId`, mount it into the wrapper, and wire
+  // input. Shared by fresh spawns and restored tabs. Returns false if the
+  // wrapper isn't mounted yet (caller should abort the spawn/attach).
+  const mountTerminalUI = useCallback((tabId: string): boolean => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return false;
+    if (termsRef.current.has(tabId)) return true; // already mounted
+
+    const settings = getSettings();
+    const container = document.createElement('div');
+    container.style.flex = '1';
+    container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
+    container.style.overflow = 'hidden';
+    container.style.height = '100%';
+    wrapper.appendChild(container);
+    containersRef.current.set(tabId, container);
+
+    const term = new Terminal(buildTermOptions(settings));
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    term.open(container);
+    termsRef.current.set(tabId, { term, fit });
+
+    requestAnimationFrame(() => {
+      fit.fit();
+      onResizeRef.current?.(tabId, term.cols, term.rows);
+      term.focus();
+    });
+
+    term.onData((data) => {
+      onInputRef.current?.(tabId, data);
+    });
+    return true;
+  }, []);
+
   // Create a new tab: allocate xterm, mount to container, call onSpawn
   const createTab = useCallback(
     (opts: CreateTabOptions = {}) => {
@@ -462,6 +519,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         mode === 'claude'
           ? opts.resumeSessionId ?? (crypto.randomUUID?.() ?? generateFallbackUuid())
           : undefined;
+      const claudeVariant = opts.claudeVariant ?? 'claude';
 
       setTabs((prev) => [
         ...prev,
@@ -474,40 +532,19 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           source,
           sshPresetId: opts.sshPresetId,
           claudeSessionId,
+          mode,
+          claudeVariant,
+          displayName: opts.displayName,
         },
       ]);
       setActiveTabId(tabId);
 
       // Defer xterm creation to next frame so the container div exists
       requestAnimationFrame(() => {
-        const wrapper = wrapperRef.current;
-        if (!wrapper) return;
-
-        const settings = getSettings();
-        const container = document.createElement('div');
-        container.style.flex = '1';
-        container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
-        container.style.overflow = 'hidden';
-        container.style.height = '100%';
-        wrapper.appendChild(container);
-        containersRef.current.set(tabId, container);
-
-        const term = new Terminal(buildTermOptions(settings));
-        const fit = new FitAddon();
-        term.loadAddon(fit);
-        term.open(container);
-        termsRef.current.set(tabId, { term, fit });
-
-        requestAnimationFrame(() => {
-          fit.fit();
-          onResizeRef.current?.(tabId, term.cols, term.rows);
-          term.focus();
-        });
-
-        term.onData((data) => {
-          onInputRef.current?.(tabId, data);
-        });
-
+        if (!mountTerminalUI(tabId)) return;
+        // A freshly-spawned tab is already subscribed on the server; mark it so
+        // the attach-on-connect effect doesn't double-subscribe it this epoch.
+        attachedRef.current.add(tabId);
         onSpawnRef.current?.({
           tabId,
           cwd: opts.cwd,
@@ -515,7 +552,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           mode,
           source,
           initialCommand: opts.initialCommand,
-          claudeVariant: opts.claudeVariant ?? 'claude',
+          claudeVariant,
           claudeSessionId: opts.resumeSessionId ? undefined : claudeSessionId,
           resumeSessionId: opts.resumeSessionId,
           displayName: opts.displayName,
@@ -524,8 +561,95 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
       return tabId;
     },
-    [t, projectNames],
+    [t, projectNames, mountTerminalUI],
   );
+
+  // Restore a persisted tab after a page reload: recreate the tab UI WITHOUT
+  // spawning a new session. The attach-on-connect effect (or the rAF below, if
+  // already connected) sends `terminal:attach` to resubscribe to the live pty;
+  // the server replies with `terminal:restore` (scrollback) or `terminal:dormant`.
+  const restoreTab = useCallback((p: PersistedTab) => {
+    setTabs((prev) =>
+      prev.some((t) => t.id === p.tabId)
+        ? prev
+        : [
+            ...prev,
+            {
+              id: p.tabId,
+              label: p.label,
+              cwd: p.cwd,
+              exited: false,
+              status: 'idle' as const,
+              source: 'local' as const,
+              claudeSessionId: p.claudeSessionId,
+              mode: p.mode,
+              claudeVariant: p.claudeVariant,
+              displayName: p.displayName,
+            },
+          ],
+    );
+    requestAnimationFrame(() => {
+      if (!mountTerminalUI(p.tabId)) return;
+      if (connectedRef.current && !attachedRef.current.has(p.tabId)) {
+        attachedRef.current.add(p.tabId);
+        onAttachRef.current?.(p.tabId);
+      }
+    });
+  }, [mountTerminalUI]);
+
+  // Restore persisted tabs once, on first mount.
+  const didRestoreRef = useRef(false);
+  useEffect(() => {
+    if (didRestoreRef.current) return;
+    didRestoreRef.current = true;
+    const persisted = loadOpenTabs();
+    if (persisted.length === 0) return;
+    for (const p of persisted) restoreTab(p);
+    setActiveTabId(persisted[persisted.length - 1]!.tabId);
+  }, [restoreTab]);
+
+  // Persist the set of open Claude tabs whenever it changes, so a reload can
+  // restore them. SSH/shell tabs and exited tabs are excluded — only resumable
+  // Claude sessions are worth restoring.
+  useEffect(() => {
+    const persisted: PersistedTab[] = tabs
+      .filter(
+        (tab) =>
+          !tab.exited &&
+          tab.source === 'local' &&
+          (tab.mode ?? 'claude') === 'claude' &&
+          !!tab.claudeSessionId,
+      )
+      .map((tab) => ({
+        tabId: tab.id,
+        claudeSessionId: tab.claudeSessionId,
+        cwd: tab.cwd,
+        label: tab.label,
+        mode: tab.mode ?? 'claude',
+        claudeVariant: tab.claudeVariant,
+        displayName: tab.displayName,
+      }));
+    saveOpenTabs(persisted);
+  }, [tabs]);
+
+  // On disconnect, clear the attached set so a reconnect reattaches every tab.
+  useEffect(() => {
+    if (!connected) attachedRef.current = new Set();
+  }, [connected]);
+
+  // When (re)connected, reattach every live, mounted tab that hasn't been
+  // attached in this connection epoch. Covers both first-load restore and
+  // reconnect-after-drop; freshly-spawned tabs are pre-marked in createTab.
+  useEffect(() => {
+    if (!connected) return;
+    for (const tab of tabs) {
+      if (tab.exited) continue;
+      if (!termsRef.current.has(tab.id)) continue;
+      if (attachedRef.current.has(tab.id)) continue;
+      attachedRef.current.add(tab.id);
+      onAttachRef.current?.(tab.id);
+    }
+  }, [connected, tabs]);
 
   const fetchBrowse = useCallback(
     (dir: string) => {
@@ -559,22 +683,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     return () => window.removeEventListener('terminal:createTab', handler);
   }, [openLocalPicker]);
 
-  // Reload/close guard. Browsers nuke the xterm DOM + server PTYs when the page
-  // reloads, which is easy to trigger accidentally (Cmd-R). Show the native
-  // "Leave site?" prompt whenever there is at least one live tab. We count only
-  // tabs that haven't exited — closed tabs left in the bar are not worth a prompt.
-  // Note: per spec, modern browsers ignore the custom message and show their own.
-  const liveTabCount = tabs.filter((t) => !t.exited).length;
-  useEffect(() => {
-    if (liveTabCount === 0) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // Required for legacy browsers; modern ones display a generic message.
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [liveTabCount]);
+  // (Reload guard removed: server-owned ptys now survive a page reload and open
+  // tabs are restored + reattached from localStorage, so a Cmd-R no longer loses
+  // the session.)
 
   // Allow sidebar items (agents / SSH presence) to focus a specific terminal tab.
   // Detail accepts either { tabId } (direct match) or { sessionId } (matched via Tab.claudeSessionId).
@@ -904,6 +1015,44 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       if (msg.type === 'terminal:output') {
         termsRef.current.get(msg.tabId)?.term.write(msg.data);
         markTabActivity(msg.tabId);
+      } else if (msg.type === 'terminal:restore') {
+        // Reattached to a live pty: repaint the screen from the server's
+        // scrollback. reset() first so a resubscribe (reconnect) doesn't
+        // duplicate content already on-screen.
+        const entry = termsRef.current.get(msg.tabId);
+        if (entry) {
+          entry.term.reset();
+          entry.term.write(msg.data);
+        }
+        // Clear any stale dormant/exited flag now that the session is live again.
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === msg.tabId ? { ...tab, dormant: false } : tab,
+          ),
+        );
+        markTabActivity(msg.tabId);
+      } else if (msg.type === 'terminal:dormant') {
+        // The server restarted: no live pty for this tab. Auto-resume in place —
+        // the tab already carries the cwd/variant, so `claude --resume` continues
+        // the same conversation under the same tabId.
+        const entry = termsRef.current.get(msg.tabId);
+        entry?.term.reset();
+        entry?.term.write('\x1b[2m[세션 재개 중… / resuming session…]\x1b[0m\r\n');
+        const tab = tabsRef.current.find((t) => t.id === msg.tabId);
+        onSpawnRef.current?.({
+          tabId: msg.tabId,
+          cwd: tab?.cwd,
+          skipPermissions: skipPermissionsRef.current,
+          mode: tab?.mode ?? 'claude',
+          source: 'local',
+          claudeVariant: tab?.claudeVariant ?? 'claude',
+          resumeSessionId: msg.claudeSessionId,
+          displayName: tab?.displayName,
+        });
+        attachedRef.current.add(msg.tabId);
+        setTabs((prev) =>
+          prev.map((t) => (t.id === msg.tabId ? { ...t, dormant: false, exited: false } : t)),
+        );
       } else if (msg.type === 'terminal:exited') {
         const timer = idleTimersRef.current.get(msg.tabId);
         if (timer) {
@@ -1005,11 +1154,15 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const layoutStyle = isListView
     ? getListViewStyle(listLeftInset)
     : getModeStyle(mode, bottomHeight, rightWidth);
+  // In list view with no open tabs, hide the terminal surface so the session
+  // dashboard rendered in the body shows through. Clicking a dashboard card
+  // opens/resumes a tab, at which point the overlay reappears.
+  const listViewEmpty = isListView && !hasTabs;
   const rootStyle: React.CSSProperties = {
     ...layoutStyle,
     transition: resizingRef.current ? 'none' : OVERLAY_TRANSITION,
-    opacity: open ? 1 : 0,
-    pointerEvents: open ? 'auto' : 'none',
+    opacity: listViewEmpty ? 0 : open ? 1 : 0,
+    pointerEvents: listViewEmpty || !open ? 'none' : 'auto',
   };
 
   const tree = (

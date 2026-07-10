@@ -83,10 +83,11 @@ type ManagedSessionRecord = {
 
 **서버 재시작:** 부팅 시 레지스트리 로드 → dormant 세션으로 스냅샷의
 `resumableSessions`에 포함. `managedSessionIds` 재구성.
-- dormant 카드/탭 클릭 → UI가 `openTab({ resumeSessionId: claudeSessionId, ... })`
-  → `terminal:spawn { resumeSessionId }` → 서버 `claude --resume`.
-- 자동 resume: 설정 토글 `autoResumeOnStart`(기본 off). on이면 클라이언트가 attach 응답이
-  dormant일 때 즉시 resume spawn.
+- **열린 탭(재시작 시점에 사용자가 열어둔 탭):** attach 응답이 `terminal:dormant`이면
+  UI가 **그 자리에서 자동 resume**한다(같은 tabId로 `terminal:spawn { resumeSessionId }`).
+  사용자 개입 없이 대화가 이어진다.
+- **닫혀 있던(대시보드의) dormant 세션:** 자동 재개하지 않는다. 대시보드 카드 클릭 →
+  `terminal:resumeExternal { sessionId, cwd }` → 새 탭에서 `claude --resume`(lazy).
 
 ### 5. UI: `list` → 에이전트 대시보드 (`SessionDashboardView`)
 

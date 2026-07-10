@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats } from '@claude-alive/core';
+import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats, ResumableSession } from '@claude-alive/core';
 import { playCompletionSound } from '../../../services/sound';
 
 export interface SystemMetrics {
@@ -19,6 +19,8 @@ export interface DashboardState {
   stats: AgentStats | null;
   connected: boolean;
   systemMetrics: SystemMetrics | null;
+  /** Persisted UI-spawned sessions with no live pty — resumable after a restart. */
+  resumableSessions: ResumableSession[];
 }
 
 // Auto-prune window for agents in `despawning` state. They linger briefly so
@@ -33,6 +35,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
     stats: null,
     connected: false,
     systemMetrics: null,
+    resumableSessions: [],
   });
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -73,7 +76,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
             }
             events = msg.recentEvents;
             completedSessions = msg.completedSessions ?? [];
-            return { agents, events, completedSessions, stats: msg.stats ?? null, connected: true, systemMetrics: prev.systemMetrics };
+            return { agents, events, completedSessions, stats: msg.stats ?? null, connected: true, systemMetrics: prev.systemMetrics, resumableSessions: msg.resumableSessions ?? [] };
           }
           case 'agent:spawn': {
             agents.set(msg.agent.sessionId, msg.agent);
@@ -153,6 +156,9 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
           case 'stats:update': {
             return { ...prev, stats: msg.stats };
           }
+          case 'sessions:resumable': {
+            return { ...prev, resumableSessions: msg.sessions };
+          }
           case 'system:heartbeat': {
             // Connection alive
             break;
@@ -170,7 +176,7 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
           }
         }
 
-        return { agents, events, completedSessions, stats: prev.stats, connected: true, systemMetrics: prev.systemMetrics };
+        return { agents, events, completedSessions, stats: prev.stats, connected: true, systemMetrics: prev.systemMetrics, resumableSessions: prev.resumableSessions };
       });
     };
   }, [url, onRawMessage]);

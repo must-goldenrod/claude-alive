@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SSHErrorKind, TerminalSource } from '@claude-alive/core';
+import type { SSHErrorKind, TerminalSource, TerminalMode } from '@claude-alive/core';
 
 export type TabStatus = 'idle' | 'active' | 'waiting' | 'done';
 
@@ -18,6 +18,14 @@ export interface Tab {
   sshError?: { kind: SSHErrorKind; line: string };
   /** Claude CLI session UUID (from --session-id / --resume). */
   claudeSessionId?: string;
+  /** Terminal mode — needed to persist & resume the tab across reloads. */
+  mode?: TerminalMode;
+  /** Claude entrypoint variant — persisted for resume. */
+  claudeVariant?: 'claude' | 'agents';
+  /** Display name passed via `claude -n` — persisted for resume. */
+  displayName?: string;
+  /** True when the server has no live pty for this tab (post-restart); awaiting resume. */
+  dormant?: boolean;
 }
 
 interface TerminalTabBarProps {

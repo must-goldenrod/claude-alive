@@ -14,6 +14,21 @@ export type SSHErrorKind =
   | 'host-key-changed'
   | 'unknown';
 
+/**
+ * A managed Claude session that the server spawned and persisted to disk, but
+ * whose pty is no longer running (server was restarted). The UI can offer to
+ * resume it via `claude --resume <claudeSessionId>`.
+ */
+export interface ResumableSession {
+  tabId: string;
+  claudeSessionId: string;
+  cwd?: string;
+  displayName?: string;
+  mode: TerminalMode;
+  claudeVariant: 'claude' | 'agents';
+  lastActive: number;
+}
+
 export type WSServerMessage =
   | { type: 'agent:spawn'; agent: AgentInfo }
   | { type: 'agent:despawn'; sessionId: string }
@@ -23,12 +38,20 @@ export type WSServerMessage =
   | { type: 'agent:completed'; session: CompletedSession }
   | { type: 'event:new'; entry: EventLogEntry }
   | { type: 'stats:update'; stats: AgentStats }
-  | { type: 'snapshot'; agents: AgentInfo[]; recentEvents: EventLogEntry[]; completedSessions: CompletedSession[]; stats: AgentStats }
+  | { type: 'snapshot'; agents: AgentInfo[]; recentEvents: EventLogEntry[]; completedSessions: CompletedSession[]; stats: AgentStats; resumableSessions: ResumableSession[] }
   | { type: 'system:heartbeat'; timestamp: number }
   | { type: 'system:metrics'; cpu: number; memUsed: number; memTotal: number; timestamp: number }
   | { type: 'terminal:output'; tabId: string; data: string }
   | { type: 'terminal:exited'; tabId: string; exitCode: number }
   | { type: 'terminal:ssh-error'; tabId: string; kind: SSHErrorKind; line: string }
+  // Sent in response to `terminal:attach` when the pty is still alive: replays
+  // the scrollback ring buffer so the reattaching browser restores its screen.
+  | { type: 'terminal:restore'; tabId: string; data: string }
+  // Sent in response to `terminal:attach` when the pty is gone (server restart).
+  // The UI can offer to resume the conversation via `claude --resume`.
+  | { type: 'terminal:dormant'; tabId: string; claudeSessionId: string }
+  // Broadcast when the set of resumable (dormant) sessions changes.
+  | { type: 'sessions:resumable'; sessions: ResumableSession[] }
   | { type: 'project:names'; names: Record<string, string> }
   | { type: 'efficio:update'; status: EfficioStatus };
 
@@ -54,4 +77,7 @@ export type WSClientMessage =
     }
   | { type: 'terminal:input'; tabId: string; data: string }
   | { type: 'terminal:resize'; tabId: string; cols: number; rows: number }
-  | { type: 'terminal:close'; tabId: string };
+  | { type: 'terminal:close'; tabId: string }
+  // Reattach to a server-owned terminal after a browser refresh. The server
+  // replies with `terminal:restore` (pty alive) or `terminal:dormant` (pty gone).
+  | { type: 'terminal:attach'; tabId: string };

@@ -6,7 +6,7 @@ import type { WSServerMessage, WSClientMessage } from '@claude-alive/core';
 const MAX_CLIENTS = 50;
 
 export interface WSBroadcasterOptions {
-  getSnapshot: () => { agents: unknown[]; recentEvents: unknown[]; completedSessions: unknown[]; stats: unknown };
+  getSnapshot: () => { agents: unknown[]; recentEvents: unknown[]; completedSessions: unknown[]; stats: unknown; resumableSessions: unknown[] };
   maxClients?: number;
   onClientMessage?: (ws: WebSocket, msg: WSClientMessage) => void;
   onClientDisconnect?: (ws: WebSocket) => void;

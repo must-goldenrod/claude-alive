@@ -1,10 +1,18 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
-import type { WebSocket } from 'ws';
 import { createPromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
-import { ClaudeTerminal } from './claudeTerminal.js';
+import { TerminalManager } from './terminalManager.js';
+import {
+  loadManagedSessions,
+  saveManagedSession,
+  touchManagedSession,
+  removeManagedSession,
+  getManagedSession,
+  getManagedSessionIds,
+  toResumableSessions,
+} from './managedSessionStore.js';
 import { buildSpawnPlaceholderEvent } from './spawnPlaceholder.js';
 import { loadNames, getNames, saveName, removeName } from './nameStore.js';
 import {
@@ -24,11 +32,27 @@ import { dirname } from 'node:path';
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
 const store = new SessionStore();
+
+/**
+ * Tracks every Claude session UUID we (the server) spawned via `terminal:spawn`,
+ * plus any restored from the persisted registry on boot. When a hook fires for a
+ * sessionId, we cross-reference this set to mark the agent as 'spawned-by-ui' vs
+ * 'external'. Resumed sessions also count as spawned-by-ui because the user
+ * explicitly opted in via our UI.
+ */
+const managedSessionIds = new Set<string>();
+
 // Load persisted names before starting the server. Project names (cwd-keyed) are the
 // primary source of truth; the old sessionId-keyed nameStore is kept as a secondary
 // fallback for agents whose cwd isn't in projectNames yet.
 await loadNames();
 await loadProjectNames();
+// Load the registry of UI-spawned Claude sessions persisted across restarts. Every
+// pty died when the previous process exited, so these start life as "dormant"
+// (resumable) sessions. We also repopulate managedSessionIds so hooks that fire
+// for a resumed session are still tagged 'spawned-by-ui'.
+await loadManagedSessions();
+for (const id of getManagedSessionIds()) managedSessionIds.add(id);
 
 // Absorbed think-prompt subsystem. Owns its own SQLite handle and a
 // Fastify instance mounted onto our shared http.Server below; no second
@@ -54,13 +78,24 @@ const efficioCollector = createEfficioCollector({
   onLog: (m) => console.log(m),
 });
 
+/** Persisted managed sessions that have no live pty right now — the resumable set. */
+function getResumableSessions() {
+  return toResumableSessions().filter((s) => !terminalManager.isLive(s.tabId));
+}
+
 function getSnapshot() {
   return {
     agents: store.getAllAgents(),
     recentEvents: store.getRecentEvents(100),
     completedSessions: store.getCompletedSessions(),
     stats: store.getStats(),
+    resumableSessions: getResumableSessions(),
   };
+}
+
+/** Push the current resumable set to every connected client. */
+function broadcastResumable(): void {
+  broadcaster.broadcast({ type: 'sessions:resumable', sessions: getResumableSessions() });
 }
 
 function onEvent(payload: HookEventPayload): void {
@@ -172,26 +207,6 @@ function removeAgent(sessionId: string): boolean {
   return ok;
 }
 
-// Per-client, per-tab terminal instances
-const terminals = new Map<WebSocket, Map<string, ClaudeTerminal>>();
-
-/**
- * Tracks every Claude session UUID we (the server) spawned via `terminal:spawn`.
- * When a hook fires for a sessionId, we cross-reference this set to mark the agent
- * as 'spawned-by-ui' vs 'external'. Resumed sessions also count as spawned-by-ui
- * because the user explicitly opted in via our UI.
- */
-const managedSessionIds = new Set<string>();
-
-function getOrCreateTabMap(ws: WebSocket): Map<string, ClaudeTerminal> {
-  let tabMap = terminals.get(ws);
-  if (!tabMap) {
-    tabMap = new Map();
-    terminals.set(ws, tabMap);
-  }
-  return tabMap;
-}
-
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
@@ -220,15 +235,26 @@ const httpServer = createHttpServer({
     }
   },
 });
+// Server-owned terminals, keyed by stable tabId and decoupled from the WS.
+// `send` forward-references `broadcaster` (assigned just below); it's only
+// invoked at message time, long after both are initialised.
+const terminalManager = new TerminalManager({
+  send: (ws, m) => broadcaster.send(ws, m),
+});
+
+// Throttles lastActive persistence per tab so active typing doesn't hammer disk.
+const lastTouchAt = new Map<string, number>();
+const TOUCH_THROTTLE_MS = 15_000;
+
 const broadcaster = new WSBroadcaster({
   getSnapshot,
   onClientMessage: (ws, msg) => {
     if (msg.type === 'terminal:spawn') {
-      const tabMap = getOrCreateTabMap(ws);
-      if (tabMap.has(msg.tabId)) return; // already exists
-      const term = new ClaudeTerminal();
-      tabMap.set(msg.tabId, term);
-      const isSsh = msg.source === 'ssh';
+      // Idempotent: a spawn for a tab we already own is treated as a reattach.
+      if (terminalManager.has(msg.tabId)) {
+        terminalManager.attach(msg.tabId, ws);
+        return;
+      }
       // Remember every Claude session UUID we mint or resume so the hook handler can
       // distinguish UI-spawned sessions from external CLI invocations.
       if (msg.claudeSessionId) managedSessionIds.add(msg.claudeSessionId);
@@ -243,57 +269,70 @@ const broadcaster = new WSBroadcaster({
       // This is what makes the Claude CLI /resume picker, sidebar, and tab label all share one name.
       const resolvedDisplayName =
         msg.displayName ?? (msg.cwd ? getProjectName(msg.cwd) : undefined);
-      term.spawn({
-        handler: (data) => {
-          broadcaster.send(ws, { type: 'terminal:output', tabId: msg.tabId, data });
-        },
-        cols: 80,
-        rows: 24,
-        onExit: (exitCode) => {
-          broadcaster.send(ws, { type: 'terminal:exited', tabId: msg.tabId, exitCode });
-        },
-        onSshError: isSsh
-          ? (err) => {
-              broadcaster.send(ws, {
-                type: 'terminal:ssh-error',
-                tabId: msg.tabId,
-                kind: err.kind,
-                line: err.line,
-              });
-            }
-          : undefined,
+      terminalManager.create(ws, {
+        tabId: msg.tabId,
         cwd: msg.cwd,
         mode: msg.mode ?? 'claude',
+        source: msg.source ?? 'local',
         claudeVariant: msg.claudeVariant ?? 'claude',
         skipPermissions: msg.skipPermissions,
         initialCommand: msg.initialCommand,
-        detectSshErrors: isSsh,
         claudeSessionId: msg.claudeSessionId,
         resumeSessionId: msg.resumeSessionId,
         displayName: resolvedDisplayName,
       });
-    } else if (msg.type === 'terminal:input') {
-      const term = terminals.get(ws)?.get(msg.tabId);
-      if (term) term.write(msg.data);
-    } else if (msg.type === 'terminal:resize') {
-      const term = terminals.get(ws)?.get(msg.tabId);
-      if (term) term.resize(msg.cols, msg.rows);
-    } else if (msg.type === 'terminal:close') {
-      const tabMap = terminals.get(ws);
-      const term = tabMap?.get(msg.tabId);
-      if (term) {
-        term.destroy();
-        tabMap!.delete(msg.tabId);
+      // Persist Claude (non-SSH) sessions so they can be resumed after a restart.
+      const effectiveClaudeId = msg.resumeSessionId ?? msg.claudeSessionId;
+      if ((msg.mode ?? 'claude') === 'claude' && msg.source !== 'ssh' && effectiveClaudeId) {
+        const now = Date.now();
+        saveManagedSession({
+          tabId: msg.tabId,
+          claudeSessionId: effectiveClaudeId,
+          cwd: msg.cwd,
+          displayName: resolvedDisplayName,
+          mode: 'claude',
+          claudeVariant: msg.claudeVariant ?? 'claude',
+          createdAt: now,
+          lastActive: now,
+        }).catch(() => {});
+        lastTouchAt.set(msg.tabId, now);
       }
+      broadcastResumable();
+    } else if (msg.type === 'terminal:attach') {
+      // Reattach after a browser refresh. Alive → restore scrollback; gone → dormant.
+      const result = terminalManager.attach(msg.tabId, ws);
+      if (result === 'missing') {
+        const rec = getManagedSession(msg.tabId);
+        if (rec) {
+          broadcaster.send(ws, {
+            type: 'terminal:dormant',
+            tabId: rec.tabId,
+            claudeSessionId: rec.claudeSessionId,
+          });
+        }
+        // else: a tab the server never knew about (stale) — the client drops it.
+      }
+    } else if (msg.type === 'terminal:input') {
+      terminalManager.input(msg.tabId, msg.data);
+      const now = Date.now();
+      const prev = lastTouchAt.get(msg.tabId) ?? 0;
+      if (now - prev > TOUCH_THROTTLE_MS && getManagedSession(msg.tabId)) {
+        lastTouchAt.set(msg.tabId, now);
+        touchManagedSession(msg.tabId, now).catch(() => {});
+      }
+    } else if (msg.type === 'terminal:resize') {
+      terminalManager.resize(msg.tabId, msg.cols, msg.rows);
+    } else if (msg.type === 'terminal:close') {
+      terminalManager.close(msg.tabId);
+      removeManagedSession(msg.tabId).catch(() => {});
+      lastTouchAt.delete(msg.tabId);
+      broadcastResumable();
     }
   },
   onClientDisconnect: (ws) => {
-    const tabMap = terminals.get(ws);
-    if (tabMap) {
-      for (const term of tabMap.values()) term.destroy();
-      tabMap.clear();
-      terminals.delete(ws);
-    }
+    // Drop this client's subscriptions only — ptys keep running so a refresh
+    // (or another browser) can reattach and replay the scrollback.
+    terminalManager.detachClient(ws);
   },
 });
 
