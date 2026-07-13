@@ -42,6 +42,9 @@ interface ManagedTerminal {
   subscribers: Set<WebSocket>;
   meta: ManagedTerminalMeta;
   exited: boolean;
+  /** Last known pty size — used to force a redraw on reattach. */
+  cols: number;
+  rows: number;
 }
 
 export interface TerminalManagerOptions {
@@ -92,6 +95,8 @@ export class TerminalManager {
       scrollback: '',
       subscribers: new Set([ws]),
       exited: false,
+      cols: 80,
+      rows: 24,
       meta: {
         tabId: opts.tabId,
         claudeSessionId: opts.resumeSessionId ?? opts.claudeSessionId,
@@ -153,7 +158,11 @@ export class TerminalManager {
   }
 
   resize(tabId: string, cols: number, rows: number): void {
-    this.terminals.get(tabId)?.term.resize(cols, rows);
+    const managed = this.terminals.get(tabId);
+    if (!managed) return;
+    managed.cols = cols;
+    managed.rows = rows;
+    managed.term.resize(cols, rows);
   }
 
   /** Explicit user close: destroy the pty and forget the terminal entirely. */
@@ -176,7 +185,31 @@ export class TerminalManager {
     this.send(ws, { type: 'terminal:restore', tabId: managed.meta.tabId, data: managed.scrollback });
     if (managed.exited) {
       this.send(ws, { type: 'terminal:exited', tabId: managed.meta.tabId, exitCode: 0 });
+      return;
     }
+    // Replaying raw scrollback does NOT reconstruct a full-screen TUI (e.g. Claude
+    // uses the alternate screen + absolute cursor positioning), so a reattaching
+    // browser would see a blank screen. Force the app to repaint by toggling the
+    // pty size, which fires SIGWINCH. The reattached client is already a
+    // subscriber, so the repaint output streams to it.
+    this.forceRedraw(managed);
+  }
+
+  /**
+   * Trigger a SIGWINCH-driven repaint so a reattaching client sees the current
+   * frame of a full-screen TUI (Claude). Two synchronous resizes net to no size
+   * change and the pty coalesces them into no SIGWINCH, so we bump the size now
+   * and restore it on a later tick — two DISTINCT size changes, each delivering a
+   * SIGWINCH the TUI actually reacts to. The restore targets the current tracked
+   * size in case the client sent its own resize in the interim.
+   */
+  private forceRedraw(managed: ManagedTerminal): void {
+    managed.term.resize(managed.cols, managed.rows + 1);
+    setTimeout(() => {
+      if (managed.exited) return;
+      if (this.terminals.get(managed.meta.tabId) !== managed) return;
+      managed.term.resize(managed.cols, managed.rows);
+    }, 60);
   }
 
   private appendScrollback(managed: ManagedTerminal, data: string): void {

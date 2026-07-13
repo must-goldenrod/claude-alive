@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { WebSocket } from 'ws';
 import type { WSServerMessage } from '@claude-alive/core';
 import { TerminalManager } from '../terminalManager.js';
@@ -10,6 +10,7 @@ class FakeTerminal {
   onExit: ((code: number) => void) | null = null;
   written: string[] = [];
   destroyed = false;
+  resizes: Array<[number, number]> = [];
   spawn(opts: { handler: (d: string) => void; onExit?: (c: number) => void }): void {
     this.handler = opts.handler;
     this.onExit = opts.onExit ?? null;
@@ -17,7 +18,9 @@ class FakeTerminal {
   write(data: string): void {
     this.written.push(data);
   }
-  resize(): void {}
+  resize(cols: number, rows: number): void {
+    this.resizes.push([cols, rows]);
+  }
   destroy(): void {
     this.destroyed = true;
   }
@@ -70,6 +73,39 @@ describe('TerminalManager', () => {
     ctx.fakes[0]!.handler!('world');
     expect(a.received).toContainEqual({ type: 'terminal:output', tabId: 'T1', data: 'world' });
     expect(b.received).toContainEqual({ type: 'terminal:output', tabId: 'T1', data: 'world' });
+  });
+
+  it('forces a redraw (two distinct SIGWINCH resizes) when reattaching to a live pty', () => {
+    vi.useFakeTimers();
+    try {
+      const a = fakeWs();
+      ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+      ctx.manager.resize('T1', 100, 30);
+      ctx.fakes[0]!.resizes.length = 0; // ignore the explicit resize above
+
+      const b = fakeWs();
+      ctx.manager.attach('T1', b.ws);
+      // Bump happens synchronously; restore fires on a later tick.
+      expect(ctx.fakes[0]!.resizes).toEqual([[100, 31]]);
+      vi.advanceTimersByTime(100);
+      expect(ctx.fakes[0]!.resizes).toEqual([
+        [100, 31],
+        [100, 30],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does NOT force a redraw when reattaching to an exited terminal', () => {
+    const a = fakeWs();
+    ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    ctx.fakes[0]!.onExit!(0);
+    ctx.fakes[0]!.resizes.length = 0;
+
+    const b = fakeWs();
+    ctx.manager.attach('T1', b.ws);
+    expect(ctx.fakes[0]!.resizes).toEqual([]);
   });
 
   it('keeps the pty alive when a client disconnects', () => {

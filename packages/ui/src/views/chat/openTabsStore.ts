@@ -27,6 +27,11 @@ export function loadOpenTabs(): PersistedTab[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((t) => t && typeof t.tabId === 'string')
+      // Drop legacy counter-format ids (`tab-1`, `tab-2`, …). Those were minted by
+      // a per-load counter that reset each reload, so they collide with unrelated
+      // server terminals — restoring them attaches to the wrong (or a missing)
+      // session and shows a blank terminal. Only UUID-format ids are trustworthy.
+      .filter((t) => !/^tab-\d+$/.test(t.tabId))
       .slice(0, MAX_TABS);
   } catch {
     return [];
