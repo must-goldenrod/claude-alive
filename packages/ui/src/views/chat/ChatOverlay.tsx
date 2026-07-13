@@ -19,6 +19,7 @@ import type { SSHPreset, SSHPresetDraft } from './sshPresets.ts';
 import { loadRecentFolders, pushRecentFolder, removeRecentFolder } from './recentFolders.ts';
 import { loadOpenTabs, saveOpenTabs } from './openTabsStore.ts';
 import type { PersistedTab } from './openTabsStore.ts';
+import { makeTabId, generateFallbackUuid } from './tabId.ts';
 import { getSettings, getThemeById, getFontFamily, subscribeSettings } from '../../services/settings.ts';
 import type { AppSettings } from '../../services/settings.ts';
 
@@ -243,28 +244,12 @@ function getModeStyle(mode: TerminalMode, bottomHeight?: number, rightWidth?: nu
   }
 }
 
+// Per-load counter used ONLY for the fallback display label ("Terminal N").
+// The tab *id* is a UUID (see makeTabId) — it must be globally unique.
 let tabCounter = 0;
-
-function makeTabId(): string {
-  return `tab-${++tabCounter}`;
-}
 
 function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
-}
-
-/**
- * Fallback v4-ish UUID for environments without `crypto.randomUUID`.
- * Claude CLI validates UUID format, so we keep the canonical 8-4-4-4-12 hex layout.
- */
-function generateFallbackUuid(): string {
-  const rnd = () => Math.random().toString(16).slice(2, 10);
-  const a = rnd();
-  const b = rnd().slice(0, 4);
-  const c = '4' + rnd().slice(0, 3);
-  const d = ((parseInt(rnd().slice(0, 1), 16) & 0x3) | 0x8).toString(16) + rnd().slice(0, 3);
-  const e = rnd() + rnd().slice(0, 4);
-  return `${a}-${b}-${c}-${d}-${e}`;
 }
 
 // Mode button SVG icons
@@ -510,7 +495,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       const resolvedProjectName = opts.cwd && projectNames ? projectNames[opts.cwd] : undefined;
       const defaultLabel = opts.cwd
         ? resolvedProjectName ?? pathBasename(opts.cwd)
-        : t('terminal.tabLabel', { n: tabCounter });
+        : t('terminal.tabLabel', { n: ++tabCounter });
       const label = opts.label ?? defaultLabel;
 
       // Assign a Claude session UUID for 1:1 matching with the sidebar agent.
