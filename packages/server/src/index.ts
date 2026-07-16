@@ -312,8 +312,12 @@ const broadcaster = new WSBroadcaster({
             tabId: rec.tabId,
             claudeSessionId: rec.claudeSessionId,
           });
+        } else {
+          // No live pty and no persisted record (record lost/evicted, or the tab
+          // predates persistence). Always reply so the client isn't left with a
+          // blank terminal — it resumes from its own persisted claudeSessionId.
+          broadcaster.send(ws, { type: 'terminal:missing', tabId: msg.tabId });
         }
-        // else: a tab the server never knew about (stale) — the client drops it.
       }
     } else if (msg.type === 'terminal:input') {
       terminalManager.input(msg.tabId, msg.data);

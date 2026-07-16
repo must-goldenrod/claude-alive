@@ -122,8 +122,13 @@ export default function App() {
   }, []);
 
   const stableOnRaw = useCallback((msg: WSServerMessage) => {
-    // App-level dispatch: terminal pipe + global toasts
-    if (msg.type === 'terminal:output' || msg.type === 'terminal:exited') {
+    // App-level dispatch: terminal pipe + global toasts.
+    // Forward EVERY terminal:* message — the ChatOverlay handler needs
+    // restore (scrollback replay), dormant/missing (drives auto-resume after a
+    // server restart) and ssh-error too, not just output/exited. Filtering to
+    // output/exited here silently killed the dormant→resume path, leaving
+    // restored tabs blank after a restart.
+    if (msg.type.startsWith('terminal:')) {
       terminalHandlerRef.current?.(msg);
     }
     if (msg.type === 'project:names') {

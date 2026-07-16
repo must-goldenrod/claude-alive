@@ -1067,6 +1067,30 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   // Register terminal event handler for incoming server messages
   useEffect(() => {
     if (!terminalEventRef) return;
+    // Resume a restored tab in place: clear the pane, show a hint, and spawn
+    // `claude --resume <sessionId>` under the SAME tabId so the conversation and
+    // session reload where the tab already sits. Shared by dormant (server knows
+    // the session id) and missing (client supplies its own persisted id).
+    const resumeInPlace = (tabId: string, claudeSessionId: string) => {
+      const entry = termsRef.current.get(tabId);
+      entry?.term.reset();
+      entry?.term.write(`\x1b[2m[${t('terminal.resumingSession')}]\x1b[0m\r\n`);
+      const tab = tabsRef.current.find((tb) => tb.id === tabId);
+      onSpawnRef.current?.({
+        tabId,
+        cwd: tab?.cwd,
+        skipPermissions: skipPermissionsRef.current,
+        mode: tab?.mode ?? 'claude',
+        source: 'local',
+        claudeVariant: tab?.claudeVariant ?? 'claude',
+        resumeSessionId: claudeSessionId,
+        displayName: tab?.displayName,
+      });
+      attachedRef.current.add(tabId);
+      setTabs((prev) =>
+        prev.map((tb) => (tb.id === tabId ? { ...tb, dormant: false, exited: false } : tb)),
+      );
+    };
     terminalEventRef.current = (msg: WSServerMessage) => {
       if (msg.type === 'terminal:output') {
         termsRef.current.get(msg.tabId)?.term.write(msg.data);
@@ -1088,27 +1112,14 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         );
         markTabActivity(msg.tabId);
       } else if (msg.type === 'terminal:dormant') {
-        // The server restarted: no live pty for this tab. Auto-resume in place —
-        // the tab already carries the cwd/variant, so `claude --resume` continues
-        // the same conversation under the same tabId.
-        const entry = termsRef.current.get(msg.tabId);
-        entry?.term.reset();
-        entry?.term.write(`\x1b[2m[${t('terminal.resumingSession')}]\x1b[0m\r\n`);
-        const tab = tabsRef.current.find((t) => t.id === msg.tabId);
-        onSpawnRef.current?.({
-          tabId: msg.tabId,
-          cwd: tab?.cwd,
-          skipPermissions: skipPermissionsRef.current,
-          mode: tab?.mode ?? 'claude',
-          source: 'local',
-          claudeVariant: tab?.claudeVariant ?? 'claude',
-          resumeSessionId: msg.claudeSessionId,
-          displayName: tab?.displayName,
-        });
-        attachedRef.current.add(msg.tabId);
-        setTabs((prev) =>
-          prev.map((t) => (t.id === msg.tabId ? { ...t, dormant: false, exited: false } : t)),
-        );
+        // The server restarted: no live pty, but it remembers this session id.
+        resumeInPlace(msg.tabId, msg.claudeSessionId);
+      } else if (msg.type === 'terminal:missing') {
+        // The server has no live pty AND no record for this tab. Resume from the
+        // tab's OWN persisted claudeSessionId so it isn't left blank. If the tab
+        // has no session id (nothing to resume), leave it as-is.
+        const tab = tabsRef.current.find((tb) => tb.id === msg.tabId);
+        if (tab?.claudeSessionId) resumeInPlace(msg.tabId, tab.claudeSessionId);
       } else if (msg.type === 'terminal:exited') {
         const timer = idleTimersRef.current.get(msg.tabId);
         if (timer) {

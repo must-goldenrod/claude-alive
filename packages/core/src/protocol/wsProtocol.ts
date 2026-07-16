@@ -50,6 +50,11 @@ export type WSServerMessage =
   // Sent in response to `terminal:attach` when the pty is gone (server restart).
   // The UI can offer to resume the conversation via `claude --resume`.
   | { type: 'terminal:dormant'; tabId: string; claudeSessionId: string }
+  // Sent in response to `terminal:attach` when the server has neither a live pty
+  // nor a persisted record for this tab (its managed-session record was lost or
+  // predates persistence). The client resumes from its OWN persisted
+  // claudeSessionId so a restored tab is never left blank.
+  | { type: 'terminal:missing'; tabId: string }
   // Broadcast when the set of resumable (dormant) sessions changes.
   | { type: 'sessions:resumable'; sessions: ResumableSession[] }
   | { type: 'project:names'; names: Record<string, string> }
