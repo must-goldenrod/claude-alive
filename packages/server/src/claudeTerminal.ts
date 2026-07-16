@@ -1,6 +1,7 @@
 import * as pty from 'node-pty';
 import { homedir } from 'node:os';
 import type { SSHErrorKind } from '@claude-alive/core';
+import { augmentPath } from './envPath.js';
 
 /** Environment variables that must be removed to avoid nested-session errors */
 const CLAUDE_ENV_KEYS = ['CLAUDECODE', 'CLAUDE_CODE_SSE_PORT', 'CLAUDE_CODE_ENTRYPOINT'];
@@ -27,6 +28,7 @@ function cleanEnv(): Record<string, string> {
       env[k] = v;
     }
   }
+  env.PATH = augmentPath(env.PATH);
   return env;
 }
 

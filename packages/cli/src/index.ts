@@ -105,7 +105,7 @@ function buildClaudeAlivePlist(): string {
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    <string>${xmlEscape(`${homedir()}/.local/bin:${homedir()}/.npm-global/bin:${homedir()}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`)}</string>
     <key>NODE_ENV</key>
     <string>production</string>
   </dict>
