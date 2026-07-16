@@ -93,7 +93,10 @@
     "totalEvents": "전체 이벤트 수",
     "generalAgent": "일반 에이전트",
     "externalShort": "외부",
-    "externalBadgeTitle": "이 앱이 아닌 다른 터미널에서 실행 중인 세션"
+    "externalBadgeTitle": "이 앱이 아닌 다른 터미널에서 실행 중인 세션",
+    "resumeExternalHint": "외부 세션 — 클릭하면 여기서 재개합니다",
+    "sshError": "오류",
+    "sshSessions": "SSH 세션"
   },
   "states": {
     "spawning": "생성 중",
@@ -272,6 +275,9 @@
   },
   "terminal": {
     "newTab": "새 탭",
+    "newChat": "새 채팅",
+    "resumingSession": "세션 재개 중…",
+    "parentDir": "상위 폴더",
     "tabLabel": "터미널 {{n}}",
     "exited": "종료됨",
     "status": {
@@ -362,7 +368,14 @@
     "animation": "애니메이션",
     "list": "리스트",
     "prompt": "프롬프트",
-    "efficio": "Efficio"
+    "efficio": "Efficio",
+    "spread": "스프레드",
+    "jarvis": "자비스"
+  },
+  "spread": {
+    "empty": "열린 터미널이 없습니다",
+    "emptyHint": "챗을 열면 여기에 표시됩니다",
+    "tileHint": "타일을 클릭하면 해당 터미널로 이동합니다"
   },
   "prompt": {
     "listTitle": "최근 프롬프트",

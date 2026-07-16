@@ -159,7 +159,7 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={isExternal ? t('agents.resumeExternalHint', { defaultValue: 'External session — click to resume here' }) : undefined}
+      title={isExternal ? t('agents.resumeExternalHint') : undefined}
     >
       <div className="flex items-center gap-4">
         {/* Sprite thumbnail — 44px */}
@@ -583,7 +583,7 @@ function SshSessionItem({ session: s, isSelected = false }: SshSessionItemProps)
             />
             <span className="text-xs" style={{ color: dotColor }}>
               {s.hasError
-                ? t('agents.sshError', { defaultValue: 'error' })
+                ? t('agents.sshError')
                 : s.exited
                   ? t('states.done')
                   : s.status === 'active'
@@ -617,7 +617,7 @@ function SshPresenceGroup({ sessions, selectedSessionId }: SshPresenceGroupProps
           {'▼'}
         </span>
         <span className="text-[15px] font-bold truncate" style={{ color: 'var(--accent-purple)' }}>
-          {t('agents.sshSessions', { defaultValue: 'SSH Sessions' })}
+          {t('agents.sshSessions')}
         </span>
         <div className="flex items-center gap-2.5 ml-auto shrink-0">
           {activeCount > 0 && (
@@ -786,7 +786,7 @@ export function ProjectSidebar({
         </div>
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('terminal:createTab'))}
-          title={t('terminal.newTab', { defaultValue: 'New Chat' })}
+          title={t('terminal.newChat')}
           className="flex items-center gap-1 transition-all"
           style={{
             padding: '4px 10px',
@@ -807,7 +807,7 @@ export function ProjectSidebar({
           }}
         >
           <span style={{ fontSize: 13, lineHeight: 1 }}>+</span>
-          <span>New Chat</span>
+          <span>{t('terminal.newChat')}</span>
         </button>
       </div>
 

@@ -93,7 +93,10 @@
     "totalEvents": "Total events received",
     "generalAgent": "General Agent",
     "externalShort": "EXT",
-    "externalBadgeTitle": "Session running in a terminal outside this app"
+    "externalBadgeTitle": "Session running in a terminal outside this app",
+    "resumeExternalHint": "External session — click to resume here",
+    "sshError": "error",
+    "sshSessions": "SSH Sessions"
   },
   "states": {
     "spawning": "spawning",
@@ -272,6 +275,9 @@
   },
   "terminal": {
     "newTab": "New tab",
+    "newChat": "New Chat",
+    "resumingSession": "resuming session…",
+    "parentDir": "Parent directory",
     "tabLabel": "Terminal {{n}}",
     "exited": "Exited",
     "status": {
@@ -362,7 +368,14 @@
     "animation": "Animation",
     "list": "List",
     "prompt": "Prompt",
-    "efficio": "Efficio"
+    "efficio": "Efficio",
+    "spread": "Spread",
+    "jarvis": "Jarvis"
+  },
+  "spread": {
+    "empty": "No open terminals",
+    "emptyHint": "Open a chat and it will appear here",
+    "tileHint": "Click a tile to open that terminal"
   },
   "prompt": {
     "listTitle": "Recent prompts",

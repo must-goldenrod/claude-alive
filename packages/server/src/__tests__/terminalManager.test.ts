@@ -154,4 +154,57 @@ describe('TerminalManager', () => {
     // The second client received the scrollback.
     expect(b.received).toContainEqual({ type: 'terminal:restore', tabId: 'T1', data: 'data' });
   });
+
+  it('invokes onTerminalExit when a pty exits', () => {
+    const exits: string[] = [];
+    const manager = new TerminalManager({
+      send: (ws, msg) => (ws as unknown as { __received: WSServerMessage[] }).__received.push(msg),
+      createTerminal: () => new FakeTerminal() as unknown as ClaudeTerminal,
+      onTerminalExit: (tabId) => exits.push(tabId),
+    });
+    const a = fakeWs();
+    manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    (a.ws as unknown as { __received: WSServerMessage[] }).__received.length = 0;
+    // Drive the pty exit through the captured onExit callback.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (manager as any).terminals.get('T1').term.onExit(0);
+    expect(exits).toEqual(['T1']);
+  });
+
+  it('does not leave a zombie entry when spawn throws synchronously', () => {
+    const exits: string[] = [];
+    class ThrowingTerminal extends FakeTerminal {
+      override spawn(): void {
+        throw new Error('cwd does not exist');
+      }
+    }
+    const manager = new TerminalManager({
+      send: (ws, msg) => (ws as unknown as { __received: WSServerMessage[] }).__received.push(msg),
+      createTerminal: () => new ThrowingTerminal() as unknown as ClaudeTerminal,
+      onTerminalExit: (tabId) => exits.push(tabId),
+    });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const a = fakeWs();
+      manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+
+      // No zombie: the tab is neither tracked nor reported live.
+      expect(manager.has('T1')).toBe(false);
+      expect(manager.isLive('T1')).toBe(false);
+      // The client is told the terminal died, and the resumable set is refreshed.
+      expect(a.received).toContainEqual({ type: 'terminal:exited', tabId: 'T1', exitCode: 1 });
+      expect(exits).toEqual(['T1']);
+
+      // A later spawn for the same tab is a fresh create, not a stuck idempotent-attach.
+      const b = fakeWs();
+      const manager2 = new TerminalManager({
+        send: (ws, msg) => (ws as unknown as { __received: WSServerMessage[] }).__received.push(msg),
+        createTerminal: () => new FakeTerminal() as unknown as ClaudeTerminal,
+      });
+      manager2.create(b.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+      expect(manager2.isLive('T1')).toBe(true);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
 });

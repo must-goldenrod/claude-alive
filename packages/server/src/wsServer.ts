@@ -2,6 +2,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { WSServerMessage, WSClientMessage } from '@claude-alive/core';
+import { parseClientMessage } from './wsClientSchema.js';
 
 const MAX_CLIENTS = 50;
 
@@ -39,25 +40,36 @@ export class WSBroadcaster {
       this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
 
       ws.on('message', (raw) => {
-        try {
-          const msg = JSON.parse(raw.toString()) as WSClientMessage;
-          if (msg.type === 'ping') {
-            this.send(ws, { type: 'system:heartbeat', timestamp: Date.now() });
-          } else if (msg.type === 'request:snapshot') {
-            this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
-          } else {
-            this.onClientMessage?.(ws, msg);
-          }
-        } catch {
-          // ignore malformed messages
+        const msg = parseClientMessage(raw.toString());
+        if (!msg) {
+          // Malformed or schema-invalid payload — drop it rather than trusting a
+          // bad shape downstream (e.g. a non-string tabId used as a Map key).
+          console.warn('[ws] dropped invalid client message');
+          return;
+        }
+        if (msg.type === 'ping') {
+          this.send(ws, { type: 'system:heartbeat', timestamp: Date.now() });
+        } else if (msg.type === 'request:snapshot') {
+          this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
+        } else {
+          this.onClientMessage?.(ws, msg);
         }
       });
 
-      ws.on('close', () => {
+      const cleanup = () => {
+        if (!this.clients.has(ws)) return;
         this.clients.delete(ws);
         this.onClientDisconnect?.(ws);
         console.log(`[ws] client disconnected (${this.clients.size} total)`);
+      };
+
+      // A socket that errors may not always emit 'close' — clean up on both so a
+      // dead client's subscriptions never linger in TerminalManager.
+      ws.on('error', (err) => {
+        console.warn('[ws] client socket error:', err.message);
+        cleanup();
       });
+      ws.on('close', cleanup);
     });
 
     this.heartbeatInterval = setInterval(() => {

@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { ResumableSession, TerminalMode } from '@claude-alive/core';
@@ -15,6 +15,7 @@ import type { ResumableSession, TerminalMode } from '@claude-alive/core';
  */
 const STORE_DIR = join(homedir(), '.claude-alive');
 const STORE_FILE = join(STORE_DIR, 'managed-sessions.json');
+const STORE_TMP = `${STORE_FILE}.tmp`;
 const MAX_SESSIONS = 200;
 
 export interface ManagedSessionRecord {
@@ -45,7 +46,13 @@ export async function loadManagedSessions(): Promise<RecordMap> {
         cached[k] = v;
       }
     }
-  } catch {
+  } catch (err) {
+    // ENOENT (no file yet) is the normal first-run case; anything else means a
+    // corrupt/unreadable store, which we surface before degrading to empty so the
+    // silent full-reset isn't invisible to an operator.
+    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+      console.error(`[session] failed to load ${STORE_FILE}, starting empty:`, err);
+    }
     cached = {};
   }
   return cached;
@@ -123,5 +130,9 @@ async function flush(): Promise<void> {
     cached = trimmed;
   }
   await mkdir(STORE_DIR, { recursive: true });
-  await writeFile(STORE_FILE, JSON.stringify(cached, null, 2));
+  // Atomic write: fully write a temp file, then rename over the target. rename is
+  // atomic on the same filesystem, so a crash mid-flush can never leave a
+  // truncated/corrupt store — the reader sees either the old file or the new one.
+  await writeFile(STORE_TMP, JSON.stringify(cached, null, 2));
+  await rename(STORE_TMP, STORE_FILE);
 }

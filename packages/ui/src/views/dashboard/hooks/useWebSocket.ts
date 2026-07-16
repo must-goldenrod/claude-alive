@@ -55,8 +55,22 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
       reconnectTimer.current = setTimeout(connect, 2000);
     };
 
+    ws.onerror = (event) => {
+      // Socket-level errors are usually followed by onclose (which handles
+      // reconnect); log here so connection failures are diagnosable.
+      console.warn('[ws] connection error', event);
+    };
+
     ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data) as WSServerMessage;
+      let msg: WSServerMessage;
+      try {
+        msg = JSON.parse(event.data) as WSServerMessage;
+      } catch {
+        // Malformed/partial payload — drop this message rather than throwing an
+        // unhandled exception inside the socket callback.
+        console.warn('[ws] dropped unparseable message');
+        return;
+      }
       onRawMessage?.(msg);
 
       if (msg.type === 'agent:completed') {

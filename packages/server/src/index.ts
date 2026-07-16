@@ -240,6 +240,9 @@ const httpServer = createHttpServer({
 // invoked at message time, long after both are initialised.
 const terminalManager = new TerminalManager({
   send: (ws, m) => broadcaster.send(ws, m),
+  // A pty exiting (or failing to spawn) makes its session resumable — tell every
+  // connected client immediately instead of waiting for an unrelated event.
+  onTerminalExit: () => broadcastResumable(),
 });
 
 // Throttles lastActive persistence per tab so active typing doesn't hammer disk.
@@ -294,7 +297,7 @@ const broadcaster = new WSBroadcaster({
           claudeVariant: msg.claudeVariant ?? 'claude',
           createdAt: now,
           lastActive: now,
-        }).catch(() => {});
+        }).catch((err) => console.error(`[session] failed to persist ${msg.tabId}:`, err));
         lastTouchAt.set(msg.tabId, now);
       }
       broadcastResumable();
@@ -318,13 +321,21 @@ const broadcaster = new WSBroadcaster({
       const prev = lastTouchAt.get(msg.tabId) ?? 0;
       if (now - prev > TOUCH_THROTTLE_MS && getManagedSession(msg.tabId)) {
         lastTouchAt.set(msg.tabId, now);
-        touchManagedSession(msg.tabId, now).catch(() => {});
+        touchManagedSession(msg.tabId, now).catch((err) =>
+          console.error(`[session] failed to touch ${msg.tabId}:`, err),
+        );
       }
     } else if (msg.type === 'terminal:resize') {
       terminalManager.resize(msg.tabId, msg.cols, msg.rows);
     } else if (msg.type === 'terminal:close') {
+      // Drop the session UUID from the provenance set so it doesn't grow for the
+      // life of the process — the record's claudeSessionId is the only handle to it.
+      const rec = getManagedSession(msg.tabId);
+      if (rec) managedSessionIds.delete(rec.claudeSessionId);
       terminalManager.close(msg.tabId);
-      removeManagedSession(msg.tabId).catch(() => {});
+      removeManagedSession(msg.tabId).catch((err) =>
+        console.error(`[session] failed to remove ${msg.tabId}:`, err),
+      );
       lastTouchAt.delete(msg.tabId);
       broadcastResumable();
     }

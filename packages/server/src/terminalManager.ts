@@ -12,6 +12,11 @@ import { ClaudeTerminal } from './claudeTerminal.js';
  * reconnecting browser reattaches and replays the scrollback ring buffer.
  */
 const SCROLLBACK_MAX_BYTES = 256 * 1024;
+// Exited ptys are retained so a reattaching browser can still replay their final
+// scrollback and be offered a resume. Cap how many we keep in memory so a
+// long-running daemon can't accumulate dead terminals without bound; the oldest
+// exited entries are evicted first.
+const MAX_EXITED_RETAINED = 50;
 
 export interface ManagedTerminalMeta {
   tabId: string;
@@ -42,6 +47,8 @@ interface ManagedTerminal {
   subscribers: Set<WebSocket>;
   meta: ManagedTerminalMeta;
   exited: boolean;
+  /** Wall-clock ms when the pty exited (or spawn failed). Undefined while live. */
+  exitedAt?: number;
   /** Last known pty size — used to force a redraw on reattach. */
   cols: number;
   rows: number;
@@ -52,16 +59,35 @@ export interface TerminalManagerOptions {
   send: (ws: WebSocket, msg: WSServerMessage) => void;
   /** Terminal factory — overridable in tests with a fake. */
   createTerminal?: () => ClaudeTerminal;
+  /**
+   * Called after a terminal transitions to exited (natural exit or spawn
+   * failure) so the caller can rebroadcast the resumable set. Errors thrown by
+   * the callback are caught and logged so they never break terminal handling.
+   */
+  onTerminalExit?: (tabId: string) => void;
 }
 
 export class TerminalManager {
   private terminals = new Map<string, ManagedTerminal>();
   private send: TerminalManagerOptions['send'];
   private createTerminal: () => ClaudeTerminal;
+  private onTerminalExit?: TerminalManagerOptions['onTerminalExit'];
 
   constructor(options: TerminalManagerOptions) {
     this.send = options.send;
     this.createTerminal = options.createTerminal ?? (() => new ClaudeTerminal());
+    this.onTerminalExit = options.onTerminalExit;
+  }
+
+  /** Mark a terminal exited and notify the caller, swallowing callback errors. */
+  private markExited(managed: ManagedTerminal): void {
+    managed.exited = true;
+    managed.exitedAt = Date.now();
+    try {
+      this.onTerminalExit?.(managed.meta.tabId);
+    } catch (err) {
+      console.error(`[terminal] onTerminalExit handler failed for ${managed.meta.tabId}:`, err);
+    }
   }
 
   has(tabId: string): boolean {
@@ -109,37 +135,72 @@ export class TerminalManager {
     };
     this.terminals.set(opts.tabId, managed);
 
-    managed.term.spawn({
-      handler: (data) => {
-        this.appendScrollback(managed, data);
-        this.fanout(managed, { type: 'terminal:output', tabId: opts.tabId, data });
-      },
-      cols: 80,
-      rows: 24,
-      onExit: (exitCode) => {
-        managed.exited = true;
-        this.fanout(managed, { type: 'terminal:exited', tabId: opts.tabId, exitCode });
-      },
-      onSshError: isSsh
-        ? (err) => {
-            this.fanout(managed, {
-              type: 'terminal:ssh-error',
-              tabId: opts.tabId,
-              kind: err.kind,
-              line: err.line,
-            });
-          }
-        : undefined,
-      cwd: opts.cwd,
-      mode: opts.mode ?? 'claude',
-      claudeVariant: opts.claudeVariant ?? 'claude',
-      skipPermissions: opts.skipPermissions,
-      initialCommand: opts.initialCommand,
-      detectSshErrors: isSsh,
-      claudeSessionId: opts.claudeSessionId,
-      resumeSessionId: opts.resumeSessionId,
-      displayName: opts.displayName,
-    });
+    try {
+      managed.term.spawn({
+        handler: (data) => {
+          this.appendScrollback(managed, data);
+          this.fanout(managed, { type: 'terminal:output', tabId: opts.tabId, data });
+        },
+        cols: 80,
+        rows: 24,
+        onExit: (exitCode) => {
+          this.markExited(managed);
+          this.fanout(managed, { type: 'terminal:exited', tabId: opts.tabId, exitCode });
+        },
+        onSshError: isSsh
+          ? (err) => {
+              this.fanout(managed, {
+                type: 'terminal:ssh-error',
+                tabId: opts.tabId,
+                kind: err.kind,
+                line: err.line,
+              });
+            }
+          : undefined,
+        cwd: opts.cwd,
+        mode: opts.mode ?? 'claude',
+        claudeVariant: opts.claudeVariant ?? 'claude',
+        skipPermissions: opts.skipPermissions,
+        initialCommand: opts.initialCommand,
+        detectSshErrors: isSsh,
+        claudeSessionId: opts.claudeSessionId,
+        resumeSessionId: opts.resumeSessionId,
+        displayName: opts.displayName,
+      });
+    } catch (err) {
+      // pty.spawn can throw synchronously (e.g. cwd no longer exists for a
+      // resumed session, or the shell binary is missing). Without this guard the
+      // half-constructed entry would linger with exited=false and no process,
+      // making isLive() report true forever and permanently wedging the tab.
+      console.error(`[terminal] spawn failed for tab ${opts.tabId}:`, err);
+      this.terminals.delete(opts.tabId);
+      this.send(ws, { type: 'terminal:exited', tabId: opts.tabId, exitCode: 1 });
+      try {
+        this.onTerminalExit?.(opts.tabId);
+      } catch (cbErr) {
+        console.error(`[terminal] onTerminalExit handler failed for ${opts.tabId}:`, cbErr);
+      }
+      return;
+    }
+
+    this.pruneExited();
+  }
+
+  /**
+   * Evict the oldest exited terminals once retention exceeds MAX_EXITED_RETAINED.
+   * Live terminals are never touched. Bounds in-memory growth on a daemon that
+   * survives terminal close and accumulates dead ptys over its uptime.
+   */
+  private pruneExited(): void {
+    const exited: Array<[string, ManagedTerminal]> = [];
+    for (const [id, m] of this.terminals) {
+      if (m.exited) exited.push([id, m]);
+    }
+    if (exited.length <= MAX_EXITED_RETAINED) return;
+    exited.sort((a, b) => (a[1].exitedAt ?? 0) - (b[1].exitedAt ?? 0));
+    for (const [id] of exited.slice(0, exited.length - MAX_EXITED_RETAINED)) {
+      this.terminals.delete(id);
+    }
   }
 
   /**

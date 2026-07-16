@@ -29,7 +29,7 @@ const EfficioView = lazy(() =>
   import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'spread' | 'jarvis';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -331,7 +331,7 @@ export default function App() {
   const projectPaths = useMemo(() => [...new Set(agentList.map(a => a.cwd))], [agentList]);
 
   // In List view, terminal is always visible. In Animation view, follow chatOpen.
-  const chatEffectivelyOpen = viewMode === 'list' ? true : chatOpen;
+  const chatEffectivelyOpen = viewMode === 'list' || viewMode === 'spread' ? true : chatOpen;
   // Left inset for the list-view terminal layout: matches the ProjectSidebar width when open.
   // Keep in sync with ProjectSidebar's own width (300px in its component).
   const SIDEBAR_WIDTH = 300;
@@ -342,6 +342,22 @@ export default function App() {
   // them dispatches `terminal:focusTab` with a sessionId, which we capture here and
   // broadcast back down via props so all three surfaces stay in sync.
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  // Remember the view we entered Spread from, so promoting a tile returns there.
+  const prevViewRef = useRef<ViewMode>('animation');
+  const handleViewModeChange = useCallback((mode: ViewMode) => {
+    setViewMode((prev) => {
+      if (mode === 'spread' && prev !== 'spread') prevViewRef.current = prev;
+      return mode;
+    });
+  }, []);
+  // Spread tile click → return to the prior (non-spread) view and focus that terminal.
+  const handleSelectSpreadTile = useCallback((tabId: string) => {
+    const back = prevViewRef.current === 'spread' ? 'animation' : prevViewRef.current;
+    setViewMode(back);
+    setChatOpen(true);
+    window.dispatchEvent(new CustomEvent('terminal:focusTab', { detail: { tabId } }));
+  }, []);
 
   // When a sidebar item / pixel character dispatches a focus/create event, ensure the
   // chat overlay is open AND track the selected session for cross-surface highlight.
@@ -373,7 +389,7 @@ export default function App() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <HeaderBar
         viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onViewModeChange={handleViewModeChange}
         leftPanelOpen={leftPanelOpen}
         rightPanelOpen={rightPanelOpen}
         chatOpen={chatOpen}
@@ -431,6 +447,14 @@ export default function App() {
               <EfficioView active={viewMode === 'efficio'} subscribeRaw={subscribeRaw} />
             </Suspense>
           </div>
+          {/* Spread view body: empty-state hint, shown only when there are no open terminals.
+              When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{i18n.t('spread.empty')}</div>
+              <div style={{ fontSize: 12, opacity: 0.6 }}>{i18n.t('spread.emptyHint')}</div>
+            </div>
+          </div>
         </ErrorBoundary>
 
         {/* App-level ChatOverlay — the DOM never relocates. When viewMode switches, the
@@ -455,6 +479,8 @@ export default function App() {
           waitingSessionIds={waitingSessionIds}
           connected={connected}
           onAttach={handleTerminalAttach}
+          spreadActive={viewMode === 'spread'}
+          onSelectSpreadTile={handleSelectSpreadTile}
         />
       </div>
     </div>

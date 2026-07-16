@@ -117,6 +117,14 @@ interface ChatOverlayProps {
   connected?: boolean;
   /** Reattach a tab to its server-owned terminal (sends `terminal:attach`). */
   onAttach?: (tabId: string) => void;
+  /**
+   * When true, lay every open terminal out in a scaled grid (Spread View). Tiles are CSS
+   * `transform: scale` snapshots — `fit()`/resize are never called, so the shared pty size is
+   * left untouched and no reflow churn is broadcast to other subscribers (design doc §4.1).
+   */
+  spreadActive?: boolean;
+  /** Spread tile click → promote that tab (App returns to the prior view and focuses it). */
+  onSelectSpreadTile?: (tabId: string) => void;
 }
 
 /**
@@ -160,6 +168,26 @@ function getListViewStyle(listLeftInset: number): React.CSSProperties {
     top: HEADER_HEIGHT,
     left: listLeftInset,
     width: `calc(100vw - ${listLeftInset}px)`,
+    height: `calc(100vh - ${HEADER_HEIGHT}px)`,
+    borderRadius: 0,
+    transform: 'none',
+  };
+}
+
+// Spread View occupies the full body area (below the header, full width — no sidebar inset).
+function getSpreadViewStyle(): React.CSSProperties {
+  return {
+    position: 'fixed',
+    zIndex: 30,
+    display: 'flex',
+    flexDirection: 'column',
+    background: 'rgba(13, 17, 23, 0.96)',
+    border: 'none',
+    borderTop: '1px solid var(--border-color)',
+    overflow: 'hidden',
+    top: HEADER_HEIGHT,
+    left: 0,
+    width: '100vw',
     height: `calc(100vh - ${HEADER_HEIGHT}px)`,
     borderRadius: 0,
     transform: 'none',
@@ -252,6 +280,73 @@ function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
 }
 
+// ── Spread View helpers ─────────────────────────────────────────────────────
+// Tiles are the same live xterm containers, kept in place inside the wrapper (never
+// reparented). In spread mode the wrapper becomes a CSS grid and each container becomes a
+// cell whose inner `.xterm` is CSS-scaled to fit. fit()/resize are never called, so the
+// shared pty size is untouched (design doc §4.1, I1).
+
+/** Height (px) of the per-tile label bar. */
+const SPREAD_LABEL_H = 18;
+
+/** Create/refresh a tile's label bar (status dot + tab name). Inserted as the container's
+ *  first child so the xterm flows below it. Built with DOM APIs (not innerHTML) so a
+ *  project-derived label can never inject markup. */
+function setSpreadLabel(container: HTMLDivElement, tab: Tab | undefined): void {
+  let label = container.querySelector<HTMLDivElement>(':scope > .spread-label');
+  if (!label) {
+    label = document.createElement('div');
+    label.className = 'spread-label';
+    container.insertBefore(label, container.firstChild);
+  }
+  label.style.cssText =
+    `height:${SPREAD_LABEL_H}px;display:flex;align-items:center;gap:6px;padding:0 8px;` +
+    `font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--text-secondary);` +
+    `background:rgba(0,0,0,0.4);white-space:nowrap;overflow:hidden;flex:none;`;
+  const color =
+    !tab || tab.exited
+      ? '#6e7681'
+      : tab.status === 'waiting'
+        ? '#ff9f43'
+        : tab.status === 'active'
+          ? '#2ea043'
+          : '#58a6ff';
+  const icon = tab?.exited ? (tab.exitCode === 0 ? '✓ ' : '✗ ') : '';
+  label.textContent = '';
+  const dot = document.createElement('span');
+  dot.style.cssText = `width:6px;height:6px;border-radius:50%;background:${color};flex:none;`;
+  const name = document.createElement('span');
+  name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;';
+  name.textContent = icon + (tab?.label ?? '');
+  label.append(dot, name);
+}
+
+function removeSpreadLabel(container: HTMLDivElement): void {
+  container.querySelector<HTMLElement>(':scope > .spread-label')?.remove();
+}
+
+/** Scale the tile's `.xterm` to fit its grid cell — CSS transform only, no fit()/resize. */
+function fitSpreadScale(container: HTMLDivElement): void {
+  const screen = container.querySelector<HTMLElement>(':scope > .xterm');
+  if (!screen) return;
+  screen.style.transform = 'none';
+  const sw = screen.offsetWidth || 1;
+  const sh = screen.offsetHeight || 1;
+  const cw = container.clientWidth - 4;
+  const ch = container.clientHeight - SPREAD_LABEL_H - 4;
+  const f = Math.min(cw / sw, ch / sh, 1);
+  screen.style.transformOrigin = 'top left';
+  screen.style.transform = `scale(${f > 0 ? f : 1})`;
+}
+
+function clearSpreadScale(container: HTMLDivElement): void {
+  const screen = container.querySelector<HTMLElement>(':scope > .xterm');
+  if (screen) {
+    screen.style.transform = '';
+    screen.style.transformOrigin = '';
+  }
+}
+
 // Mode button SVG icons
 function ModeIcon({ mode, size = 14 }: { mode: TerminalMode; size?: number }) {
   const s = size;
@@ -293,7 +388,7 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds, connected = false, onAttach }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds, connected = false, onAttach, spreadActive = false, onSelectSpreadTile }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
@@ -332,6 +427,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const onChatClaudeSessionsChangeRef = useRef(onChatClaudeSessionsChange);
   const onAttachRef = useRef(onAttach);
   const connectedRef = useRef(connected);
+  const onSelectSpreadTileRef = useRef(onSelectSpreadTile);
   onSpawnRef.current = onSpawn;
   onInputRef.current = onInput;
   onResizeRef.current = onResize;
@@ -340,6 +436,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   onChatClaudeSessionsChangeRef.current = onChatClaudeSessionsChange;
   onAttachRef.current = onAttach;
   connectedRef.current = connected;
+  onSelectSpreadTileRef.current = onSelectSpreadTile;
 
   // Tabs that have been (re)attached to their server pty in the current WS
   // connection epoch. Reset on disconnect so a reconnect reattaches everything.
@@ -359,6 +456,16 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const [skipPermissions, setSkipPermissions] = useState(true);
   tabsRef.current = tabs;
   skipPermissionsRef.current = skipPermissions;
+  const spreadActiveRef = useRef(spreadActive);
+  spreadActiveRef.current = spreadActive;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+  // Stable primitive keys so the spread effects re-run only when the tab *set* or a tab's
+  // *status* changes — not on every terminal-output-driven `tabs` identity change.
+  const spreadTabsKey = tabs.map((t) => t.id).join('|');
+  const spreadStatusKey = tabs
+    .map((t) => `${t.id}:${t.status}:${t.exited ? 'x' + (t.exitCode ?? '') : ''}`)
+    .join('|');
   const [_browsePath, setBrowsePath] = useState('~');
   const [browseDirs, setBrowseDirs] = useState<{ name: string; path: string }[]>([]);
   const [browseCurrentPath, setBrowseCurrentPath] = useState('');
@@ -387,15 +494,22 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
   /** Transition a tab to "active" and (re)schedule the idle timer. */
   const markTabActivity = useCallback((tabId: string) => {
-    setTabs((prev) =>
-      prev.map((tab) => {
+    setTabs((prev) => {
+      let changed = false;
+      const next = prev.map((tab) => {
         if (tab.id !== tabId || tab.exited) return tab;
         // Don't overwrite the orange "waiting" state with green "active" — Claude is still
         // blocked on a prompt even while emitting incidental output (e.g. spinner frames).
         if (tab.status === 'waiting') return tab;
-        return { ...tab, status: 'active' };
-      }),
-    );
+        // Already active: return the same object so `tabs` keeps its identity. This
+        // fires on every terminal-output chunk, so a new array here would cascade a
+        // re-render, a localStorage write, and App-level state broadcasts per chunk.
+        if (tab.status === 'active') return tab;
+        changed = true;
+        return { ...tab, status: 'active' as const };
+      });
+      return changed ? next : prev;
+    });
     const existing = idleTimersRef.current.get(tabId);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
@@ -464,6 +578,13 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
     container.style.overflow = 'hidden';
     container.style.height = '100%';
+    // Set initial visibility here rather than relying solely on the [activeTabId]
+    // display-toggle effect: containers are created lazily in a rAF, so restoring
+    // several persisted tabs at once mounts their containers AFTER activeTabId has
+    // stopped changing — the toggle effect never re-runs and every terminal would
+    // render stacked. Spread View manages its own display, so defer to it there.
+    const isActive = tabId === activeTabIdRef.current;
+    container.style.display = spreadActiveRef.current || isActive ? 'block' : 'none';
     wrapper.appendChild(container);
     containersRef.current.set(tabId, container);
 
@@ -476,7 +597,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     requestAnimationFrame(() => {
       fit.fit();
       onResizeRef.current?.(tabId, term.cols, term.rows);
-      term.focus();
+      // Only focus the active tab — otherwise each tab restored in this batch
+      // steals focus in turn, leaving focus on whichever mounted last.
+      if (isActive && !spreadActiveRef.current) term.focus();
     });
 
     term.onData((data) => {
@@ -815,9 +938,15 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
     setActiveTabId(prev => {
       if (prev !== tabId) return prev;
-      // Switch to the last remaining tab
-      const remaining = [...termsRef.current.keys()].filter(id => id !== tabId);
-      return remaining.length > 0 ? remaining[remaining.length - 1]! : '';
+      // Pick the neighbour in *visual* tab-bar order (tabsRef), not termsRef
+      // insertion order — after a reorder those differ, and jumping to a
+      // non-adjacent tab is disorienting. Prefer the tab to the left of the
+      // closed one, else the new first tab.
+      const order = tabsRef.current.map(t => t.id);
+      const idx = order.indexOf(tabId);
+      const remaining = order.filter(id => id !== tabId);
+      if (remaining.length === 0) return '';
+      return order[idx - 1] ?? remaining[0]!;
     });
   }, []);
 
@@ -851,8 +980,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     });
   }, []);
 
-  // When active tab changes, show/hide containers and fit
+  // When active tab changes, show/hide containers and fit. Skipped in Spread View — the
+  // spread effect owns container display/scale there.
   useEffect(() => {
+    if (spreadActive) return;
     for (const [id, container] of containersRef.current) {
       container.style.display = id === activeTabId ? 'block' : 'none';
     }
@@ -863,7 +994,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         entry.term.focus();
       });
     }
-  }, [activeTabId]);
+  }, [activeTabId, spreadActive]);
 
   // Live-apply user settings to all open terminal tabs. xterm v6 lets us mutate most
   // options on the fly via `term.options.*`; container padding is plain CSS. After
@@ -889,9 +1020,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       for (const [, container] of containersRef.current) {
         container.style.padding = padding;
       }
-      // Refit the active tab so the cell grid matches the new metrics.
+      // Refit the active tab so the cell grid matches the new metrics. Skipped in Spread
+      // View — a scaled tile must not trigger a shared-pty resize.
       const active = termsRef.current.get(activeTabId);
-      if (active) {
+      if (active && !spreadActiveRef.current) {
         requestAnimationFrame(() => {
           active.fit.fit();
           onResizeRef.current?.(activeTabId, active.term.cols, active.term.rows);
@@ -907,6 +1039,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
+    // In Spread View the spread effect owns its own rescale observer; the active-tab
+    // auto-fit here would resize the shared pty (I1), so it's disabled while spreadActive.
+    if (spreadActive) return;
 
     const ro = new ResizeObserver(() => {
       const entry = termsRef.current.get(activeTabId);
@@ -917,12 +1052,13 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     });
     ro.observe(wrapper);
     return () => ro.disconnect();
-  }, [activeTabId]);
+  }, [activeTabId, spreadActive]);
 
   // Final refit after the view transition settles. ResizeObserver may batch/skip
   // the last frame; this guarantees xterm reads final dimensions cleanly.
   // 1300ms ≈ 1260ms transition duration + 40ms buffer.
   useEffect(() => {
+    if (spreadActive) return;
     const entry = termsRef.current.get(activeTabId);
     if (!entry) return;
     const timer = setTimeout(() => {
@@ -930,11 +1066,12 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       onResizeRef.current?.(activeTabId, entry.term.cols, entry.term.rows);
     }, 1300);
     return () => clearTimeout(timer);
-  }, [listViewActive, listLeftInset, activeTabId]);
+  }, [listViewActive, listLeftInset, activeTabId, spreadActive]);
 
   // Re-fit terminals when mode changes (container size changes).
   // Matches the 1260ms positional transition + 40ms buffer.
   useEffect(() => {
+    if (spreadActive) return;
     const entry = termsRef.current.get(activeTabId);
     if (entry) {
       const timer = setTimeout(() => {
@@ -943,7 +1080,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       }, 1300);
       return () => clearTimeout(timer);
     }
-  }, [mode, activeTabId]);
+  }, [mode, activeTabId, spreadActive]);
 
   // Initialize first tab when overlay opens — show picker instead of auto-creating
   useEffect(() => {
@@ -1022,7 +1159,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         // the same conversation under the same tabId.
         const entry = termsRef.current.get(msg.tabId);
         entry?.term.reset();
-        entry?.term.write('\x1b[2m[세션 재개 중… / resuming session…]\x1b[0m\r\n');
+        entry?.term.write(`\x1b[2m[${t('terminal.resumingSession')}]\x1b[0m\r\n`);
         const tab = tabsRef.current.find((t) => t.id === msg.tabId);
         onSpawnRef.current?.({
           tabId: msg.tabId,
@@ -1117,6 +1254,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
   // Re-fit terminal when expanding from collapsed state
   useEffect(() => {
+    if (spreadActive) return;
     if (open && activeTabId) {
       const entry = termsRef.current.get(activeTabId);
       if (entry) {
@@ -1126,28 +1264,135 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         });
       }
     }
-  }, [open, activeTabId]);
+  }, [open, activeTabId, spreadActive]);
+
+  // Spread View layout. Re-runs only when the tab *set* (spreadTabsKey) or spreadActive
+  // changes — never on output-driven `tabs` churn. On enter: switch the wrapper to a grid,
+  // style every container as a cell, blur all terminals (I1-S5), and CSS-scale each `.xterm`
+  // to fit (no fit()/resize → shared pty size untouched). On leave: restore the single-tab
+  // layout and refit the active tab.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    if (!spreadActive) {
+      wrapper.style.display = '';
+      wrapper.style.gridTemplateColumns = '';
+      wrapper.style.gridAutoRows = '';
+      wrapper.style.gap = '';
+      wrapper.style.padding = '';
+      wrapper.style.overflow = 'hidden';
+      const settings = getSettings();
+      const activeId = activeTabIdRef.current;
+      for (const [id, container] of containersRef.current) {
+        container.style.flex = '1';
+        container.style.height = '100%';
+        container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
+        container.style.overflow = 'hidden';
+        container.style.position = '';
+        container.style.border = '';
+        container.style.borderRadius = '';
+        container.style.cursor = '';
+        container.style.background = '';
+        container.style.display = id === activeId ? 'block' : 'none';
+        container.onclick = null;
+        removeSpreadLabel(container);
+        clearSpreadScale(container);
+      }
+      const entry = termsRef.current.get(activeId);
+      if (entry) {
+        requestAnimationFrame(() => {
+          entry.fit.fit();
+          onResizeRef.current?.(activeId, entry.term.cols, entry.term.rows);
+          entry.term.focus();
+        });
+      }
+      return;
+    }
+
+    const ids = tabsRef.current.map((t) => t.id).filter((id) => containersRef.current.has(id));
+    const cols = Math.max(1, Math.ceil(Math.sqrt(ids.length)));
+    wrapper.style.display = 'grid';
+    wrapper.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    wrapper.style.gridAutoRows = 'minmax(0, 1fr)';
+    wrapper.style.gap = '10px';
+    wrapper.style.padding = '12px';
+    wrapper.style.overflow = 'auto';
+
+    for (const { term } of termsRef.current.values()) term.blur();
+
+    for (const id of ids) {
+      const container = containersRef.current.get(id);
+      if (!container) continue;
+      const tab = tabsRef.current.find((t) => t.id === id);
+      container.style.display = 'block';
+      container.style.flex = '';
+      container.style.height = '';
+      container.style.padding = '';
+      container.style.position = 'relative';
+      container.style.overflow = 'hidden';
+      container.style.border = '1px solid var(--border-color)';
+      container.style.borderRadius = '8px';
+      container.style.cursor = 'pointer';
+      container.style.background = 'rgba(0,0,0,0.25)';
+      setSpreadLabel(container, tab);
+      container.onclick = () => onSelectSpreadTileRef.current?.(id);
+    }
+
+    let raf = requestAnimationFrame(() => {
+      for (const id of ids) {
+        const c = containersRef.current.get(id);
+        if (c) fitSpreadScale(c);
+      }
+    });
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        for (const id of ids) {
+          const c = containersRef.current.get(id);
+          if (c) fitSpreadScale(c);
+        }
+      });
+    });
+    ro.observe(wrapper);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [spreadActive, spreadTabsKey]);
+
+  // Spread View label refresh — cheap DOM-only update when a tab's status/exit changes.
+  useEffect(() => {
+    if (!spreadActive) return;
+    for (const tab of tabsRef.current) {
+      const container = containersRef.current.get(tab.id);
+      if (container) setSpreadLabel(container, tab);
+    }
+  }, [spreadActive, spreadStatusKey]);
 
   const uniquePaths = [...new Set(projectPaths)];
   const hasTabs = tabs.length > 0;
 
-  if (!open && !hasTabs && !isListView) return null;
+  if (!open && !hasTabs && !isListView && !spreadActive) return null;
 
   // Compose root style: the mode/list layout geometry plus a shared transition so changes
   // to any positioning property animate. Opacity handles open/close; transform: none in
   // list-view clears the popup's translateX so the terminal "slides" to its new position.
   const layoutStyle = isListView
     ? getListViewStyle(listLeftInset)
-    : getModeStyle(mode, bottomHeight, rightWidth);
-  // In list view with no open tabs, hide the terminal surface so the session
-  // dashboard rendered in the body shows through. Clicking a dashboard card
-  // opens/resumes a tab, at which point the overlay reappears.
+    : spreadActive
+      ? getSpreadViewStyle()
+      : getModeStyle(mode, bottomHeight, rightWidth);
+  // In list/spread view with no open tabs, hide the terminal surface so the empty-state
+  // rendered in the body shows through. Opening/resuming a tab brings the overlay back.
   const listViewEmpty = isListView && !hasTabs;
+  const spreadViewEmpty = spreadActive && !hasTabs;
+  const surfaceVisible = open || spreadActive;
   const rootStyle: React.CSSProperties = {
     ...layoutStyle,
     transition: resizingRef.current ? 'none' : OVERLAY_TRANSITION,
-    opacity: listViewEmpty ? 0 : open ? 1 : 0,
-    pointerEvents: listViewEmpty || !open ? 'none' : 'auto',
+    opacity: listViewEmpty || spreadViewEmpty ? 0 : surfaceVisible ? 1 : 0,
+    pointerEvents: listViewEmpty || spreadViewEmpty || !surfaceVisible ? 'none' : 'auto',
   };
 
   const tree = (
@@ -1247,7 +1492,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
           ■ {t('chat.title')}
         </span>
 
-        {!isListView && (
+        {!isListView && !spreadActive && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {/* Mode toggle buttons. Fullscreen is disabled while a content view (Prompt/Efficio)
                 is active, since it would cover that view. */}
@@ -1646,7 +1891,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                             padding: '2px 6px',
                             flexShrink: 0,
                           }}
-                          title="Parent directory"
+                          title={t('terminal.parentDir')}
                         >
                           &#8592;
                         </button>
