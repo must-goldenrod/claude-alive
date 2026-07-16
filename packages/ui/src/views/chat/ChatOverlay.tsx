@@ -20,6 +20,7 @@ import { loadRecentFolders, pushRecentFolder, removeRecentFolder } from './recen
 import { loadOpenTabs, saveOpenTabs } from './openTabsStore.ts';
 import type { PersistedTab } from './openTabsStore.ts';
 import { makeTabId, generateFallbackUuid } from './tabId.ts';
+import { useSpreadView } from './useSpreadView.ts';
 import { getSettings, getThemeById, getFontFamily, subscribeSettings } from '../../services/settings.ts';
 import type { AppSettings } from '../../services/settings.ts';
 
@@ -278,73 +279,6 @@ let tabCounter = 0;
 
 function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
-}
-
-// ── Spread View helpers ─────────────────────────────────────────────────────
-// Tiles are the same live xterm containers, kept in place inside the wrapper (never
-// reparented). In spread mode the wrapper becomes a CSS grid and each container becomes a
-// cell whose inner `.xterm` is CSS-scaled to fit. fit()/resize are never called, so the
-// shared pty size is untouched (design doc §4.1, I1).
-
-/** Height (px) of the per-tile label bar. */
-const SPREAD_LABEL_H = 18;
-
-/** Create/refresh a tile's label bar (status dot + tab name). Inserted as the container's
- *  first child so the xterm flows below it. Built with DOM APIs (not innerHTML) so a
- *  project-derived label can never inject markup. */
-function setSpreadLabel(container: HTMLDivElement, tab: Tab | undefined): void {
-  let label = container.querySelector<HTMLDivElement>(':scope > .spread-label');
-  if (!label) {
-    label = document.createElement('div');
-    label.className = 'spread-label';
-    container.insertBefore(label, container.firstChild);
-  }
-  label.style.cssText =
-    `height:${SPREAD_LABEL_H}px;display:flex;align-items:center;gap:6px;padding:0 8px;` +
-    `font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--text-secondary);` +
-    `background:rgba(0,0,0,0.4);white-space:nowrap;overflow:hidden;flex:none;`;
-  const color =
-    !tab || tab.exited
-      ? '#6e7681'
-      : tab.status === 'waiting'
-        ? '#ff9f43'
-        : tab.status === 'active'
-          ? '#2ea043'
-          : '#58a6ff';
-  const icon = tab?.exited ? (tab.exitCode === 0 ? '✓ ' : '✗ ') : '';
-  label.textContent = '';
-  const dot = document.createElement('span');
-  dot.style.cssText = `width:6px;height:6px;border-radius:50%;background:${color};flex:none;`;
-  const name = document.createElement('span');
-  name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;';
-  name.textContent = icon + (tab?.label ?? '');
-  label.append(dot, name);
-}
-
-function removeSpreadLabel(container: HTMLDivElement): void {
-  container.querySelector<HTMLElement>(':scope > .spread-label')?.remove();
-}
-
-/** Scale the tile's `.xterm` to fit its grid cell — CSS transform only, no fit()/resize. */
-function fitSpreadScale(container: HTMLDivElement): void {
-  const screen = container.querySelector<HTMLElement>(':scope > .xterm');
-  if (!screen) return;
-  screen.style.transform = 'none';
-  const sw = screen.offsetWidth || 1;
-  const sh = screen.offsetHeight || 1;
-  const cw = container.clientWidth - 4;
-  const ch = container.clientHeight - SPREAD_LABEL_H - 4;
-  const f = Math.min(cw / sw, ch / sh, 1);
-  screen.style.transformOrigin = 'top left';
-  screen.style.transform = `scale(${f > 0 ? f : 1})`;
-}
-
-function clearSpreadScale(container: HTMLDivElement): void {
-  const screen = container.querySelector<HTMLElement>(':scope > .xterm');
-  if (screen) {
-    screen.style.transform = '';
-    screen.style.transformOrigin = '';
-  }
 }
 
 // Mode button SVG icons
@@ -1266,109 +1200,22 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     }
   }, [open, activeTabId, spreadActive]);
 
-  // Spread View layout. Re-runs only when the tab *set* (spreadTabsKey) or spreadActive
-  // changes — never on output-driven `tabs` churn. On enter: switch the wrapper to a grid,
-  // style every container as a cell, blur all terminals (I1-S5), and CSS-scale each `.xterm`
-  // to fit (no fit()/resize → shared pty size untouched). On leave: restore the single-tab
-  // layout and refit the active tab.
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    if (!spreadActive) {
-      wrapper.style.display = '';
-      wrapper.style.gridTemplateColumns = '';
-      wrapper.style.gridAutoRows = '';
-      wrapper.style.gap = '';
-      wrapper.style.padding = '';
-      wrapper.style.overflow = 'hidden';
-      const settings = getSettings();
-      const activeId = activeTabIdRef.current;
-      for (const [id, container] of containersRef.current) {
-        container.style.flex = '1';
-        container.style.height = '100%';
-        container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
-        container.style.overflow = 'hidden';
-        container.style.position = '';
-        container.style.border = '';
-        container.style.borderRadius = '';
-        container.style.cursor = '';
-        container.style.background = '';
-        container.style.display = id === activeId ? 'block' : 'none';
-        container.onclick = null;
-        removeSpreadLabel(container);
-        clearSpreadScale(container);
-      }
-      const entry = termsRef.current.get(activeId);
-      if (entry) {
-        requestAnimationFrame(() => {
-          entry.fit.fit();
-          onResizeRef.current?.(activeId, entry.term.cols, entry.term.rows);
-          entry.term.focus();
-        });
-      }
-      return;
-    }
-
-    const ids = tabsRef.current.map((t) => t.id).filter((id) => containersRef.current.has(id));
-    const cols = Math.max(1, Math.ceil(Math.sqrt(ids.length)));
-    wrapper.style.display = 'grid';
-    wrapper.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-    wrapper.style.gridAutoRows = 'minmax(0, 1fr)';
-    wrapper.style.gap = '10px';
-    wrapper.style.padding = '12px';
-    wrapper.style.overflow = 'auto';
-
-    for (const { term } of termsRef.current.values()) term.blur();
-
-    for (const id of ids) {
-      const container = containersRef.current.get(id);
-      if (!container) continue;
-      const tab = tabsRef.current.find((t) => t.id === id);
-      container.style.display = 'block';
-      container.style.flex = '';
-      container.style.height = '';
-      container.style.padding = '';
-      container.style.position = 'relative';
-      container.style.overflow = 'hidden';
-      container.style.border = '1px solid var(--border-color)';
-      container.style.borderRadius = '8px';
-      container.style.cursor = 'pointer';
-      container.style.background = 'rgba(0,0,0,0.25)';
-      setSpreadLabel(container, tab);
-      container.onclick = () => onSelectSpreadTileRef.current?.(id);
-    }
-
-    let raf = requestAnimationFrame(() => {
-      for (const id of ids) {
-        const c = containersRef.current.get(id);
-        if (c) fitSpreadScale(c);
-      }
-    });
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        for (const id of ids) {
-          const c = containersRef.current.get(id);
-          if (c) fitSpreadScale(c);
-        }
-      });
-    });
-    ro.observe(wrapper);
-    return () => {
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-    };
-  }, [spreadActive, spreadTabsKey]);
-
-  // Spread View label refresh — cheap DOM-only update when a tab's status/exit changes.
-  useEffect(() => {
-    if (!spreadActive) return;
-    for (const tab of tabsRef.current) {
-      const container = containersRef.current.get(tab.id);
-      if (container) setSpreadLabel(container, tab);
-    }
-  }, [spreadActive, spreadStatusKey]);
+  // Spread View: interactive resizable tiling grid of live terminals. All the
+  // DOM orchestration, gutters, drag-to-swap, keyboard shortcuts and hover hints
+  // live in the hook so this component stays focused on the single-tab surface.
+  useSpreadView({
+    spreadActive,
+    spreadTabsKey,
+    spreadStatusKey,
+    wrapperRef,
+    containersRef,
+    termsRef,
+    tabsRef,
+    activeTabIdRef,
+    onResizeRef,
+    onSelectSpreadTileRef,
+    t,
+  });
 
   const uniquePaths = [...new Set(projectPaths)];
   const hasTabs = tabs.length > 0;

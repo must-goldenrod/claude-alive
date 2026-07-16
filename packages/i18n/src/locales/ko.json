@@ -375,7 +375,29 @@
   "spread": {
     "empty": "열린 터미널이 없습니다",
     "emptyHint": "챗을 열면 여기에 표시됩니다",
-    "tileHint": "타일을 클릭하면 해당 터미널로 이동합니다"
+    "tileHint": "타일을 클릭하면 그 자리에서 입력할 수 있습니다. 더블클릭 또는 ⤢로 최대화",
+    "hint": {
+      "focus": "포커스",
+      "swap": "이동",
+      "resize": "크기",
+      "maximize": "최대화"
+    },
+    "shortcut": {
+      "focusLeft": "왼쪽 포커스",
+      "focusRight": "오른쪽 포커스",
+      "focusUp": "위쪽 포커스",
+      "focusDown": "아래쪽 포커스",
+      "swapLeft": "타일 왼쪽 이동",
+      "swapRight": "타일 오른쪽 이동",
+      "swapUp": "타일 위로 이동",
+      "swapDown": "타일 아래로 이동",
+      "shrinkWidth": "폭 줄이기",
+      "growWidth": "폭 늘리기",
+      "shrinkHeight": "높이 줄이기",
+      "growHeight": "높이 늘리기",
+      "maximize": "최대화",
+      "resetLayout": "레이아웃 초기화"
+    }
   },
   "prompt": {
     "listTitle": "최근 프롬프트",

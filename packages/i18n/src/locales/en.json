@@ -375,7 +375,29 @@
   "spread": {
     "empty": "No open terminals",
     "emptyHint": "Open a chat and it will appear here",
-    "tileHint": "Click a tile to open that terminal"
+    "tileHint": "Click a tile to type into it here; double-click or ⤢ to maximize",
+    "hint": {
+      "focus": "focus",
+      "swap": "move",
+      "resize": "resize",
+      "maximize": "maximize"
+    },
+    "shortcut": {
+      "focusLeft": "Focus left",
+      "focusRight": "Focus right",
+      "focusUp": "Focus up",
+      "focusDown": "Focus down",
+      "swapLeft": "Move tile left",
+      "swapRight": "Move tile right",
+      "swapUp": "Move tile up",
+      "swapDown": "Move tile down",
+      "shrinkWidth": "Shrink width",
+      "growWidth": "Grow width",
+      "shrinkHeight": "Shrink height",
+      "growHeight": "Grow height",
+      "maximize": "Maximize",
+      "resetLayout": "Reset layout"
+    }
   },
   "prompt": {
     "listTitle": "Recent prompts",
