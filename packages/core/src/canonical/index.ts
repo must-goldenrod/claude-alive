@@ -55,3 +55,6 @@ export {
   decodeUlidTime,
 } from './ids.js';
 export type { UlidClockOptions, UlidFactory } from './ids.js';
+
+export { claudeHookToCanonical } from './claudeV1ToV2.js';
+export type { ClaudeHookContext } from './claudeV1ToV2.js';
