@@ -16,6 +16,7 @@ export type {
   ResumableSession,
 } from './protocol/wsProtocol.js';
 export { parseTranscriptTokens } from './transcript/parser.js';
+export * from './canonical/index.js';
 export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';
 export type {
   EfficioAxisKey, EfficioAxisStatus, EfficioCluster, EfficioAxisMeta,
