@@ -225,6 +225,16 @@ importers:
         specifier: ^8
         version: 8.18.1
 
+  packages/storage:
+    dependencies:
+      '@claude-alive/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.11
+        version: 22.19.11
+
   packages/ui:
     dependencies:
       '@claude-alive/core':

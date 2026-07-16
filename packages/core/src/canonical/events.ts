@@ -43,6 +43,13 @@ export type CanonicalEventKind = (typeof CANONICAL_EVENT_KINDS)[number];
 /** Where the normalized event came from — used to weigh trust and dedupe. */
 export type EventSource = 'structured' | 'hook' | 'transcript' | 'pty' | 'synthetic';
 
+/**
+ * How an event's dedupe key was derived (spec §I.4): `native` from a provider
+ * event id, `content-hash` from a hash of stable fields when no native id exists.
+ * Set by the storage layer at append time.
+ */
+export type DedupeConfidence = 'native' | 'content-hash';
+
 export interface CanonicalEvent<T = unknown> {
   schemaVersion: 2;
   eventId: string;
@@ -60,6 +67,8 @@ export interface CanonicalEvent<T = unknown> {
   occurredAt: number;
   receivedAt: number;
   confidence: StateConfidence;
+  /** How this event's dedupe key was derived; set by the storage layer. */
+  dedupeConfidence?: DedupeConfidence;
   payload: T;
   /** Opaque reference to the stored raw event (e.g. a transcript offset or row id). */
   rawRef?: string;

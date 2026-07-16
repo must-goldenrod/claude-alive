@@ -15,7 +15,12 @@ export { COMMON_AGENT_STATES } from './state.js';
 export type { CommonAgentState, StateConfidence, NormalizedState } from './state.js';
 
 export { CANONICAL_EVENT_KINDS } from './events.js';
-export type { CanonicalEvent, CanonicalEventKind, EventSource } from './events.js';
+export type {
+  CanonicalEvent,
+  CanonicalEventKind,
+  EventSource,
+  DedupeConfidence,
+} from './events.js';
 
 export type {
   LocationKind,
