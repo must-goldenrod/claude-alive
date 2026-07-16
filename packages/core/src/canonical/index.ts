@@ -63,3 +63,18 @@ export type { UlidClockOptions, UlidFactory } from './ids.js';
 
 export { claudeHookToCanonical } from './claudeV1ToV2.js';
 export type { ClaudeHookContext } from './claudeV1ToV2.js';
+
+export type {
+  AgentRuntimeAdapter,
+  SessionId,
+  RuntimeInstallation,
+  StartSessionInput,
+  ProviderSessionRef,
+  RuntimeSessionHandle,
+  UserInput,
+  ApprovalDecision,
+  AdapterHealth,
+} from './adapter.js';
+
+export { runConformanceSuite } from './conformance.js';
+export type { ConformanceCheck, ConformanceReport, ConformanceOptions } from './conformance.js';
