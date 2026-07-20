@@ -61,6 +61,12 @@ export {
 } from './ids.js';
 export type { UlidClockOptions, UlidFactory } from './ids.js';
 
+export { codexEventToCanonical } from './codexToCanonical.js';
+export type { CodexServerMessage, CodexEventContext } from './codexToCanonical.js';
+
+export { createCodexAdapter, CODEX_CAPABILITIES } from './codexAdapter.js';
+export type { CodexAdapterOptions } from './codexAdapter.js';
+
 export { claudeHookToCanonical } from './claudeV1ToV2.js';
 export type { ClaudeHookContext } from './claudeV1ToV2.js';
 

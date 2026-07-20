@@ -65,7 +65,15 @@ export interface DoctorReport {
   summary: { installed: number; total: number };
 }
 
-/** Runtimes Alive targets. All adapters are still planned as of P0. */
+/**
+ * Runtimes Alive targets.
+ *
+ * `adapterStatus` tracks Alive's side, not the binary's: `implemented` means an
+ * adapter exists and passes the conformance suite. It does **not** claim a live
+ * smoke test — Codex's adapter is fixture-verified only (ADR-0004 Conditionally
+ * Accepted), which is why the report shows adapter status separately from
+ * installation.
+ */
 export const DEFAULT_RUNTIME_PROBES: readonly RuntimeProbe[] = [
   {
     provider: 'claude',
@@ -80,7 +88,7 @@ export const DEFAULT_RUNTIME_PROBES: readonly RuntimeProbe[] = [
     provider: 'codex',
     command: 'codex',
     versionArgs: ['--version'],
-    adapterStatus: 'planned',
+    adapterStatus: 'implemented',
     identityPattern: /\bcodex\b/i,
   },
   {

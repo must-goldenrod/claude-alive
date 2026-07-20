@@ -122,9 +122,13 @@ describe('formatDoctorReport', () => {
 });
 
 describe('DEFAULT_RUNTIME_PROBES', () => {
-  test('covers the three target providers and claims no implemented adapters yet', () => {
+  test('covers the three target providers', () => {
     expect(DEFAULT_RUNTIME_PROBES.map((p) => p.provider)).toEqual(['claude', 'codex', 'hermes']);
-    expect(DEFAULT_RUNTIME_PROBES.every((p) => p.adapterStatus === 'planned')).toBe(true);
+  });
+
+  test('marks codex as implemented and the untouched providers as planned', () => {
+    const byProvider = Object.fromEntries(DEFAULT_RUNTIME_PROBES.map((p) => [p.provider, p.adapterStatus]));
+    expect(byProvider).toEqual({ claude: 'planned', codex: 'implemented', hermes: 'planned' });
   });
 
   test('every probe carries an identity pattern so name collisions are rejected', () => {
