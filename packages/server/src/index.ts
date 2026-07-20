@@ -269,6 +269,9 @@ const httpServer = createHttpServer({
   removeProjectName,
   efficio,
   workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
+  sessionConversation: canonicalPipeline.enabled
+    ? (sessionId, cursor) => canonicalPipeline.conversation(sessionId, cursor)
+    : undefined,
   promptRouter: (req, res) => {
     if (!promptSubsystem) {
       // Explicit over a confusing 404: the route exists, the subsystem does not.

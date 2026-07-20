@@ -20,6 +20,7 @@
 import {
   ClaudeCanonicalStream,
   applyCanonicalEvent,
+  buildConversation,
   buildProjection,
   emptyProjection,
   pickTitleSource,
@@ -27,6 +28,7 @@ import {
   ulid,
   type CommandRunner,
   type HookEventPayload,
+  type ConversationItem,
   type LocationSummary,
   type ProjectionState,
   type SessionProjectionRow,
@@ -72,6 +74,19 @@ export interface WorkspaceTreeProjection {
   }>;
 }
 
+export interface ConversationPage {
+  sessionId: string;
+  items: ConversationItem[];
+  cursor: number;
+  hasMore: boolean;
+  /**
+   * Claude hooks carry one assistant message per turn, not the streamed reply,
+   * so a hook-derived conversation is partial by construction. Surfaced rather
+   * than implied, so the UI never presents it as the whole transcript (§F.7).
+   */
+  completeness: 'hook-derived';
+}
+
 export interface CanonicalPipeline {
   readonly enabled: boolean;
   /** Queue a hook for canonical processing. Never rejects. */
@@ -80,6 +95,8 @@ export interface CanonicalPipeline {
   drain(): Promise<void>;
   /** Server-owned catalog: Location → Workspace → Session (§I.5). */
   tree(): WorkspaceTreeProjection;
+  /** One session's dialogue, paginated (§F.7, §J.1). */
+  conversation(sessionId: string, cursor?: number, limit?: number): ConversationPage | null;
   stats(): { events: number; sessions: number; workspaces: number };
   close(): void;
 }
@@ -89,6 +106,7 @@ const DISABLED: CanonicalPipeline = {
   async ingest() {},
   async drain() {},
   tree: () => ({ locations: [] }),
+  conversation: () => null,
   stats: () => ({ events: 0, sessions: 0, workspaces: 0 }),
   close() {},
 };
@@ -220,6 +238,19 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
         .sort((a, b) => a.workspace.displayName.localeCompare(b.workspace.displayName));
 
       return { locations: [{ location, workspaces }] };
+    },
+    conversation(sessionId, cursor = 0, limit = 500) {
+      // Unknown session → null, so the caller can answer 404 rather than
+      // implying an empty-but-valid conversation.
+      if (!refs.findProviderRef(sessionId)) return null;
+      const page = events.readSession(sessionId, cursor, limit);
+      return {
+        sessionId,
+        items: buildConversation(page.events),
+        cursor: page.cursor,
+        hasMore: page.hasMore,
+        completeness: 'hook-derived',
+      };
     },
     drain: () => tail,
     stats: () => ({

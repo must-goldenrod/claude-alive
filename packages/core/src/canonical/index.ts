@@ -82,6 +82,9 @@ export type { ConformanceCheck, ConformanceReport, ConformanceOptions } from './
 export { normalizeLegacyState } from './stateMapping.js';
 export { ClaudeCanonicalStream } from './claudeSessionReducer.js';
 
+export { buildConversation } from './conversation.js';
+export type { ConversationItem, ConversationItemStatus } from './conversation.js';
+
 export { emptyProjection, applyCanonicalEvent, buildProjection } from './projection.js';
 export type { SessionProjectionRow, ProjectionState } from './projection.js';
 

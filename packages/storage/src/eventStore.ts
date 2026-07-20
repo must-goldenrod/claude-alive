@@ -32,6 +32,11 @@ interface EventRow {
   raw_ref: string | null;
 }
 
+export interface SessionReadResult extends ReadResult {
+  /** True when more events exist past `cursor` for this session. */
+  hasMore: boolean;
+}
+
 export interface ReadResult {
   events: CanonicalEvent[];
   /** Highest `id` returned; pass back to `readAfter` to resume. */
@@ -121,6 +126,24 @@ export class EventStore {
     const events = rows.map(rowToEvent);
     const nextCursor = rows.length > 0 ? rows[rows.length - 1].id : cursor;
     return { events, cursor: nextCursor };
+  }
+
+  /**
+   * Read one session's events past `cursor`, in append order. Used by the
+   * conversation reader, which must not scan the whole log to render one session.
+   */
+  readSession(sessionId: string, cursor: number, limit = 500): SessionReadResult {
+    const rows = this.db
+      .prepare('SELECT * FROM events WHERE session_id = ? AND id > ? ORDER BY id ASC LIMIT ?')
+      .all(sessionId, cursor, limit + 1) as unknown as (EventRow & { id: number })[];
+    // One extra row is fetched purely to answer "is there more" without a count.
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    return {
+      events: page.map(rowToEvent),
+      cursor: page.length > 0 ? page[page.length - 1].id : cursor,
+      hasMore,
+    };
   }
 
   count(): number {

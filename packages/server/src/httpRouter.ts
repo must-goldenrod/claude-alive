@@ -96,6 +96,9 @@ export interface HttpRouterOptions {
    * pretending the tree is empty.
    */
   workspaceTree?: () => unknown;
+
+  /** One session's conversation; null when the session is unknown (§F.7). */
+  sessionConversation?: (sessionId: string, cursor: number) => unknown | null;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -168,6 +171,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     uiDistPath,
     promptRouter,
     workspaceTree,
+    sessionConversation,
     efficio,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
@@ -215,6 +219,25 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, workspaceTree(), req);
+      return;
+    }
+
+    const conversationMatch = url.pathname.match(/^\/api\/v2\/sessions\/([^/]+)\/conversation$/);
+    if (req.method === 'GET' && conversationMatch) {
+      if (!sessionConversation) {
+        sendJson(res, 503, { error: 'canonical event log unavailable', detail: 'see server logs' }, req);
+        return;
+      }
+      const cursor = Number(url.searchParams.get('cursor') ?? '0');
+      const page = sessionConversation(
+        decodeURIComponent(conversationMatch[1]),
+        Number.isFinite(cursor) ? cursor : 0,
+      );
+      if (!page) {
+        sendJson(res, 404, { error: 'unknown session' }, req);
+        return;
+      }
+      sendJson(res, 200, page, req);
       return;
     }
 
