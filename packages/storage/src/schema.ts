@@ -40,4 +40,19 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_events_workspace ON events (workspace_id, id);
     `,
   },
+  {
+    // ADR-0011: the single translation point between Alive's internal ULIDs and
+    // provider-native session ids. Alive ids are never written into the prompt or
+    // efficio databases; cross-database joins go through `provider_session_id`.
+    version: 2,
+    up: `
+      CREATE TABLE IF NOT EXISTS session_provider_refs (
+        alive_session_id    TEXT PRIMARY KEY,
+        provider            TEXT NOT NULL,
+        provider_session_id TEXT NOT NULL,
+        created_at          INTEGER NOT NULL,
+        UNIQUE (provider, provider_session_id)
+      );
+    `,
+  },
 ];

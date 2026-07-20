@@ -89,26 +89,10 @@ export interface MigrationResult {
   skipped: SkippedEntry[];
 }
 
-/** Cross-platform basename; core also runs in the browser, so no node:path. */
-function basename(path: string): string {
-  const parts = path.split(/[/\\]/).filter(Boolean);
-  return parts.length > 0 ? parts[parts.length - 1] : path;
-}
-
-/**
- * Canonicalize a root path for use as a workspace key (§F.5). Trims, collapses
- * duplicate separators, and drops a trailing separator so `/repo/alpha`,
- * `/repo/alpha/`, and `/repo//alpha` are one workspace.
- *
- * Deliberately does NOT case-fold: case sensitivity is filesystem-dependent, and
- * folding would merge genuinely distinct directories on Linux. Resolving
- * symlinks and case-insensitive collisions needs filesystem access, so it stays
- * with the runtime workspace probe (P1) rather than this pure migration.
- */
-function canonicalizeRootPath(path: string): string {
-  const trimmed = path.trim().replace(/\/{2,}/g, '/');
-  return trimmed.length > 1 ? trimmed.replace(/\/+$/, '') : trimmed;
-}
+// Path handling is shared with the runtime workspace probe so migrated and
+// freshly-probed workspaces key identically — two implementations would drift
+// and split one workspace in two.
+import { basename, canonicalizeRootPath } from './workspaceProbe.js';
 
 function minDefined(a: number | undefined, b: number | undefined): number | undefined {
   if (a === undefined) return b;

@@ -85,6 +85,14 @@ export { ClaudeCanonicalStream } from './claudeSessionReducer.js';
 export { emptyProjection, applyCanonicalEvent, buildProjection } from './projection.js';
 export type { SessionProjectionRow, ProjectionState } from './projection.js';
 
+export {
+  probeWorkspace,
+  normalizeRemoteUrl,
+  canonicalizeRootPath,
+  basename,
+} from './workspaceProbe.js';
+export type { WorkspaceProbeInput } from './workspaceProbe.js';
+
 export { migrateLegacyState } from './migration.js';
 export type {
   LegacyAgent,
