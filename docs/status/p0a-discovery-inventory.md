@@ -4,8 +4,8 @@
 > 대화 기록·과거 보고·이전 요약은 작성 시점의 스냅샷이며, 이 문서와 어긋나면 **무효(stale)** 로 취급합니다.
 > 모든 항목에 재검증 명령이 붙어 있습니다. 인용하기 전에 명령을 실행해 확인하십시오.
 
-- 검증 시점: 2026-07-20 (P1 진행 중 갱신)
-- 검증 커밋: `6595db1`+
+- 검증 시점: 2026-07-20 (P1 사용자 대면 기능 완료 시점)
+- 검증 커밋: `0869e50`
 - 대상 문서: `docs/plans/2026-07-16-multi-agent-alive-platform-atoz.md` (1,636줄)
 - 재검증 일괄: `pnpm run build && pnpm exec vitest run`
 
@@ -90,7 +90,9 @@ grep -rn "better-sqlite3\|node:sqlite" packages/*/src --include="*.ts" | grep -v
 | `probeWorkspace` | 2 | ✅ **배선됨** — workspace identity |
 | `buildProjection` | 2 | ✅ **배선됨** — 부팅 시 로그에서 재생성 |
 | `buildConversation` | 2 | ✅ **배선됨** — 대화 읽기 |
-| `migrateLegacyState` | 0 | ❌ 미배선 (기존 상태 1회 이전, P1 잔여) |
+| legacy 임포트 (`importLegacySessions`) | 2 | ✅ **배선됨** — 부팅 시 1회, 멱등 |
+| `resolveSessionTerminal` | 2 | ✅ **배선됨** — 세션↔터미널 상관 |
+| `migrateLegacyState` (core) | 0 | ⚪ 미사용 — 서버는 동등 로직을 파이프라인에 직접 구현 |
 | `runConformanceSuite` | 0 | ⚪ 설계상 테스트 전용 |
 
 ### v2 HTTP 엔드포인트 (동작 확인됨)
@@ -99,16 +101,24 @@ grep -rn "better-sqlite3\|node:sqlite" packages/*/src --include="*.ts" | grep -v
 |---|---|
 | `GET /api/v2/workspace-tree` | Location → Workspace → Session 트리 |
 | `GET /api/v2/sessions/:id/conversation?cursor=` | 대화 항목, 미지 세션은 404 |
+| `GET /api/v2/sessions/:id/terminal` | 터미널 가용성(live/외부시작/미지) |
+| WS `v2:catalog-changed` | 카탈로그 무효화 신호(300ms 디바운스) |
 
 두 경로 모두 파이프라인 비활성 시 **503 + 사유**를 반환합니다(빈 결과로 위장하지 않음).
 
 ### UI 노출 상태
 
-**Workspaces 탭**(신규)이 v2 경로를 읽습니다: 좌측 Location → Workspace → Session 트리,
-세션 클릭 시 우측에 대화 패널. 세션 클릭은 **재개하지 않고 대화만 엽니다**(§F.7).
+**Workspaces 탭**(신규)이 v2 경로를 읽습니다:
+- 좌측: Location → Workspace → Session 트리 (WebSocket 신호로 실시간 갱신)
+- 우측: 세션 상세 — **대화 탭(기본)** ↔ **터미널 탭**
+- 세션 클릭은 **재개하지 않고 대화만 엽니다**(§F.7)
+- 터미널이 없으면 이유를 표시(외부 시작 / 미지 세션 / 조회 실패)
 
 기존 5개 뷰(animation/list/prompt/efficio/spread)와 v1 `AgentInfo` 경로는 **무변경**입니다.
 두 모델이 병행 동작하며 비교 가능합니다.
+
+**미구현**: 터미널 탭의 xterm 실제 마운트. 렌더링이 `ChatOverlay`에 내장돼 있어 추출 시
+주 터미널 UX 회귀 위험이 커서 가용성 보고까지만 구현했습니다.
 
 ```bash
 # 배선 여부 재확인 (테스트 제외 호출처 수)
@@ -123,12 +133,14 @@ grep -rn "\bEventStore\b" packages/*/src --include="*.ts" | grep -v __tests__ | 
 
 | 항목 | 값 |
 |---|---|
-| 전체 테스트 | **596 통과 / 47 파일 / 실패 0** |
+| 전체 테스트 | **610 통과 / 48 파일 / 실패 0** |
 | 빌드 | `turbo` 11 tasks 성공 |
 | 서버 기동 | 확인 (hook 3건 end-to-end 반영 확인) |
 | Degradation | 네이티브 모듈 손상 시 서버 생존·`/api/prompts` 503 확인 |
 | v2 dual-write | 실서버 hook 5건 → canonical 이벤트 10건 영속, workspace/세션 매핑 확인 |
 | v2 재시작 내성 | 3회 재시작에도 workspace 1개 유지(초기 결함 수정 후 실측) |
+| legacy 임포트 | 실제 21건 → workspace 7개, 재부팅 시 중복 0 |
+| WS 실시간 | hook 3건 → `v2:catalog-changed` 1건(디바운스) 수신 확인 |
 
 ---
 
