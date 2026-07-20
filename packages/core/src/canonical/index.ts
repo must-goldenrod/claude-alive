@@ -79,6 +79,16 @@ export type {
 export { runConformanceSuite } from './conformance.js';
 export type { ConformanceCheck, ConformanceReport, ConformanceOptions } from './conformance.js';
 
+export { migrateLegacyState } from './migration.js';
+export type {
+  LegacyAgent,
+  LegacyManagedSession,
+  LegacyOpenTab,
+  MigrationInput,
+  MigrationResult,
+  SkippedEntry,
+} from './migration.js';
+
 export { DEFAULT_RUNTIME_PROBES, extractVersion, runDoctor, formatDoctorReport } from './doctor.js';
 export type {
   CommandResult,
