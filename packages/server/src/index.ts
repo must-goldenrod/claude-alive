@@ -99,9 +99,23 @@ try {
   // Directory creation failure surfaces below when the database fails to open.
 }
 const execFileAsync = promisify(execFile);
+/**
+ * Coalesce catalog change signals: a busy session emits several events per
+ * second, and the client only needs to know "refetch", not how many times.
+ */
+let catalogChangeTimer: ReturnType<typeof setTimeout> | null = null;
+function signalCatalogChanged(): void {
+  if (catalogChangeTimer) return;
+  catalogChangeTimer = setTimeout(() => {
+    catalogChangeTimer = null;
+    broadcaster.broadcast({ type: 'v2:catalog-changed' });
+  }, 300);
+}
+
 const canonicalPipeline = createCanonicalPipeline({
   dbPath: process.env.CLAUDE_ALIVE_EVENT_DB ?? join(ALIVE_DIR, 'alive.db'),
   locationId: 'local',
+  onChange: signalCatalogChanged,
   // Read-only git probe for workspace identity; augmentPath so a reduced
   // launchd PATH does not make every workspace look like a plain folder.
   runner: async (command, args) => {

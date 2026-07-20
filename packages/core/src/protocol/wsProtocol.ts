@@ -30,6 +30,12 @@ export interface ResumableSession {
 }
 
 export type WSServerMessage =
+  /**
+   * Canonical (v2) catalog invalidation. Carries no payload on purpose: the tree
+   * is fetched over HTTP, so the socket protocol never has to version the read
+   * model. Clients that do not know this type ignore it.
+   */
+  | { type: 'v2:catalog-changed' }
   | { type: 'agent:spawn'; agent: AgentInfo }
   | { type: 'agent:despawn'; sessionId: string }
   | { type: 'agent:state'; sessionId: string; state: AgentState; tool: string | null; animation: ToolAnimation | null; timestamp: number }

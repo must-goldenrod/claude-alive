@@ -6,8 +6,9 @@
  * failure. Showing "no sessions" when the truth is "cannot read" would be the
  * silent-loss failure mode the spec forbids (§C.10).
  *
- * Polls rather than subscribing: the v2 read model has no WebSocket channel yet,
- * and polling keeps this additive to the existing v1 socket.
+ * Updates on a `v2:catalog-changed` signal from the existing socket when one is
+ * supplied, and keeps a slow poll as a safety net so a dropped signal degrades to
+ * a delay rather than a permanently stale view.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -56,8 +57,15 @@ export interface UseWorkspaceTreeResult {
 
 const POLL_MS = 5_000;
 
-export function useWorkspaceTree(options: { active?: boolean } = {}): UseWorkspaceTreeResult {
+export interface UseWorkspaceTreeOptions {
+  active?: boolean;
+  /** Raw socket subscription; the hook refetches on `v2:catalog-changed`. */
+  subscribeRaw?: (handler: (msg: unknown) => void) => () => void;
+}
+
+export function useWorkspaceTree(options: UseWorkspaceTreeOptions = {}): UseWorkspaceTreeResult {
   const active = options.active ?? true;
+  const { subscribeRaw } = options;
   const [tree, setTree] = useState<WorkspaceTree | null>(null);
   const [loading, setLoading] = useState(active);
   const [unavailable, setUnavailable] = useState(false);
@@ -106,6 +114,16 @@ export function useWorkspaceTree(options: { active?: boolean } = {}): UseWorkspa
       clearInterval(timer);
     };
   }, [active, nonce]);
+
+  // Server-pushed invalidation. The payload is only a signal — the tree itself is
+  // fetched over HTTP so the socket protocol does not have to carry (and version)
+  // the whole read model.
+  useEffect(() => {
+    if (!active || !subscribeRaw) return;
+    return subscribeRaw((msg) => {
+      if ((msg as { type?: string } | null)?.type === 'v2:catalog-changed') refresh();
+    });
+  }, [active, subscribeRaw, refresh]);
 
   return { tree, loading, unavailable, error, refresh };
 }

@@ -81,9 +81,15 @@ function SessionRow({
   );
 }
 
-export function WorkspaceTreeView({ active }: { active: boolean }): React.ReactElement {
+export function WorkspaceTreeView({
+  active,
+  subscribeRaw,
+}: {
+  active: boolean;
+  subscribeRaw?: (handler: (msg: unknown) => void) => () => void;
+}): React.ReactElement {
   const { t } = useTranslation();
-  const { tree, loading, unavailable, error } = useWorkspaceTree({ active });
+  const { tree, loading, unavailable, error } = useWorkspaceTree({ active, subscribeRaw });
   // Selecting a session opens its conversation; it never resumes it (§F.7).
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 

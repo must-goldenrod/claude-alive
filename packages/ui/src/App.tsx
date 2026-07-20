@@ -456,7 +456,7 @@ export default function App() {
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
               When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'workspace' ? 'block' : 'none' }}>
-            <WorkspaceTreeView active={viewMode === 'workspace'} />
+            <WorkspaceTreeView active={viewMode === 'workspace'} subscribeRaw={subscribeRaw} />
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>

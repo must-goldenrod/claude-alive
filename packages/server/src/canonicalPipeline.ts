@@ -51,6 +51,11 @@ export interface CanonicalPipelineOptions {
   /** Command runner for the workspace probe (injected for tests / SSH reuse). */
   runner?: CommandRunner;
   locationId?: string;
+  /**
+   * Called after the read model advances. Debounced by the caller if needed —
+   * a busy session emits several events per second.
+   */
+  onChange?: () => void;
 }
 
 /** One session as the tree exposes it (§I.5 `SessionSummary`). */
@@ -189,6 +194,7 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
   }
 
   async function process(payload: HookEventPayload): Promise<void> {
+    let changed = false;
     const cwd = payload.data.cwd;
     if (!cwd) return; // Without a cwd there is no workspace to attribute it to.
 
@@ -206,8 +212,12 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
       const { inserted } = events.append(event);
       // Only advance the read model for events that were actually stored;
       // a deduped redelivery must not be counted twice.
-      if (inserted) projection = applyCanonicalEvent(projection, event);
+      if (inserted) {
+        projection = applyCanonicalEvent(projection, event);
+        changed = true;
+      }
     }
+    if (changed) options.onChange?.();
   }
 
   return {
@@ -324,6 +334,7 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
         }
       }
 
+      if (imported > 0) options.onChange?.();
       return { imported, skipped };
     },
     conversation(sessionId, cursor = 0, limit = 500) {

@@ -86,6 +86,45 @@ describe('useWorkspaceTree', () => {
     await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(before));
   });
 
+  it('refetches when the server signals the catalog changed', async () => {
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => TREE }));
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);
+    // Held in an object: a plain `let` gets narrowed to `null` by control-flow
+    // analysis after the closure assignment, which breaks the build.
+    const bus: { emit?: (msg: unknown) => void } = {};
+    const subscribeRaw = (handler: (msg: unknown) => void) => {
+      bus.emit = handler;
+      return () => {
+        bus.emit = undefined;
+      };
+    };
+
+    const { result } = renderHook(() => useWorkspaceTree({ subscribeRaw }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const before = fetchSpy.mock.calls.length;
+
+    bus.emit?.({ type: 'v2:catalog-changed' });
+    await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it('ignores unrelated socket messages', async () => {
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => TREE }));
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);
+    const bus: { emit?: (msg: unknown) => void } = {};
+    const subscribeRaw = (handler: (msg: unknown) => void) => {
+      bus.emit = handler;
+      return () => {};
+    };
+
+    const { result } = renderHook(() => useWorkspaceTree({ subscribeRaw }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const before = fetchSpy.mock.calls.length;
+
+    bus.emit?.({ type: 'agent:state', sessionId: 'x' });
+    await vi.advanceTimersByTimeAsync(200);
+    expect(fetchSpy.mock.calls.length).toBe(before);
+  });
+
   it('does not poll while inactive', async () => {
     const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => TREE }));
     vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);
