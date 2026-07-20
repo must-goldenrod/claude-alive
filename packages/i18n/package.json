@@ -14,5 +14,8 @@
   },
   "peerDependencies": {
     "react": "^19"
+  },
+  "scripts": {
+    "test": "vitest run"
   }
 }
