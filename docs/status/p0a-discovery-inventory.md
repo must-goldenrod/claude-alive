@@ -5,7 +5,7 @@
 > 모든 항목에 재검증 명령이 붙어 있습니다. 인용하기 전에 명령을 실행해 확인하십시오.
 
 - 검증 시점: 2026-07-20 (P1 진행 중 갱신)
-- 검증 커밋: `08aba2f`
+- 검증 커밋: `6595db1`+
 - 대상 문서: `docs/plans/2026-07-16-multi-agent-alive-platform-atoz.md` (1,636줄)
 - 재검증 일괄: `pnpm run build && pnpm exec vitest run`
 
@@ -102,10 +102,13 @@ grep -rn "better-sqlite3\|node:sqlite" packages/*/src --include="*.ts" | grep -v
 
 두 경로 모두 파이프라인 비활성 시 **503 + 사유**를 반환합니다(빈 결과로 위장하지 않음).
 
-### 아직 UI에 노출되지 않음
+### UI 노출 상태
 
-v2 데이터는 서버에서 생성·저장·조회되지만 **UI는 여전히 v1 `AgentInfo`만 읽습니다.**
-사용자가 화면에서 체감하는 변화는 아직 없습니다 (P1 잔여: UI projection 전환).
+**Workspaces 탭**(신규)이 v2 경로를 읽습니다: 좌측 Location → Workspace → Session 트리,
+세션 클릭 시 우측에 대화 패널. 세션 클릭은 **재개하지 않고 대화만 엽니다**(§F.7).
+
+기존 5개 뷰(animation/list/prompt/efficio/spread)와 v1 `AgentInfo` 경로는 **무변경**입니다.
+두 모델이 병행 동작하며 비교 가능합니다.
 
 ```bash
 # 배선 여부 재확인 (테스트 제외 호출처 수)
@@ -120,7 +123,7 @@ grep -rn "\bEventStore\b" packages/*/src --include="*.ts" | grep -v __tests__ | 
 
 | 항목 | 값 |
 |---|---|
-| 전체 테스트 | **580 통과 / 45 파일 / 실패 0** |
+| 전체 테스트 | **596 통과 / 47 파일 / 실패 0** |
 | 빌드 | `turbo` 11 tasks 성공 |
 | 서버 기동 | 확인 (hook 3건 end-to-end 반영 확인) |
 | Degradation | 네이티브 모듈 손상 시 서버 생존·`/api/prompts` 503 확인 |

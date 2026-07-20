@@ -6,8 +6,10 @@
  * models run side by side (§F.4 "1차: 기존 탭 유지").
  */
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkspaceTree, type TreeSession } from '../../hooks/useWorkspaceTree';
+import { ConversationPanel } from './ConversationPanel';
 
 /** Dot colour per canonical state; unknown states fall back to neutral. */
 const STATE_COLOR: Record<string, string> = {
@@ -24,10 +26,32 @@ const STATE_COLOR: Record<string, string> = {
   'unknown': 'var(--text-tertiary)',
 };
 
-function SessionRow({ session }: { session: TreeSession }): React.ReactElement {
+function SessionRow({
+  session,
+  selected,
+  onSelect,
+}: {
+  session: TreeSession;
+  selected: boolean;
+  onSelect: () => void;
+}): React.ReactElement {
   const { t } = useTranslation();
   return (
-    <li className="flex items-center gap-2 py-1.5 pl-6 pr-3 rounded-lg hover:bg-[var(--bg-hover)] transition-colors">
+    <li
+      role="button"
+      tabIndex={0}
+      aria-current={selected}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`flex items-center gap-2 py-1.5 pl-6 pr-3 rounded-lg cursor-pointer transition-colors ${
+        selected ? 'bg-[var(--bg-tertiary)]' : 'hover:bg-[var(--bg-hover)]'
+      }`}
+    >
       <span
         aria-hidden
         className="w-2 h-2 rounded-full shrink-0"
@@ -60,6 +84,8 @@ function SessionRow({ session }: { session: TreeSession }): React.ReactElement {
 export function WorkspaceTreeView({ active }: { active: boolean }): React.ReactElement {
   const { t } = useTranslation();
   const { tree, loading, unavailable, error } = useWorkspaceTree({ active });
+  // Selecting a session opens its conversation; it never resumes it (§F.7).
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   if (loading) {
     return <p className="p-6 text-sm text-[var(--text-tertiary)]">{t('workspaceTree.loading')}</p>;
@@ -92,7 +118,8 @@ export function WorkspaceTreeView({ active }: { active: boolean }): React.ReactE
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4">
+    <div className="h-full flex">
+      <div className="w-[340px] shrink-0 h-full overflow-y-auto p-4 border-r border-[var(--border-primary)]">
       {locations.map(({ location, workspaces }) => (
         <section key={location.locationId} className="mb-5">
           <h2 className="px-2 mb-2 text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
@@ -113,13 +140,22 @@ export function WorkspaceTreeView({ active }: { active: boolean }): React.ReactE
               </div>
               <ul>
                 {sessions.map((session) => (
-                  <SessionRow key={session.sessionId} session={session} />
+                  <SessionRow
+                    key={session.sessionId}
+                    session={session}
+                    selected={session.sessionId === selectedSessionId}
+                    onSelect={() => setSelectedSessionId(session.sessionId)}
+                  />
                 ))}
               </ul>
             </div>
           ))}
         </section>
       ))}
+      </div>
+      <div className="flex-1 min-w-0 h-full">
+        <ConversationPanel sessionId={selectedSessionId} />
+      </div>
     </div>
   );
 }

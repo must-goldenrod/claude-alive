@@ -502,5 +502,31 @@
     "folder": "folder",
     "heuristic": "estimated",
     "heuristicHint": "This state was inferred, not reported directly by the provider."
+  },
+  "conversation": {
+    "selectPrompt": "Select a session to read its conversation.",
+    "loading": "Loading conversation…",
+    "empty": "No conversation recorded for this session.",
+    "notFound": "This session is not in the catalog.",
+    "unavailable": "The canonical event log is unavailable, so this conversation cannot be read.",
+    "error": "Could not load the conversation.",
+    "partialNotice": "Derived from hooks: one assistant message per turn, not the full streamed reply.",
+    "tool": "tool",
+    "approval": "Approval requested",
+    "systemEvent": "System",
+    "role": {
+      "user": "You",
+      "assistant": "Assistant",
+      "reasoning": "Reasoning"
+    },
+    "status": {
+      "running": "running",
+      "completed": "completed",
+      "failed": "failed"
+    },
+    "decision": {
+      "allow": "allowed",
+      "deny": "denied"
+    }
   }
 }
