@@ -215,6 +215,71 @@ describe('workspace tree — the server-owned catalog (§I.5)', () => {
   });
 });
 
+describe('legacy import — existing sessions appear in the new tree', () => {
+  const legacy = (over: Partial<Parameters<CanonicalPipeline['importLegacySessions']>[0][number]> = {}) => ({
+    tabId: 'tab-8',
+    claudeSessionId: 'de71b20f-legacy',
+    cwd: CWD,
+    mode: 'claude' as const,
+    claudeVariant: 'claude' as const,
+    createdAt: 1_700_000_000_000,
+    lastActive: 1_700_000_001_000,
+    ...over,
+  });
+
+  test('a persisted managed session becomes a session in the tree', async () => {
+    const p = make();
+    const result = await p.importLegacySessions([legacy()]);
+    expect(result.imported).toBe(1);
+    const sessions = p.tree().locations.flatMap((l) => l.workspaces.flatMap((w) => w.sessions));
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].providerSessionId).toBe('de71b20f-legacy');
+    p.close();
+  });
+
+  test('importing twice does not duplicate the session', async () => {
+    const p = make();
+    await p.importLegacySessions([legacy()]);
+    const second = await p.importLegacySessions([legacy()]);
+    expect(second.imported).toBe(0);
+    expect(p.tree().locations.flatMap((l) => l.workspaces.flatMap((w) => w.sessions))).toHaveLength(1);
+    p.close();
+  });
+
+  test('a legacy session and a live hook for the same id stay one session', async () => {
+    t = 0;
+    const p = make();
+    await p.importLegacySessions([legacy({ claudeSessionId: SID })]);
+    await p.ingest(hook('SessionStart'));
+    await p.drain();
+    expect(p.tree().locations.flatMap((l) => l.workspaces.flatMap((w) => w.sessions))).toHaveLength(1);
+    p.close();
+  });
+
+  test('a user-set display name becomes the session title', async () => {
+    const p = make();
+    await p.importLegacySessions([legacy({ displayName: 'Auth refactor' })]);
+    const session = p.tree().locations[0].workspaces[0].sessions[0];
+    expect(session.title).toBe('Auth refactor');
+    expect(session.titleSource).toBe('manual');
+    p.close();
+  });
+
+  test('records skipped records instead of dropping them silently', async () => {
+    const p = make();
+    const result = await p.importLegacySessions([legacy({ cwd: undefined }), legacy({ mode: 'shell' })]);
+    expect(result.imported).toBe(0);
+    expect(result.skipped.length).toBe(2);
+    p.close();
+  });
+
+  test('is a no-op on a disabled pipeline', async () => {
+    const p = createCanonicalPipeline({ dbPath: '/nonexistent-dir-xyz/alive.db', runner: gitRunner });
+    await expect(p.importLegacySessions([legacy()])).resolves.toMatchObject({ imported: 0 });
+    p.close();
+  });
+});
+
 describe('failure isolation — the hook path must never break', () => {
   test('an unopenable database disables the pipeline instead of throwing', () => {
     const p = createCanonicalPipeline({ dbPath: '/nonexistent-dir-xyz/alive.db', runner: gitRunner });

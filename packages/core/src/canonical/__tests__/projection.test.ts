@@ -140,6 +140,12 @@ describe('accumulated facts', () => {
     expect(s.sessions.S1.lastPrompt).toBe('now also fix the tests');
   });
 
+  test('captures a user-set display name as the manual title source', () => {
+    seq = 0;
+    const s = buildProjection([evt('session.created', { cwd: '/r', displayName: 'Auth refactor' })]);
+    expect(s.sessions.S1.displayName).toBe('Auth refactor');
+  });
+
   test('records the transcript path when an event carries it', () => {
     seq = 0;
     const s = buildProjection([evt('session.created', { cwd: '/r', transcriptPath: '/t.jsonl' })]);

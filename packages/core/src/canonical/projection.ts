@@ -20,6 +20,8 @@ export interface SessionProjectionRow {
   transcriptPath?: string;
   /** First meaningful user prompt, captured once — the title source (§F.6). */
   firstPrompt?: string;
+  /** User-assigned name; outranks a generated title (§F.6 manual). */
+  displayName?: string;
   lastPrompt?: string;
   currentTool?: string;
   toolsUsed: string[];
@@ -103,6 +105,8 @@ export function applyCanonicalEvent(state: ProjectionState, event: CanonicalEven
   if (cwd) next.cwd = cwd;
   const transcriptPath = payloadString(event, 'transcriptPath');
   if (transcriptPath) next.transcriptPath = transcriptPath;
+  const displayName = payloadString(event, 'displayName');
+  if (displayName) next.displayName = displayName;
 
   const derived = stateFor(event);
   if (derived) {

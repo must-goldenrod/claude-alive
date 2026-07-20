@@ -28,6 +28,7 @@ import {
   ulid,
   type CommandRunner,
   type HookEventPayload,
+  type CanonicalEvent,
   type ConversationItem,
   type LocationSummary,
   type ProjectionState,
@@ -87,6 +88,23 @@ export interface ConversationPage {
   completeness: 'hook-derived';
 }
 
+/** A persisted managed session as the legacy store holds it. */
+export interface LegacyManagedRecord {
+  tabId: string;
+  claudeSessionId: string;
+  cwd?: string;
+  displayName?: string;
+  mode: 'claude' | 'shell';
+  claudeVariant?: 'claude' | 'agents';
+  createdAt: number;
+  lastActive: number;
+}
+
+export interface LegacyImportResult {
+  imported: number;
+  skipped: Array<{ id: string; reason: string }>;
+}
+
 export interface CanonicalPipeline {
   readonly enabled: boolean;
   /** Queue a hook for canonical processing. Never rejects. */
@@ -97,6 +115,8 @@ export interface CanonicalPipeline {
   tree(): WorkspaceTreeProjection;
   /** One session's dialogue, paginated (§F.7, §J.1). */
   conversation(sessionId: string, cursor?: number, limit?: number): ConversationPage | null;
+  /** One-time import of pre-canonical sessions; idempotent (§P0 migration). */
+  importLegacySessions(records: readonly LegacyManagedRecord[]): Promise<LegacyImportResult>;
   stats(): { events: number; sessions: number; workspaces: number };
   close(): void;
 }
@@ -107,6 +127,9 @@ const DISABLED: CanonicalPipeline = {
   async drain() {},
   tree: () => ({ locations: [] }),
   conversation: () => null,
+  async importLegacySessions() {
+    return { imported: 0, skipped: [] };
+  },
   stats: () => ({ events: 0, sessions: 0, workspaces: 0 }),
   close() {},
 };
@@ -207,7 +230,11 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
       const byWorkspace = new Map<string, SessionSummary[]>();
       for (const row of Object.values(projection.sessions)) {
         const ref = refs.findProviderRef(row.sessionId);
-        const title = pickTitleSource({ firstPrompt: row.firstPrompt, now: row.lastEventAt });
+        const title = pickTitleSource({
+          manual: row.displayName,
+          firstPrompt: row.firstPrompt,
+          now: row.lastEventAt,
+        });
         const summary: SessionSummary = {
           sessionId: row.sessionId,
           provider: row.provider,
@@ -238,6 +265,66 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
         .sort((a, b) => a.workspace.displayName.localeCompare(b.workspace.displayName));
 
       return { locations: [{ location, workspaces }] };
+    },
+    async importLegacySessions(records) {
+      const skipped: LegacyImportResult['skipped'] = [];
+      let imported = 0;
+
+      for (const record of records) {
+        if (record.mode !== 'claude') {
+          skipped.push({ id: record.claudeSessionId, reason: 'terminal-only (non-claude mode)' });
+          continue;
+        }
+        if (!record.cwd) {
+          skipped.push({ id: record.claudeSessionId, reason: 'no cwd — cannot place under a workspace' });
+          continue;
+        }
+
+        try {
+          const workspace = await workspaceFor(record.cwd);
+          if (!workspace) {
+            skipped.push({ id: record.claudeSessionId, reason: 'workspace probe unavailable' });
+            continue;
+          }
+          const sessionId = refs.resolve('claude', record.claudeSessionId);
+
+          // Synthetic origin event. The projection is built from the log, so a
+          // migrated session needs an event to exist at all. The stable
+          // sourceEventId makes re-running the import a no-op via dedupe rather
+          // than needing a separate "already migrated" flag.
+          const event: CanonicalEvent = {
+            schemaVersion: 2,
+            eventId: ulid(),
+            kind: 'session.created',
+            provider: 'claude',
+            source: 'synthetic',
+            sourceEventId: `migration:v1:${record.claudeSessionId}`,
+            workspaceId: workspace.workspaceId,
+            sessionId,
+            occurredAt: record.createdAt,
+            receivedAt: record.lastActive,
+            // Reconstructed from a registry, not observed live.
+            confidence: 'derived',
+            payload: {
+              cwd: record.cwd,
+              displayName: record.displayName,
+              source: 'legacy-managed-session',
+            },
+          };
+          const { inserted } = events.append(event);
+          if (inserted) {
+            projection = applyCanonicalEvent(projection, event);
+            imported += 1;
+          }
+        } catch (error) {
+          skipped.push({
+            id: record.claudeSessionId,
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      return { imported, skipped };
     },
     conversation(sessionId, cursor = 0, limit = 500) {
       // Unknown session → null, so the caller can answer 404 rather than

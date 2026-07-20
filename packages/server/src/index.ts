@@ -11,6 +11,7 @@ import {
   removeManagedSession,
   getManagedSession,
   getManagedSessionIds,
+  getManagedSessions,
   toResumableSessions,
 } from './managedSessionStore.js';
 import { buildSpawnPlaceholderEvent } from './spawnPlaceholder.js';
@@ -116,6 +117,25 @@ const canonicalPipeline = createCanonicalPipeline({
     }
   },
 });
+
+// One-time import of pre-canonical sessions so an existing install sees its
+// history in the new tree rather than an empty catalog. Idempotent: each record
+// carries a stable synthetic sourceEventId, so re-running is a dedupe no-op.
+// Fire-and-forget — a slow git probe must not delay the server listening.
+if (canonicalPipeline.enabled) {
+  void canonicalPipeline
+    .importLegacySessions(getManagedSessions())
+    .then((result) => {
+      if (result.imported > 0) {
+        console.log(`[canonical] imported ${result.imported} legacy session(s) into the catalog`);
+      }
+      if (result.skipped.length > 0) {
+        // Never drop rows silently; an operator can see exactly what was left out.
+        console.warn(`[canonical] skipped ${result.skipped.length} legacy session(s):`, result.skipped);
+      }
+    })
+    .catch((error) => console.error('[canonical] legacy import failed:', error));
+}
 
 // Auto-collect: when a session ends, trigger `efficio collect` (debounced). The
 // existing ~/.efficio watcher then broadcasts efficio:update so the UI refreshes.
