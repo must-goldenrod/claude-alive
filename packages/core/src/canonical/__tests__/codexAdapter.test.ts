@@ -8,13 +8,13 @@ import type { CodexServerMessage } from '../codexToCanonical.js';
  * This is the shape the adapter must survive without a Codex install.
  */
 const RECORDED_TURN: CodexServerMessage[] = [
-  { method: 'thread/started', params: { threadId: 'th_1', cwd: '/repo/alpha' } },
-  { method: 'turn/started', params: { turnId: 't_1' } },
-  { method: 'item/started', params: { item: { id: 'i1', type: 'commandExecution', command: 'pnpm test' } } },
-  { method: 'item/completed', params: { item: { id: 'i1', type: 'commandExecution', exitCode: 0 } } },
+  { method: 'thread/started', params: { thread: { id: 'th_1', cwd: '/repo/alpha' } } },
+  { method: 'turn/started', params: { threadId: 'th_1', turn: { id: 't_1', status: 'inProgress', items: [] } } },
+  { method: 'item/started', params: { threadId: 'th_1', turnId: 't_1', startedAtMs: 1_000, item: { id: 'i1', type: 'commandExecution', command: 'pnpm test' } } },
+  { method: 'item/completed', params: { threadId: 'th_1', turnId: 't_1', startedAtMs: 1_100, item: { id: 'i1', type: 'commandExecution', status: 'completed', exitCode: 0 } } },
   { method: 'thread/tokenUsage/updated', params: { usage: { inputTokens: 120, outputTokens: 30 } } },
-  { method: 'item/completed', params: { item: { id: 'i2', type: 'agentMessage', text: 'tests pass' } } },
-  { method: 'turn/completed', params: { turnId: 't_1' } },
+  { method: 'item/completed', params: { threadId: 'th_1', turnId: 't_1', startedAtMs: 1_200, item: { id: 'i2', type: 'agentMessage', text: 'tests pass' } } },
+  { method: 'turn/completed', params: { threadId: 'th_1', turn: { id: 't_1', status: 'completed', items: [] } } },
 ];
 
 const START = { sessionId: 'S1', workspaceId: 'W1', cwd: '/repo/alpha', prompt: 'run the tests' };

@@ -1,24 +1,21 @@
 /**
  * Codex app-server → canonical event mapping (spec §H.3, ADR-0004).
  *
- * Codex speaks JSON-RPC over stdio and reports structured items (agent messages,
- * reasoning, command executions, file changes) plus turn lifecycle, token usage
- * and server-initiated approval requests. Unlike the Claude hook path this is a
- * genuine structured feed, so events map with `source: 'structured'` and
- * `confidence: 'exact'` — nothing here is inferred from screen output.
+ * Verified against `codex app-server generate-json-schema` from **codex-cli
+ * 0.144.6**: method names come from `ServerNotification`/`ServerRequest`, and the
+ * parameter shapes from the generated definitions. An earlier version of this
+ * file was written from assumed shapes and was wrong in three ways — there is no
+ * `turn/failed` notification, turn events carry a `Turn` object rather than a
+ * `turnId`, and `thread/started` carries a whole `Thread`. Re-run the generator
+ * and re-check this table when targeting a different Codex version.
  *
- * **Verification status:** built against the documented app-server protocol and
- * exercised by recorded fixtures (§R.1). It has NOT been smoke-tested against an
- * installed Codex on this machine. Method names and item shapes must be
- * re-confirmed against `codex app-server generate-json-schema` for the target
- * version before ADR-0004 moves from Conditionally Accepted to Accepted.
- *
- * Unknown methods and unknown item types deliberately map to nothing: inventing
- * a canonical meaning for a shape we have not seen would put a guess into the
- * log with `exact` confidence, which is worse than a gap.
+ * Unknown methods and unknown item types map to nothing on purpose: inventing a
+ * canonical meaning for a shape we have not seen would put a guess into the log
+ * with `exact` confidence, which is worse than a gap.
  */
 
 import type { CanonicalEvent, CanonicalEventKind } from './events.js';
+import type { CommonAgentState } from './state.js';
 
 export interface CodexServerMessage {
   method: string;
@@ -33,25 +30,29 @@ export interface CodexEventContext {
   newEventId: () => string;
 }
 
-interface CodexItem {
-  id?: string;
-  type?: string;
-  text?: string;
-  command?: string;
-  path?: string;
-  exitCode?: number;
-}
-
 function obj(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
-
 function str(source: Record<string, unknown>, key: string): string | undefined {
   return typeof source[key] === 'string' ? (source[key] as string) : undefined;
 }
+function num(source: Record<string, unknown>, key: string): number | undefined {
+  return typeof source[key] === 'number' ? (source[key] as number) : undefined;
+}
 
-/** Item types Codex reports that Alive represents as tool calls. */
-const TOOL_ITEM_TYPES = new Set(['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch']);
+/** ThreadItem types Alive represents as tool calls. */
+const TOOL_ITEM_TYPES = new Set(['commandExecution', 'fileChange', 'mcpToolCall', 'webSearch', 'dynamicToolCall']);
+
+/** `ThreadStatus.type` → canonical state. */
+const THREAD_STATUS: Record<string, CommonAgentState> = {
+  notLoaded: 'unknown',
+  idle: 'ready',
+  active: 'thinking',
+  systemError: 'failed',
+};
+
+/** `TurnStatus` values that are not a successful completion. */
+const TURN_FAILURE = new Set(['failed', 'interrupted']);
 
 function build(
   ctx: CodexEventContext,
@@ -59,7 +60,6 @@ function build(
   payload: Record<string, unknown>,
   extra: Partial<CanonicalEvent> = {},
 ): CanonicalEvent {
-  const now = ctx.receivedAt;
   return {
     schemaVersion: 2,
     eventId: ctx.newEventId(),
@@ -68,9 +68,9 @@ function build(
     source: 'structured',
     workspaceId: ctx.workspaceId,
     sessionId: ctx.sessionId,
-    occurredAt: now,
-    receivedAt: now,
-    // A structured feed reports facts; nothing here is inferred.
+    occurredAt: ctx.receivedAt,
+    receivedAt: ctx.receivedAt,
+    // A structured feed reports facts; nothing here is inferred from output.
     confidence: 'exact',
     payload,
     ...extra,
@@ -79,30 +79,34 @@ function build(
 
 function mapItem(
   ctx: CodexEventContext,
-  item: CodexItem,
+  params: Record<string, unknown>,
   phase: 'started' | 'completed',
 ): CanonicalEvent[] {
-  const type = item.type;
+  const item = obj(params.item);
+  const type = str(item, 'type');
   if (!type) return [];
 
+  const id = str(item, 'id');
+  const runId = str(params, 'turnId');
+  const occurredAt = num(params, 'startedAtMs') ?? ctx.receivedAt;
+  const common: Partial<CanonicalEvent> = { occurredAt, ...(runId ? { runId } : {}) };
+
   if (TOOL_ITEM_TYPES.has(type)) {
-    const failed = phase === 'completed' && typeof item.exitCode === 'number' && item.exitCode !== 0;
-    const kind: CanonicalEventKind =
-      phase === 'started' ? 'tool.started' : failed ? 'tool.failed' : 'tool.completed';
+    // `status` is authoritative; exitCode is a commandExecution detail that is
+    // absent for other tool kinds.
+    const status = str(item, 'status');
+    const exitCode = num(item, 'exitCode');
+    const failed =
+      phase === 'completed' && (status === 'failed' || (status === undefined && exitCode !== undefined && exitCode !== 0));
+    const kind: CanonicalEventKind = phase === 'started' ? 'tool.started' : failed ? 'tool.failed' : 'tool.completed';
     const suffix = phase === 'started' ? 'started' : failed ? 'failed' : 'completed';
     return [
       build(
         ctx,
         kind,
-        {
-          toolName: type,
-          toolUseId: item.id,
-          command: item.command,
-          path: item.path,
-          exitCode: item.exitCode,
-        },
+        { toolName: type, toolUseId: id, command: str(item, 'command'), exitCode, status },
         // Phase-qualified so a lifecycle's start and end keep distinct dedupe keys.
-        item.id ? { sourceEventId: `${item.id}:${suffix}` } : {},
+        { ...common, ...(id ? { sourceEventId: `${id}:${suffix}` } : {}) },
       ),
     ];
   }
@@ -110,11 +114,21 @@ function mapItem(
   // Text items only carry meaning once complete; a `started` marker adds nothing.
   if (phase !== 'completed') return [];
 
-  if (type === 'agentMessage' && item.text) {
-    return [build(ctx, 'message.assistant', { text: item.text }, item.id ? { sourceEventId: `${item.id}:message` } : {})];
+  if (type === 'userMessage') {
+    const text = str(item, 'content');
+    return text ? [build(ctx, 'message.user', { text }, { ...common, ...(id ? { sourceEventId: `${id}:user` } : {}) })] : [];
   }
-  if (type === 'reasoning' && item.text) {
-    return [build(ctx, 'message.reasoning', { text: item.text }, item.id ? { sourceEventId: `${item.id}:reasoning` } : {})];
+  if (type === 'agentMessage') {
+    const text = str(item, 'text');
+    return text
+      ? [build(ctx, 'message.assistant', { text }, { ...common, ...(id ? { sourceEventId: `${id}:assistant` } : {}) })]
+      : [];
+  }
+  if (type === 'reasoning') {
+    const text = str(item, 'text');
+    return text
+      ? [build(ctx, 'message.reasoning', { text }, { ...common, ...(id ? { sourceEventId: `${id}:reasoning` } : {}) })]
+      : [];
   }
 
   return [];
@@ -127,25 +141,66 @@ export function codexEventToCanonical(
   const params = obj(message.params);
 
   switch (message.method) {
-    case 'thread/started':
-      return [build(ctx, 'session.created', { cwd: str(params, 'cwd'), threadId: str(params, 'threadId') })];
+    case 'thread/started': {
+      const thread = obj(params.thread);
+      return [build(ctx, 'session.created', { cwd: str(thread, 'cwd'), threadId: str(thread, 'id') })];
+    }
 
-    case 'turn/started':
-      return [build(ctx, 'run.started', {}, { runId: str(params, 'turnId') })];
-
-    case 'turn/completed':
-      return [build(ctx, 'run.completed', {}, { runId: str(params, 'turnId') })];
-
-    case 'turn/failed':
+    case 'thread/status/changed': {
+      const type = str(obj(params.status), 'type') ?? 'notLoaded';
       return [
-        build(ctx, 'run.failed', { reason: str(obj(params.error), 'message') }, { runId: str(params, 'turnId') }),
+        build(ctx, 'agent.state', {
+          common: THREAD_STATUS[type] ?? 'unknown',
+          providerState: type,
+        }),
       ];
+    }
+
+    case 'turn/started': {
+      const turn = obj(params.turn);
+      return [build(ctx, 'run.started', {}, { runId: str(turn, 'id') })];
+    }
+
+    case 'turn/completed': {
+      // There is no `turn/failed`: a failed or interrupted turn arrives here with
+      // a non-success `status`, and reading it as a completion would report a
+      // failure as success.
+      const turn = obj(params.turn);
+      const status = str(turn, 'status');
+      const failed = status !== undefined && TURN_FAILURE.has(status);
+      return [
+        build(
+          ctx,
+          failed ? 'run.failed' : 'run.completed',
+          failed ? { reason: str(obj(turn.error), 'message'), status } : { status },
+          { runId: str(turn, 'id') },
+        ),
+      ];
+    }
+
+    case 'error': {
+      // A retryable error is not terminal: recording it as `run.failed` would end
+      // a run the provider intends to continue.
+      const willRetry = params.willRetry === true;
+      const reason = str(obj(params.error), 'message');
+      const runId = str(params, 'turnId');
+      return [
+        willRetry
+          ? build(
+              ctx,
+              'agent.state',
+              { common: 'thinking' satisfies CommonAgentState, providerState: 'error', reason, willRetry },
+              runId ? { runId } : {},
+            )
+          : build(ctx, 'run.failed', { reason, willRetry }, runId ? { runId } : {}),
+      ];
+    }
 
     case 'item/started':
-      return mapItem(ctx, obj(params.item) as CodexItem, 'started');
+      return mapItem(ctx, params, 'started');
 
     case 'item/completed':
-      return mapItem(ctx, obj(params.item) as CodexItem, 'completed');
+      return mapItem(ctx, params, 'completed');
 
     case 'item/commandExecution/requestApproval':
     case 'item/fileChange/requestApproval':
@@ -170,7 +225,7 @@ export function codexEventToCanonical(
       return [build(ctx, 'usage.updated', { ...obj(params.usage) })];
 
     default:
-      // Unknown method: record nothing rather than guess a canonical meaning.
+      // Includes every `*/delta` stream: rendering concerns, not log entries.
       return [];
   }
 }
