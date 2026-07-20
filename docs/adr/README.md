@@ -18,8 +18,8 @@
 | [0001](0001-thin-orchestration.md) | thin orchestration/control plane | Accepted | P0 contract review |
 | [0002](0002-canonical-event-and-raw-preservation.md) | canonical event + raw event 보존 | Accepted | P0 fixture review |
 | [0003](0003-operational-sqlite-and-projections.md) | operational SQLite + rebuildable projection | Accepted | P0 storage prototype |
-| 0004 | Codex app-server stdio transport | Conditionally Accepted | P2 lifecycle smoke (기획서 §W 유지) |
-| 0005 | Hermes 통합 표면 | **Pending** | P3 3-day Spike |
+| [0004](0004-codex-app-server-transport.md) | Codex app-server stdio transport | **Accepted** | 0.144.6 스키마 실측 완료 |
+| [0005](0005-hermes-integration-surface.md) | Hermes 통합 표면 | **Accepted** | P3 Spike 완료 (v0.18.2 실측) |
 | [0006](0006-native-mcp-first.md) | native MCP 우선, 중앙 proxy opt-in | Accepted | P0 security review |
 | [0007](0007-capability-driven-ui.md) | provider capability 기반 UI | Accepted | P0 adapter contract |
 | [0008](0008-efficio-comparability.md) | Efficio 비교 조건/confidence | Proposed | M1 spec + P5 calibration |
