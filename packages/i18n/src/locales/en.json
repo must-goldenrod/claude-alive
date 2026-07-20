@@ -370,7 +370,8 @@
     "prompt": "Prompt",
     "efficio": "Efficio",
     "spread": "Spread",
-    "jarvis": "Jarvis"
+    "jarvis": "Jarvis",
+    "workspace": "Workspaces"
   },
   "spread": {
     "empty": "No open terminals",
@@ -487,5 +488,19 @@
       "hoursAgo": "{{n}}h ago",
       "daysAgo": "{{n}}d ago"
     }
+  },
+  "workspaceTree": {
+    "loading": "Loading workspaces…",
+    "empty": "No sessions recorded yet.",
+    "unavailable": "The canonical event log is unavailable.",
+    "unavailableHint": "Sessions are still running; only this view cannot be read. See the server logs.",
+    "error": "Could not load the workspace tree.",
+    "sessionCount": "{{count}} sessions",
+    "sessionCount_one": "{{count}} session",
+    "pendingApprovals": "{{count}} awaiting approval",
+    "gitRepo": "git",
+    "folder": "folder",
+    "heuristic": "estimated",
+    "heuristicHint": "This state was inferred, not reported directly by the provider."
   }
 }

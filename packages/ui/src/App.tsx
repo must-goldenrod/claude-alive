@@ -28,8 +28,9 @@ const PromptView = lazy(() =>
 const EfficioView = lazy(() =>
   import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
 );
+import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'spread' | 'jarvis';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'spread' | 'jarvis' | 'workspace';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -454,6 +455,9 @@ export default function App() {
           </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
               When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'workspace' ? 'block' : 'none' }}>
+            <WorkspaceTreeView active={viewMode === 'workspace'} />
+          </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{i18n.t('spread.empty')}</div>

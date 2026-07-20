@@ -370,7 +370,8 @@
     "prompt": "프롬프트",
     "efficio": "Efficio",
     "spread": "스프레드",
-    "jarvis": "자비스"
+    "jarvis": "자비스",
+    "workspace": "워크스페이스"
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",
@@ -487,5 +488,18 @@
       "hoursAgo": "{{n}}시간 전",
       "daysAgo": "{{n}}일 전"
     }
+  },
+  "workspaceTree": {
+    "loading": "워크스페이스를 불러오는 중…",
+    "empty": "아직 기록된 세션이 없습니다.",
+    "unavailable": "canonical 이벤트 로그를 읽을 수 없습니다.",
+    "unavailableHint": "세션은 계속 실행 중이며 이 화면만 읽지 못합니다. 서버 로그를 확인하세요.",
+    "error": "워크스페이스 트리를 불러오지 못했습니다.",
+    "sessionCount": "세션 {{count}}개",
+    "pendingApprovals": "승인 대기 {{count}}건",
+    "gitRepo": "git",
+    "folder": "폴더",
+    "heuristic": "추정",
+    "heuristicHint": "공급자가 직접 보고한 상태가 아니라 추론된 값입니다."
   }
 }

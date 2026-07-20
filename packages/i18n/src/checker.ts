@@ -36,6 +36,17 @@ export function flattenKeys(tree: LocaleTree, prefix = ''): string[] {
   return out;
 }
 
+/**
+ * i18next plural suffixes. A locale only carries the forms its own plural rules
+ * need — English has `_one`/`_other`, Korean has a single form — so parity is
+ * compared on the base key, not on every variant.
+ */
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+
+function baseKey(key: string): string {
+  return key.replace(PLURAL_SUFFIX, '');
+}
+
 function valueAt(tree: LocaleTree, path: string): unknown {
   return path.split('.').reduce<unknown>((node, part) => {
     if (node !== null && typeof node === 'object') return (node as LocaleTree)[part];
@@ -46,10 +57,15 @@ function valueAt(tree: LocaleTree, path: string): unknown {
 export function checkLocaleParity(base: LocaleTree, target: LocaleTree): ParityResult {
   const baseKeys = flattenKeys(base);
   const targetKeys = new Set(flattenKeys(target));
+  const baseBases = new Set(baseKeys.map(baseKey));
+  const targetBases = new Set([...targetKeys].map(baseKey));
 
-  const missingInTarget = baseKeys.filter((k) => !targetKeys.has(k));
-  const missingInBase = [...targetKeys].filter((k) => !baseKeys.includes(k));
+  // Compare on base keys so a plural variant present in only one locale — which
+  // is what correct pluralization looks like — is not reported as a gap.
+  const missingInTarget = [...baseBases].filter((k) => !targetBases.has(k)).sort();
+  const missingInBase = [...targetBases].filter((k) => !baseBases.has(k)).sort();
   const emptyInTarget = baseKeys.filter((k) => {
+    if (!targetKeys.has(k)) return false; // absent variants are handled above
     const v = valueAt(target, k);
     return typeof v === 'string' && v.trim().length === 0;
   });

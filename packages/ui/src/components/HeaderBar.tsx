@@ -101,6 +101,7 @@ const VIEW_MODES: { mode: ViewMode; labelKey: string }[] = [
   { mode: 'prompt', labelKey: 'viewMode.prompt' },
   { mode: 'efficio', labelKey: 'viewMode.efficio' },
   { mode: 'spread', labelKey: 'viewMode.spread' },
+  { mode: 'workspace', labelKey: 'viewMode.workspace' },
 ];
 
 export function HeaderBar({

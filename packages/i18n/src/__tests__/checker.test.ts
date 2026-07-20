@@ -36,6 +36,25 @@ describe('checkLocaleParity', () => {
     expect(r.ok).toBe(false);
     expect(r.emptyInTarget).toEqual(['a']);
   });
+
+  // i18next selects `key_one` / `key_other` by the target language's plural
+  // rules. Korean has a single form, so an English `_one` variant legitimately
+  // has no Korean counterpart — that is correct i18n, not a missing key.
+  test('treats i18next plural variants as one key', () => {
+    const en = { items: '{{count}} items', items_one: '{{count}} item' };
+    const ko = { items: '{{count}}개' };
+    expect(checkLocaleParity(en, ko).ok).toBe(true);
+  });
+
+  test('still flags a plural key whose base is missing entirely', () => {
+    const r = checkLocaleParity({ items: 'x', items_one: 'y' }, { other: 'z' });
+    expect(r.ok).toBe(false);
+    expect(r.missingInTarget).toContain('items');
+  });
+
+  test('a target-only plural variant is not reported as an extra key', () => {
+    expect(checkLocaleParity({ items: 'x' }, { items: 'y', items_few: 'z' }).ok).toBe(true);
+  });
 });
 
 describe('findRawText', () => {
