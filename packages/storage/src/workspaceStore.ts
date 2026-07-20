@@ -56,6 +56,13 @@ export class WorkspaceStore {
     return row ? rowToIdentity(row) : undefined;
   }
 
+  findById(workspaceId: string): WorkspaceIdentity | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM workspaces WHERE workspace_id = ?')
+      .get(workspaceId) as WorkspaceRow | undefined;
+    return row ? rowToIdentity(row) : undefined;
+  }
+
   /**
    * Store the identity, keeping any id already assigned to this
    * `(locationId, rootPath)` and refreshing the mutable details.

@@ -125,6 +125,96 @@ describe('workspace identity survives a restart', () => {
   });
 });
 
+describe('workspace tree — the server-owned catalog (§I.5)', () => {
+  test('groups sessions under their workspace and location', async () => {
+    t = 0;
+    const p = make();
+    await p.ingest(hook('SessionStart'));
+    await p.ingest(hook('UserPromptSubmit', { prompt: 'refactor the auth module' }));
+    await p.drain();
+
+    const tree = p.tree();
+    expect(tree.locations).toHaveLength(1);
+    expect(tree.locations[0].location.kind).toBe('local');
+    expect(tree.locations[0].workspaces).toHaveLength(1);
+    expect(tree.locations[0].workspaces[0].sessions).toHaveLength(1);
+    p.close();
+  });
+
+  test('titles a session from its first prompt', async () => {
+    t = 0;
+    const p = make();
+    await p.ingest(hook('SessionStart'));
+    await p.ingest(hook('UserPromptSubmit', { prompt: 'refactor the auth module' }));
+    await p.ingest(hook('UserPromptSubmit', { prompt: 'a much later prompt' }));
+    await p.drain();
+
+    const session = p.tree().locations[0].workspaces[0].sessions[0];
+    expect(session.titleSource).toBe('first-prompt');
+    expect(session.title).toBe('refactor t…');
+    expect(session.firstPromptPreview).toBe('refactor the auth module');
+    p.close();
+  });
+
+  test('exposes the provider session id and live state', async () => {
+    t = 0;
+    const p = make();
+    await p.ingest(hook('SessionStart'));
+    await p.ingest(hook('PreToolUse', { tool_name: 'Bash', tool_use_id: 'tu1' }));
+    await p.drain();
+
+    const session = p.tree().locations[0].workspaces[0].sessions[0];
+    expect(session.providerSessionId).toBe(SID);
+    expect(session.provider).toBe('claude');
+    expect(session.state).toBe('using-tool');
+    p.close();
+  });
+
+  test('a session appears exactly once in the tree', async () => {
+    t = 0;
+    const p = make();
+    for (const h of [hook('SessionStart'), hook('UserPromptSubmit', { prompt: 'x' }), hook('Stop')]) {
+      await p.ingest(h);
+    }
+    await p.drain();
+    const all = p.tree().locations.flatMap((l) => l.workspaces.flatMap((w) => w.sessions));
+    expect(all).toHaveLength(1);
+    p.close();
+  });
+
+  test('rebuilds the projection from the log after a restart', async () => {
+    const dbPath = join(tmpdir(), `alive-tree-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    try {
+      t = 0;
+      const first = make({ dbPath });
+      await first.ingest(hook('SessionStart'));
+      await first.ingest(hook('UserPromptSubmit', { prompt: 'survive the restart' }));
+      await first.drain();
+      first.close();
+
+      // A fresh pipeline sees no new events; the tree must come from the log.
+      const second = make({ dbPath });
+      const session = second.tree().locations[0].workspaces[0].sessions[0];
+      expect(session.firstPromptPreview).toBe('survive the restart');
+      second.close();
+    } finally {
+      for (const suffix of ['', '-wal', '-shm']) {
+        try {
+          unlinkSync(dbPath + suffix);
+        } catch {
+          // Absent WAL sidecars are fine.
+        }
+      }
+    }
+  });
+
+  test('an empty log yields an empty tree, not an error', () => {
+    const p = make();
+    expect(p.tree().locations.flatMap((l) => l.workspaces)).toEqual([]);
+    p.close();
+  });
+});
+
 describe('failure isolation — the hook path must never break', () => {
   test('an unopenable database disables the pipeline instead of throwing', () => {
     const p = createCanonicalPipeline({ dbPath: '/nonexistent-dir-xyz/alive.db', runner: gitRunner });

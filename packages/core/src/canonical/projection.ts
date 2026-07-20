@@ -18,6 +18,8 @@ export interface SessionProjectionRow {
   stateConfidence: StateConfidence;
   cwd?: string;
   transcriptPath?: string;
+  /** First meaningful user prompt, captured once — the title source (§F.6). */
+  firstPrompt?: string;
   lastPrompt?: string;
   currentTool?: string;
   toolsUsed: string[];
@@ -111,7 +113,11 @@ export function applyCanonicalEvent(state: ProjectionState, event: CanonicalEven
   switch (event.kind) {
     case 'message.user': {
       const text = payloadString(event, 'text');
-      if (text) next.lastPrompt = text;
+      if (text) {
+        // Captured once: a later prompt must not silently rename the session.
+        if (next.firstPrompt === undefined) next.firstPrompt = text;
+        next.lastPrompt = text;
+      }
       break;
     }
     case 'tool.started': {

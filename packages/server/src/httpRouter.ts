@@ -89,6 +89,13 @@ export interface HttpRouterOptions {
    * http.Server with no second port.
    */
   promptRouter?: (req: IncomingMessage, res: ServerResponse) => void;
+
+  /**
+   * Server-owned canonical catalog (§I.5). Absent when the v2 event log could
+   * not start, in which case the route reports that explicitly rather than
+   * pretending the tree is empty.
+   */
+  workspaceTree?: () => unknown;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -160,6 +167,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     onProjectNamesChanged,
     uiDistPath,
     promptRouter,
+    workspaceTree,
     efficio,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
@@ -196,6 +204,17 @@ export function createHttpServer(options: HttpRouterOptions) {
       } catch {
         sendJson(res, 400, { error: 'Invalid payload' }, req);
       }
+      return;
+    }
+
+    // v2 read model. Separate from /api/status (v1) so the two can be compared
+    // during the dual-write period instead of one silently replacing the other.
+    if (req.method === 'GET' && url.pathname === '/api/v2/workspace-tree') {
+      if (!workspaceTree) {
+        sendJson(res, 503, { error: 'canonical event log unavailable', detail: 'see server logs' }, req);
+        return;
+      }
+      sendJson(res, 200, workspaceTree(), req);
       return;
     }
 

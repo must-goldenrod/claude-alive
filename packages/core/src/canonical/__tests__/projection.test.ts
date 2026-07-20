@@ -127,6 +127,19 @@ describe('accumulated facts', () => {
     expect(s.sessions.S1.toolCallCount).toBe(3);
   });
 
+  test('captures the first prompt once and keeps it as later prompts arrive', () => {
+    // §F.6 rule 7: the title is generated once; a follow-up prompt must not
+    // silently rename the session.
+    seq = 0;
+    const s = buildProjection([
+      evt('session.created'),
+      evt('message.user', { text: 'refactor the auth module' }),
+      evt('message.user', { text: 'now also fix the tests' }),
+    ]);
+    expect(s.sessions.S1.firstPrompt).toBe('refactor the auth module');
+    expect(s.sessions.S1.lastPrompt).toBe('now also fix the tests');
+  });
+
   test('records the transcript path when an event carries it', () => {
     seq = 0;
     const s = buildProjection([evt('session.created', { cwd: '/r', transcriptPath: '/t.jsonl' })]);

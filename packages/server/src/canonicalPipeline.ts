@@ -19,10 +19,18 @@
 
 import {
   ClaudeCanonicalStream,
+  applyCanonicalEvent,
+  buildProjection,
+  emptyProjection,
+  pickTitleSource,
   probeWorkspace,
   ulid,
   type CommandRunner,
   type HookEventPayload,
+  type LocationSummary,
+  type ProjectionState,
+  type SessionProjectionRow,
+  type TitleSource,
   type WorkspaceIdentity,
 } from '@claude-alive/core';
 import {
@@ -42,12 +50,36 @@ export interface CanonicalPipelineOptions {
   locationId?: string;
 }
 
+/** One session as the tree exposes it (§I.5 `SessionSummary`). */
+export interface SessionSummary {
+  sessionId: string;
+  provider: string;
+  providerSessionId?: string;
+  title: string;
+  titleSource: TitleSource;
+  firstPromptPreview?: string;
+  state: SessionProjectionRow['state'];
+  stateConfidence: SessionProjectionRow['stateConfidence'];
+  currentTool?: string;
+  pendingApprovals: number;
+  lastActiveAt: number;
+}
+
+export interface WorkspaceTreeProjection {
+  locations: Array<{
+    location: LocationSummary;
+    workspaces: Array<{ workspace: WorkspaceIdentity; sessions: SessionSummary[] }>;
+  }>;
+}
+
 export interface CanonicalPipeline {
   readonly enabled: boolean;
   /** Queue a hook for canonical processing. Never rejects. */
   ingest(payload: HookEventPayload): Promise<void>;
   /** Await all queued work (tests, shutdown). */
   drain(): Promise<void>;
+  /** Server-owned catalog: Location → Workspace → Session (§I.5). */
+  tree(): WorkspaceTreeProjection;
   stats(): { events: number; sessions: number; workspaces: number };
   close(): void;
 }
@@ -56,6 +88,7 @@ const DISABLED: CanonicalPipeline = {
   enabled: false,
   async ingest() {},
   async drain() {},
+  tree: () => ({ locations: [] }),
   stats: () => ({ events: 0, sessions: 0, workspaces: 0 }),
   close() {},
 };
@@ -83,6 +116,15 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
   const stream = new ClaudeCanonicalStream();
   /** In-process probe cache; identity itself is persisted in `workspaces`. */
   const workspaces = new Map<string, WorkspaceIdentity>();
+
+  // Read model kept in step with the log. Rebuilt from the log on boot, so a
+  // restart reconstructs exactly the state the events describe (§K.2).
+  let projection: ProjectionState = emptyProjection();
+  try {
+    projection = buildProjection(events.readAfter(0, 100_000).events);
+  } catch (error) {
+    console.error('[canonical] could not rebuild the projection from the log:', error);
+  }
 
   // Serializes async work so log order matches arrival order.
   let tail: Promise<void> = Promise.resolve();
@@ -119,7 +161,12 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
       receivedAt: Date.now(),
       newEventId: ulid,
     });
-    for (const event of canonical) events.append(event);
+    for (const event of canonical) {
+      const { inserted } = events.append(event);
+      // Only advance the read model for events that were actually stored;
+      // a deduped redelivery must not be counted twice.
+      if (inserted) projection = applyCanonicalEvent(projection, event);
+    }
   }
 
   return {
@@ -130,6 +177,49 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
         console.error('[canonical] failed to ingest a hook; v2 log may have a gap:', error);
       });
       return Promise.resolve();
+    },
+    tree() {
+      const location: LocationSummary = {
+        locationId,
+        kind: 'local',
+        displayName: 'This Mac',
+        status: 'online',
+      };
+
+      const byWorkspace = new Map<string, SessionSummary[]>();
+      for (const row of Object.values(projection.sessions)) {
+        const ref = refs.findProviderRef(row.sessionId);
+        const title = pickTitleSource({ firstPrompt: row.firstPrompt, now: row.lastEventAt });
+        const summary: SessionSummary = {
+          sessionId: row.sessionId,
+          provider: row.provider,
+          providerSessionId: ref?.providerSessionId,
+          title: title.title,
+          titleSource: title.titleSource,
+          firstPromptPreview: title.firstPromptPreview,
+          state: row.state,
+          stateConfidence: row.stateConfidence,
+          currentTool: row.currentTool,
+          pendingApprovals: row.pendingApprovals,
+          lastActiveAt: row.lastEventAt,
+        };
+        const list = byWorkspace.get(row.workspaceId) ?? [];
+        list.push(summary);
+        byWorkspace.set(row.workspaceId, list);
+      }
+
+      const workspaces = [...byWorkspace.entries()]
+        .map(([workspaceId, sessions]) => {
+          const workspace = workspaceStore.findById(workspaceId);
+          if (!workspace) return null;
+          // Most recently active first — the order the tree is read in.
+          sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+          return { workspace, sessions };
+        })
+        .filter((w): w is { workspace: WorkspaceIdentity; sessions: SessionSummary[] } => w !== null)
+        .sort((a, b) => a.workspace.displayName.localeCompare(b.workspace.displayName));
+
+      return { locations: [{ location, workspaces }] };
     },
     drain: () => tail,
     stats: () => ({
