@@ -55,4 +55,25 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    // Workspaces must outlive the process: a freshly probed identity mints a new
+    // ULID every boot, so without this table the same repository would appear as
+    // a different workspace after a restart (§F.5 key = location + root path).
+    version: 3,
+    up: `
+      CREATE TABLE IF NOT EXISTS workspaces (
+        workspace_id   TEXT PRIMARY KEY,
+        location_id    TEXT NOT NULL,
+        root_path      TEXT NOT NULL,
+        kind           TEXT NOT NULL,
+        display_name   TEXT NOT NULL,
+        custom_name    TEXT,
+        repo_url       TEXT,
+        repo_host      TEXT,
+        repo_owner     TEXT,
+        repo_name      TEXT,
+        UNIQUE (location_id, root_path)
+      );
+    `,
+  },
 ];

@@ -24,10 +24,15 @@ import {
 } from './projectNameStore.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
+import { createCanonicalPipeline } from './canonicalPipeline.js';
+import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
-import { watch, existsSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { watch, existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
@@ -83,6 +88,35 @@ const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // we only read them. Absent/empty DB degrades gracefully to available:false.
 const efficio = createEfficioReader();
 
+// Canonical (v2) dual-write. Runs beside the legacy SessionStore path, never in
+// front of it: if this cannot start, hooks keep flowing exactly as before
+// (ADR-0003 storage location; §C.7 graceful degradation).
+const ALIVE_DIR = join(homedir(), '.claude-alive');
+try {
+  mkdirSync(ALIVE_DIR, { recursive: true });
+} catch {
+  // Directory creation failure surfaces below when the database fails to open.
+}
+const execFileAsync = promisify(execFile);
+const canonicalPipeline = createCanonicalPipeline({
+  dbPath: process.env.CLAUDE_ALIVE_EVENT_DB ?? join(ALIVE_DIR, 'alive.db'),
+  locationId: 'local',
+  // Read-only git probe for workspace identity; augmentPath so a reduced
+  // launchd PATH does not make every workspace look like a plain folder.
+  runner: async (command, args) => {
+    try {
+      const { stdout } = await execFileAsync(command, args, {
+        timeout: 5_000,
+        env: { ...process.env, PATH: augmentPath(process.env.PATH) },
+      });
+      return { ok: true, stdout };
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      return { ok: false, stdout: '', error: err?.message ?? String(error), code: err?.code };
+    }
+  },
+});
+
 // Auto-collect: when a session ends, trigger `efficio collect` (debounced). The
 // existing ~/.efficio watcher then broadcasts efficio:update so the UI refreshes.
 // Disabled if efficio source isn't found or CLAUDE_ALIVE_AUTO_COLLECT=0.
@@ -118,6 +152,8 @@ function onEvent(payload: HookEventPayload): void {
   // there are isolated inside `ingest` (fail-open) so the UI broadcast
   // path below is never blocked.
   promptSubsystem?.ingest(payload);
+  // v2 dual-write: queued and error-isolated, never blocks the legacy path below.
+  void canonicalPipeline.ingest(payload);
 
   const agent = store.processEvent(payload);
   if (!agent) return;
@@ -443,6 +479,7 @@ process.on('SIGINT', () => {
   efficioCollector.stop();
   efficioWatcher?.close();
   stopWorkerLoop();
+  canonicalPipeline.close();
   promptSubsystem?.fastify.close().catch(() => {});
   promptSubsystem?.close();
   broadcaster.close();

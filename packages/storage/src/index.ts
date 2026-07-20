@@ -13,3 +13,4 @@ export { EventStore } from './eventStore.js';
 export type { ReadResult } from './eventStore.js';
 export { SessionRefStore } from './sessionRefs.js';
 export type { ProviderRef } from './sessionRefs.js';
+export { WorkspaceStore } from './workspaceStore.js';
