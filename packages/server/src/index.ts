@@ -1,6 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
-import { createPromptSubsystem } from '@think-prompt/agent';
+import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
 import { TerminalManager } from './terminalManager.js';
@@ -58,8 +58,23 @@ for (const id of getManagedSessionIds()) managedSessionIds.add(id);
 // Fastify instance mounted onto our shared http.Server below; no second
 // port, no separate daemon. `ingest` is called from onEvent() to fan the
 // same hook payload into the prompt-quality pipeline.
-const promptSubsystem = createPromptSubsystem();
-await promptSubsystem.fastify.ready();
+// Optional by design: this subsystem owns a native SQLite binding, and a Node
+// upgrade leaves that binding unloadable (NODE_MODULE_VERSION mismatch). A
+// failure here must not take the dashboard down with it — prompt analytics
+// degrade to unavailable and agents/terminals/WebSocket keep working (§C.7).
+// The failure is logged loudly rather than swallowed.
+let promptSubsystem: PromptSubsystem | null = null;
+try {
+  promptSubsystem = createPromptSubsystem();
+  await promptSubsystem.fastify.ready();
+} catch (error) {
+  promptSubsystem = null;
+  console.error(
+    '[prompt] subsystem failed to start — prompt analytics are disabled for this run. ' +
+      'If this is a native module error, run `pnpm rebuild better-sqlite3`.',
+    error,
+  );
+}
 
 const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -102,7 +117,7 @@ function onEvent(payload: HookEventPayload): void {
   // Fan the same hook payload into the prompt-quality pipeline. Errors
   // there are isolated inside `ingest` (fail-open) so the UI broadcast
   // path below is never blocked.
-  promptSubsystem.ingest(payload);
+  promptSubsystem?.ingest(payload);
 
   const agent = store.processEvent(payload);
   if (!agent) return;
@@ -218,6 +233,12 @@ const httpServer = createHttpServer({
   removeProjectName,
   efficio,
   promptRouter: (req, res) => {
+    if (!promptSubsystem) {
+      // Explicit over a confusing 404: the route exists, the subsystem does not.
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'prompt subsystem unavailable', detail: 'see server logs' }));
+      return;
+    }
     promptSubsystem.fastify.routing(req, res);
   },
   onProjectNamesChanged: () => {
@@ -422,8 +443,8 @@ process.on('SIGINT', () => {
   efficioCollector.stop();
   efficioWatcher?.close();
   stopWorkerLoop();
-  promptSubsystem.fastify.close().catch(() => {});
-  promptSubsystem.close();
+  promptSubsystem?.fastify.close().catch(() => {});
+  promptSubsystem?.close();
   broadcaster.close();
   httpServer.close();
   process.exit(0);

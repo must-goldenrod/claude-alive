@@ -54,6 +54,10 @@ function totalPlays(): number {
 beforeEach(() => {
   FakeAudio.created = [];
   vi.stubGlobal('Audio', FakeAudio as unknown as typeof Audio);
+  // Settings persist to localStorage, so a test that disables a sound or drops
+  // its volume to 0 would otherwise leak into every later test — re-importing
+  // the module reloads the same persisted value.
+  localStorage.clear();
 });
 
 afterEach(() => {
