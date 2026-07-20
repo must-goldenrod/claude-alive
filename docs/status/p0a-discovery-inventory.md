@@ -4,8 +4,8 @@
 > 대화 기록·과거 보고·이전 요약은 작성 시점의 스냅샷이며, 이 문서와 어긋나면 **무효(stale)** 로 취급합니다.
 > 모든 항목에 재검증 명령이 붙어 있습니다. 인용하기 전에 명령을 실행해 확인하십시오.
 
-- 검증 시점: 2026-07-20
-- 검증 커밋: `08fc84d`
+- 검증 시점: 2026-07-20 (P1 진행 중 갱신)
+- 검증 커밋: `08aba2f`
 - 대상 문서: `docs/plans/2026-07-16-multi-agent-alive-platform-atoz.md` (1,636줄)
 - 재검증 일괄: `pnpm run build && pnpm exec vitest run`
 
@@ -50,10 +50,11 @@ ls -d packages/*/ | sed 's|packages/||;s|/||'
 |---|---|---|---|---|---|
 | 1 | `~/.think-prompt/prompts.db` | `prompt-core` | **better-sqlite3** (네이티브) | 읽기/쓰기 | 운영 중 (WAL) |
 | 2 | `~/.efficio/efficio.db` | **efficio (외부 Python)** | `node:sqlite` | **read-only** | 운영 중 |
-| 3 | canonical event log | `storage` (P0 신규) | `node:sqlite` | 읽기/쓰기 | **경로 미정 · 프로덕션 미배선** |
+| 3 | `~/.claude-alive/alive.db` | `storage` | `node:sqlite` | 읽기/쓰기 | **운영 중** (P1 배선 완료, WAL) |
 
 - (1)은 유일한 네이티브 의존입니다. Node 버전 불일치 시 로드 실패하며, `08fc84d`에서 서버를 죽이지 않고 degrade하도록 수정했습니다.
-- (3)의 파일 경로는 아직 결정되지 않았습니다 → **ADR-003 / P1 배선 시 확정 필요**.
+- (3)의 경로는 ADR-0003에 따라 `~/.claude-alive/alive.db`로 확정했습니다. `CLAUDE_ALIVE_EVENT_DB`로 override할 수 있습니다.
+  스키마 v3까지 적용: `events`, `session_provider_refs`, `workspaces`.
 
 ```bash
 ls ~/.think-prompt/*.db ~/.efficio/*.db
@@ -62,7 +63,7 @@ grep -rn "better-sqlite3\|node:sqlite" packages/*/src --include="*.ts" | grep -v
 
 ### 그 외 파일 저장소 (`~/.claude-alive/`)
 
-`managed-sessions.json`, `agent-names.json`, `project-names.json`, `server.pid`, `server.log`
+`managed-sessions.json`, `agent-names.json`, `project-names.json`, `server.pid`, `server.log`, `alive.db`(위 3번)
 
 ---
 
@@ -79,16 +80,32 @@ grep -rn "better-sqlite3\|node:sqlite" packages/*/src --include="*.ts" | grep -v
 
 ---
 
-## 4. P0 산출물 배선 상태
+## 4. 배선 상태 (P1 진행 중)
 
 | 산출물 | 프로덕션 호출 | 상태 |
 |---|---|---|
-| `runDoctor` (`cli doctor`) | 2 | ✅ **배선됨 — 유일한 사용자 체감 기능** |
-| `ClaudeCanonicalStream`, `claudeHookToCanonical` | 0 | ❌ 미배선 |
-| `EventStore`, `computeDedupeKey`, `runMigrations`(storage) | 0 | ❌ 미배선 |
-| `buildProjection`, `normalizeLegacyState` | 0 | ❌ 미배선 |
-| `migrateLegacyState`, `pickTitleSource` | 0 | ❌ 미배선 |
+| `runDoctor` (`cli doctor`) | 2 | ✅ 배선됨 |
+| `ClaudeCanonicalStream` | 2 | ✅ **배선됨** — `onEvent` dual-write |
+| `EventStore` / `SessionRefStore` / `WorkspaceStore` | 2 / 2 / 2 | ✅ **배선됨** — `~/.claude-alive/alive.db` |
+| `probeWorkspace` | 2 | ✅ **배선됨** — workspace identity |
+| `buildProjection` | 2 | ✅ **배선됨** — 부팅 시 로그에서 재생성 |
+| `buildConversation` | 2 | ✅ **배선됨** — 대화 읽기 |
+| `migrateLegacyState` | 0 | ❌ 미배선 (기존 상태 1회 이전, P1 잔여) |
 | `runConformanceSuite` | 0 | ⚪ 설계상 테스트 전용 |
+
+### v2 HTTP 엔드포인트 (동작 확인됨)
+
+| 엔드포인트 | 상태 |
+|---|---|
+| `GET /api/v2/workspace-tree` | Location → Workspace → Session 트리 |
+| `GET /api/v2/sessions/:id/conversation?cursor=` | 대화 항목, 미지 세션은 404 |
+
+두 경로 모두 파이프라인 비활성 시 **503 + 사유**를 반환합니다(빈 결과로 위장하지 않음).
+
+### 아직 UI에 노출되지 않음
+
+v2 데이터는 서버에서 생성·저장·조회되지만 **UI는 여전히 v1 `AgentInfo`만 읽습니다.**
+사용자가 화면에서 체감하는 변화는 아직 없습니다 (P1 잔여: UI projection 전환).
 
 ```bash
 # 배선 여부 재확인 (테스트 제외 호출처 수)
@@ -103,10 +120,12 @@ grep -rn "\bEventStore\b" packages/*/src --include="*.ts" | grep -v __tests__ | 
 
 | 항목 | 값 |
 |---|---|
-| 전체 테스트 | **486 통과 / 36 파일 / 실패 0** |
+| 전체 테스트 | **580 통과 / 45 파일 / 실패 0** |
 | 빌드 | `turbo` 11 tasks 성공 |
 | 서버 기동 | 확인 (hook 3건 end-to-end 반영 확인) |
 | Degradation | 네이티브 모듈 손상 시 서버 생존·`/api/prompts` 503 확인 |
+| v2 dual-write | 실서버 hook 5건 → canonical 이벤트 10건 영속, workspace/세션 매핑 확인 |
+| v2 재시작 내성 | 3회 재시작에도 workspace 1개 유지(초기 결함 수정 후 실측) |
 
 ---
 
