@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkspaceTree, type TreeSession } from '../../hooks/useWorkspaceTree';
-import { ConversationPanel } from './ConversationPanel';
+import { SessionDetail } from './SessionDetail';
 
 /** Dot colour per canonical state; unknown states fall back to neutral. */
 const STATE_COLOR: Record<string, string> = {
@@ -160,7 +160,7 @@ export function WorkspaceTreeView({
       ))}
       </div>
       <div className="flex-1 min-w-0 h-full">
-        <ConversationPanel sessionId={selectedSessionId} />
+        <SessionDetail sessionId={selectedSessionId} />
       </div>
     </div>
   );

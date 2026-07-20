@@ -527,5 +527,23 @@
       "allow": "허용됨",
       "deny": "거부됨"
     }
+  },
+  "sessionDetail": {
+    "tab": {
+      "conversation": "대화",
+      "terminal": "터미널"
+    },
+    "terminalLoading": "터미널을 확인하는 중…",
+    "terminalError": "이 세션의 터미널을 확인하지 못했습니다.",
+    "noTerminal": "이 세션에 Alive가 소유한 터미널이 없습니다.",
+    "terminalLive": "이 세션의 터미널이 실행 중입니다.",
+    "terminalExited": "이 세션의 터미널은 종료되었습니다.",
+    "terminalTab": "터미널 탭: {{tabId}}",
+    "terminalHint": "원문 출력을 조작하려면 Chat 화면에서 여세요.",
+    "reason": {
+      "unknown-session": "이 세션은 카탈로그에 없습니다.",
+      "not-spawned-by-alive": "Alive 외부에서 시작된 세션이라 붙을 프로세스가 없습니다. 대화 이력은 훅에서 계속 읽을 수 있습니다.",
+      "lookup-failed": "터미널 레지스트리를 읽지 못했습니다. 서버 로그를 확인하세요."
+    }
   }
 }

@@ -122,6 +122,8 @@ export interface CanonicalPipeline {
   conversation(sessionId: string, cursor?: number, limit?: number): ConversationPage | null;
   /** One-time import of pre-canonical sessions; idempotent (§P0 migration). */
   importLegacySessions(records: readonly LegacyManagedRecord[]): Promise<LegacyImportResult>;
+  /** Alive session id → provider reference, for cross-store correlation. */
+  findProviderRef(sessionId: string): { provider: string; providerSessionId: string } | undefined;
   stats(): { events: number; sessions: number; workspaces: number };
   close(): void;
 }
@@ -135,6 +137,7 @@ const DISABLED: CanonicalPipeline = {
   async importLegacySessions() {
     return { imported: 0, skipped: [] };
   },
+  findProviderRef: () => undefined,
   stats: () => ({ events: 0, sessions: 0, workspaces: 0 }),
   close() {},
 };
@@ -337,6 +340,7 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
       if (imported > 0) options.onChange?.();
       return { imported, skipped };
     },
+    findProviderRef: (sessionId) => refs.findProviderRef(sessionId),
     conversation(sessionId, cursor = 0, limit = 500) {
       // Unknown session → null, so the caller can answer 404 rather than
       // implying an empty-but-valid conversation.

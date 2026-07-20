@@ -26,6 +26,7 @@ import {
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
+import { resolveSessionTerminal } from './sessionTerminalLink.js';
 import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
@@ -305,6 +306,16 @@ const httpServer = createHttpServer({
   workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
   sessionConversation: canonicalPipeline.enabled
     ? (sessionId, cursor) => canonicalPipeline.conversation(sessionId, cursor)
+    : undefined,
+  sessionTerminal: canonicalPipeline.enabled
+    ? (sessionId) =>
+        resolveSessionTerminal(sessionId, {
+          findProviderRef: (id) => canonicalPipeline.findProviderRef(id),
+          // The managed registry is what remembers which tab owned a session.
+          findTabId: (claudeSessionId) =>
+            getManagedSessions().find((r) => r.claudeSessionId === claudeSessionId)?.tabId,
+          isLive: (tabId) => terminalManager.isLive(tabId),
+        })
     : undefined,
   promptRouter: (req, res) => {
     if (!promptSubsystem) {

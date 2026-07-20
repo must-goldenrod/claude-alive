@@ -528,5 +528,23 @@
       "allow": "allowed",
       "deny": "denied"
     }
+  },
+  "sessionDetail": {
+    "tab": {
+      "conversation": "Conversation",
+      "terminal": "Terminal"
+    },
+    "terminalLoading": "Checking for a terminal…",
+    "terminalError": "Could not check the terminal for this session.",
+    "noTerminal": "No Alive-owned terminal for this session.",
+    "terminalLive": "A terminal is running for this session.",
+    "terminalExited": "This session's terminal has exited.",
+    "terminalTab": "Terminal tab: {{tabId}}",
+    "terminalHint": "Open it from the Chat view to interact with the raw output.",
+    "reason": {
+      "unknown-session": "This session is not in the catalog.",
+      "not-spawned-by-alive": "It was started outside Alive, so there is no process of ours to attach to. Its conversation is still readable from hooks.",
+      "lookup-failed": "The terminal registry could not be read; see the server logs."
+    }
   }
 }

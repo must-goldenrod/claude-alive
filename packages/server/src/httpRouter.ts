@@ -99,6 +99,9 @@ export interface HttpRouterOptions {
 
   /** One session's conversation; null when the session is unknown (§F.7). */
   sessionConversation?: (sessionId: string, cursor: number) => unknown | null;
+
+  /** Whether a server-owned terminal exists for the session, and why not (§F.7). */
+  sessionTerminal?: (sessionId: string) => unknown;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -172,6 +175,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     promptRouter,
     workspaceTree,
     sessionConversation,
+    sessionTerminal,
     efficio,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
@@ -219,6 +223,16 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, workspaceTree(), req);
+      return;
+    }
+
+    const terminalMatch = url.pathname.match(/^\/api\/v2\/sessions\/([^/]+)\/terminal$/);
+    if (req.method === 'GET' && terminalMatch) {
+      if (!sessionTerminal) {
+        sendJson(res, 503, { error: 'canonical event log unavailable', detail: 'see server logs' }, req);
+        return;
+      }
+      sendJson(res, 200, sessionTerminal(decodeURIComponent(terminalMatch[1])), req);
       return;
     }
 
