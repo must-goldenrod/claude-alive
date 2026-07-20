@@ -16,7 +16,7 @@
 
 import type { HookEventName, HookEventPayload } from '../events/types.js';
 import type { CanonicalEvent, CanonicalEventKind } from './events.js';
-import type { CommonAgentState, StateConfidence } from './state.js';
+import type { StateConfidence } from './state.js';
 
 export interface ClaudeHookContext {
   /** Alive stable session id this hook belongs to. */
@@ -37,8 +37,19 @@ interface Mapping {
   agentId?: (data: HookEventPayload['data']) => string | undefined;
 }
 
-function agentStatePayload(common: CommonAgentState, providerState: string): Record<string, unknown> {
-  return { common, providerState, confidence: 'heuristic' };
+/**
+ * Claude Code's `Notification` hook is overloaded: it fires both for decision
+ * requests ("needs your permission to use X"), which block the user, and for
+ * plain idle reminders, which do not. The distinction is a pure function of the
+ * message, so it belongs here rather than in a stateful layer.
+ */
+export function permissionRequestFromNotification(
+  message: string,
+): { isPermission: boolean; tool?: string } {
+  const m =
+    message.match(/permission to use ([A-Za-z][\w-]*)/i) ??
+    message.match(/needs your (?:permission|approval|confirmation)(?: to use ([A-Za-z][\w-]*))?/i);
+  return m ? { isPermission: true, tool: m[1] } : { isPermission: false };
 }
 
 /** Phase-qualify a tool_use_id so lifecycle phases don't share a dedupe key. */
@@ -104,19 +115,10 @@ const MAPPINGS: Partial<Record<HookEventName, Mapping>> = {
     agentId: (d) => d.agent_id,
     payload: (d) => ({ agentId: d.agent_id }),
   },
-  Notification: {
-    kind: 'agent.state',
-    confidence: 'heuristic',
-    payload: (d) => ({
-      ...agentStatePayload('waiting-user', d.notification_type ?? 'Notification'),
-      message: d.message,
-    }),
-  },
-  TeammateIdle: {
-    kind: 'agent.state',
-    confidence: 'heuristic',
-    payload: (d) => ({ ...agentStatePayload('ready', 'TeammateIdle'), message: d.message }),
-  },
+  // Notification is handled separately: it is overloaded and only its
+  // permission-request form carries canonical meaning (see below).
+  // TeammateIdle carries no content event; session state is owned by the
+  // stateful Claude layer, which runs the FSM.
   ConfigChange: {
     kind: 'session.updated',
     confidence: 'derived',
@@ -135,14 +137,32 @@ export function claudeHookToCanonical(
   payload: HookEventPayload,
   ctx: ClaudeHookContext,
 ): CanonicalEvent[] {
+  const data = payload.data;
+
+  // Overloaded hook: only its decision-request form is a canonical event.
+  if (payload.event === 'Notification') {
+    const { isPermission, tool } = permissionRequestFromNotification(data.message ?? '');
+    if (!isPermission) return [];
+    return [
+      buildEvent(payload, ctx, {
+        kind: 'approval.requested',
+        confidence: 'derived',
+        payload: () => ({ toolName: data.tool_name ?? tool, reason: data.message }),
+      }),
+    ];
+  }
+
   const mapping = MAPPINGS[payload.event];
   if (!mapping) return [];
+  return [buildEvent(payload, ctx, mapping)];
+}
 
+function buildEvent(payload: HookEventPayload, ctx: ClaudeHookContext, mapping: Mapping): CanonicalEvent {
   const data = payload.data;
   // Guard against missing/invalid hook timestamps (ingress zod allows any number).
   const occurredAt =
     Number.isFinite(payload.timestamp) && payload.timestamp > 0 ? payload.timestamp : ctx.receivedAt;
-  const event: CanonicalEvent = {
+  return {
     schemaVersion: 2,
     eventId: ctx.newEventId(),
     kind: mapping.kind,
@@ -155,7 +175,10 @@ export function claudeHookToCanonical(
     occurredAt,
     receivedAt: ctx.receivedAt,
     confidence: mapping.confidence,
-    payload: mapping.payload(data, ctx),
+    // transcript_path rides on every hook; carrying it through is what lets a
+    // projection know a structured transcript exists rather than assuming it.
+    payload: data.transcript_path
+      ? { ...mapping.payload(data, ctx), transcriptPath: data.transcript_path }
+      : mapping.payload(data, ctx),
   };
-  return [event];
 }

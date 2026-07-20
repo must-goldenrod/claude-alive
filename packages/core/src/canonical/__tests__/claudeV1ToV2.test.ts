@@ -116,11 +116,19 @@ describe('claudeHookToCanonical — kind mapping', () => {
     expect(ev.agentId).toBe('a_1');
   });
 
-  test('Notification → agent.state waiting-user, marked heuristic, keeps message', () => {
-    const [ev] = claudeHookToCanonical(hook('Notification', { message: 'waiting for input' }), ctx);
-    expect(ev.kind).toBe('agent.state');
-    expect(ev.confidence).toBe('heuristic');
-    expect(ev.payload).toMatchObject({ common: 'waiting-user', message: 'waiting for input' });
+  test('a permission-style Notification is an approval request, with the tool recovered', () => {
+    // The hook is overloaded; only decision requests block the user.
+    const [ev] = claudeHookToCanonical(
+      hook('Notification', { message: 'Claude needs your permission to use Bash' }),
+      ctx,
+    );
+    expect(ev.kind).toBe('approval.requested');
+    expect(ev.payload).toMatchObject({ toolName: 'Bash' });
+  });
+
+  test('an idle Notification produces no event rather than a false waiting state', () => {
+    expect(claudeHookToCanonical(hook('Notification', { message: 'Claude is waiting for your input' }), ctx))
+      .toEqual([]);
   });
 
   test('ConfigChange preserves the hook-supplied reason instead of a hardcoded string', () => {

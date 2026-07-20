@@ -79,6 +79,12 @@ export type {
 export { runConformanceSuite } from './conformance.js';
 export type { ConformanceCheck, ConformanceReport, ConformanceOptions } from './conformance.js';
 
+export { normalizeLegacyState } from './stateMapping.js';
+export { ClaudeCanonicalStream } from './claudeSessionReducer.js';
+
+export { emptyProjection, applyCanonicalEvent, buildProjection } from './projection.js';
+export type { SessionProjectionRow, ProjectionState } from './projection.js';
+
 export { migrateLegacyState } from './migration.js';
 export type {
   LegacyAgent,
