@@ -23,6 +23,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@claude-alive/core':
+        specifier: workspace:*
+        version: link:../core
       '@claude-alive/hooks':
         specifier: workspace:*
         version: link:../hooks

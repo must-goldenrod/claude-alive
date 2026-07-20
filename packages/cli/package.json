@@ -11,6 +11,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@claude-alive/core": "workspace:*",
     "@claude-alive/hooks": "workspace:*"
   },
   "devDependencies": {

@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 
 import { installHooks, uninstallHooks } from '@claude-alive/hooks';
+import {
+  DEFAULT_RUNTIME_PROBES,
+  augmentPath,
+  formatDoctorReport,
+  runDoctor,
+  type CommandRunner,
+} from '@claude-alive/core';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFileSync, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   readFileSync,
   writeFileSync,
@@ -280,6 +288,30 @@ switch (command) {
     break;
   }
 
+  case 'doctor': {
+    const execFileAsync = promisify(execFile);
+    // Probe with the same augmented PATH the server uses to spawn runtimes;
+    // under launchd the inherited PATH is minimal and would yield false ENOENTs.
+    const probeEnv = { ...process.env, PATH: augmentPath(process.env.PATH) };
+    /** Probe a runtime binary; a missing binary rejects with ENOENT → not installed. */
+    const runner: CommandRunner = async (cmd, args) => {
+      try {
+        const { stdout } = await execFileAsync(cmd, args, { timeout: 5_000, env: probeEnv });
+        return { ok: true, stdout };
+      } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        return { ok: false, stdout: '', error: err?.message ?? String(error), code: err?.code };
+      }
+    };
+    const report = await runDoctor(DEFAULT_RUNTIME_PROBES, runner, Date.now());
+    if (process.argv.includes('--json')) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(formatDoctorReport(report));
+    }
+    break;
+  }
+
   case 'logs': {
     try {
       const logs = readFileSync(LOG_FILE, 'utf-8');
@@ -304,6 +336,8 @@ Usage:
   claude-alive stop         Stop the server
   claude-alive status       Show server status
   claude-alive autostart    enable|disable|status — macOS launchd plist
+  claude-alive doctor       Detect installed agent runtimes and adapter status
+                            (pass --json for machine-readable output)
   claude-alive logs         Show recent server logs
 `);
   }
