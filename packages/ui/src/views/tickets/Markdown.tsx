@@ -15,6 +15,20 @@ const inlineCode: CSSProperties = {
   padding: '1px 5px',
 };
 
+/**
+ * Ticket results are agent output over untrusted repo content, so a markdown
+ * link scheme is untrusted. Allow only http/https/mailto; reject javascript:,
+ * data:, vbscript:, etc. Returns the safe href, or null to render as plain text.
+ */
+function safeHref(raw: string): string | null {
+  try {
+    const u = new URL(raw, 'http://x.invalid/');
+    return u.protocol === 'http:' || u.protocol === 'https:' || u.protocol === 'mailto:' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 function renderInline(text: string, key: string): ReactNode[] {
   const out: ReactNode[] = [];
   const re = /(\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
@@ -30,12 +44,19 @@ function renderInline(text: string, key: string): ReactNode[] {
           {m[3]}
         </code>,
       );
-    else if (m[4] !== undefined)
+    else if (m[4] !== undefined) {
+      const href = safeHref(m[5]);
       out.push(
-        <a key={`${key}-a${i}`} href={m[5]} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-blue, #58a6ff)' }}>
-          {m[4]}
-        </a>,
+        href ? (
+          <a key={`${key}-a${i}`} href={href} target="_blank" rel="noreferrer noopener" style={{ color: 'var(--accent-blue, #58a6ff)' }}>
+            {m[4]}
+          </a>
+        ) : (
+          // Disallowed scheme (javascript:, data:, …) → render the label as text.
+          <span key={`${key}-a${i}`}>{m[4]}</span>
+        ),
       );
+    }
     last = m.index + m[0].length;
     i++;
   }
