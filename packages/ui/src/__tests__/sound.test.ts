@@ -53,6 +53,12 @@ function totalPlays(): number {
 
 beforeEach(() => {
   FakeAudio.created = [];
+  // Settings persist to localStorage, and the module singleton re-reads it on
+  // (re-)import. Without clearing it between tests, an earlier test's
+  // setSettings (e.g. disabling completion or setting volume to 0) leaks into
+  // later tests via localStorage — even across vi.resetModules() — silently
+  // gating sounds off. Clear it so every test starts from DEFAULT_SETTINGS.
+  localStorage.clear();
   vi.stubGlobal('Audio', FakeAudio as unknown as typeof Audio);
 });
 
