@@ -377,17 +377,25 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const attachedRef = useRef<Set<string>>(new Set());
   // Live mirrors for use inside the stable terminal-event handler closure.
   const tabsRef = useRef<Tab[]>([]);
-  const skipPermissionsRef = useRef(true);
+  // Default OFF: skipping permissions launches an unsandboxed agent, so it must
+  // be a deliberate opt-in, never the default a new session inherits silently.
+  const skipPermissionsRef = useRef(false);
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
   /** Tab id pending a close-confirmation. null = no dialog open. */
   const [pendingCloseTabId, setPendingCloseTabId] = useState<string | null>(null);
+  /**
+   * External session pending a resume-confirmation. Resuming re-opens a session
+   * that may still be running elsewhere; both processes would then write the same
+   * transcript. We gate it behind an explicit warning instead of resuming silently.
+   */
+  const [pendingResume, setPendingResume] = useState<{ sessionId: string; cwd?: string } | null>(null);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [cwdTab, setCwdTab] = useState<'local' | 'ssh'>('local');
   const [claudeVariant, setClaudeVariant] = useState<'claude' | 'agents'>('claude');
   const [customPath, setCustomPath] = useState('');
-  const [skipPermissions, setSkipPermissions] = useState(true);
+  const [skipPermissions, setSkipPermissions] = useState(false);
   tabsRef.current = tabs;
   skipPermissionsRef.current = skipPermissions;
   const spreadActiveRef = useRef(spreadActive);
@@ -765,17 +773,29 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         setActiveTabId(existing.id);
         return;
       }
-      createTab({
-        cwd: detail.cwd,
-        dangerousSkip: skipPermissions,
-        mode: 'claude',
-        source: 'local',
-        resumeSessionId: detail.sessionId,
-      });
+      // Don't resume immediately — a session shown as "external" may still be
+      // live in another terminal, and resuming makes both write the same
+      // transcript. Gate behind a confirm dialog.
+      setPendingResume({ sessionId: detail.sessionId, cwd: detail.cwd });
     };
     window.addEventListener('terminal:resumeExternal', handler);
     return () => window.removeEventListener('terminal:resumeExternal', handler);
-  }, [tabs, createTab, skipPermissions]);
+  }, [tabs]);
+
+  const confirmResume = useCallback(() => {
+    setPendingResume((pending) => {
+      if (pending) {
+        createTab({
+          cwd: pending.cwd,
+          dangerousSkip: skipPermissionsRef.current,
+          mode: 'claude',
+          source: 'local',
+          resumeSessionId: pending.sessionId,
+        });
+      }
+      return null;
+    });
+  }, [createTab]);
 
   const launchPreset = useCallback(
     (preset: SSHPreset) => {
@@ -1518,6 +1538,82 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                 }}
               >
                 {t('terminal.closeConfirm.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Resume-confirmation modal — warns that an external session may still be
+          running, so resuming can double-write the same transcript. */}
+      {pendingResume && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.55)',
+          }}
+          onClick={() => setPendingResume(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setPendingResume(null);
+            if (e.key === 'Enter') confirmResume();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(440px, 92vw)',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 12,
+              padding: '20px 22px 18px',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+              {t('terminal.resumeConfirm.title')}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 18 }}>
+              {t('terminal.resumeConfirm.message')}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setPendingResume(null)}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 8,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('terminal.resumeConfirm.cancel')}
+              </button>
+              <button
+                autoFocus
+                onClick={confirmResume}
+                style={{
+                  padding: '6px 14px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  background: 'var(--accent-amber, #d29922)',
+                  border: '1px solid var(--accent-amber, #d29922)',
+                  borderRadius: 8,
+                  color: '#0d1117',
+                  cursor: 'pointer',
+                }}
+              >
+                {t('terminal.resumeConfirm.confirm')}
               </button>
             </div>
           </div>

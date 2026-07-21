@@ -29,7 +29,11 @@ const EfficioView = lazy(() =>
   import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'spread' | 'jarvis';
+const ArchiveView = lazy(() =>
+  import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
+);
+
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'spread' | 'jarvis';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -166,6 +170,22 @@ export default function App() {
           requireInteraction: true,
         });
         playErrorSound(msg.sessionId);
+      } else if (
+        (msg.state === 'idle' || msg.state === 'done') &&
+        (prevState === 'listening' || prevState === 'active' || prevState === 'waiting' || prevState === 'error')
+      ) {
+        // Completion: a task finished. Mirror the exact transition that fires the
+        // completion chime (in useWebSocket) so sound, toast, and native
+        // notification always agree on what "done" means. Unlike waiting/error
+        // this is informational, so the native notification does not require
+        // interaction — it auto-dismisses.
+        addToastRef.current('success', label, 'notifications.taskCompleted', `${msg.sessionId}:done`);
+        fireNotification({
+          title: i18n.t('notifications.taskCompleted'),
+          body: label,
+          tag: `${msg.sessionId}:done`,
+          requireInteraction: false,
+        });
       }
     }
     // Fan out to view-level subscribers
@@ -379,15 +399,22 @@ export default function App() {
     };
     const onCreate = () => setChatOpen(true);
     const onResume = () => setChatOpen(true);
+    // Cross-surface view navigation (e.g. CompletionLog's "view all" → Archive).
+    const onNavigate = (event: Event) => {
+      const mode = (event as CustomEvent).detail?.mode as ViewMode | undefined;
+      if (mode) handleViewModeChange(mode);
+    };
     window.addEventListener('terminal:focusTab', onFocus);
     window.addEventListener('terminal:createTab', onCreate);
     window.addEventListener('terminal:resumeExternal', onResume);
+    window.addEventListener('claude-alive:navigate', onNavigate);
     return () => {
       window.removeEventListener('terminal:focusTab', onFocus);
       window.removeEventListener('terminal:createTab', onCreate);
       window.removeEventListener('terminal:resumeExternal', onResume);
+      window.removeEventListener('claude-alive:navigate', onNavigate);
     };
-  }, []);
+  }, [handleViewModeChange]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -452,6 +479,11 @@ export default function App() {
               <EfficioView active={viewMode === 'efficio'} subscribeRaw={subscribeRaw} />
             </Suspense>
           </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'archive' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <ArchiveView active={viewMode === 'archive'} />
+            </Suspense>
+          </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
               When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -476,7 +508,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio'}
+          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}

@@ -99,15 +99,15 @@
     "sshSessions": "SSH Sessions"
   },
   "states": {
-    "spawning": "spawning",
-    "idle": "idle",
-    "listening": "listening",
-    "active": "active",
-    "waiting": "waiting",
-    "error": "error",
-    "done": "done",
-    "despawning": "despawning",
-    "removed": "removed"
+    "spawning": "Starting",
+    "idle": "Idle",
+    "listening": "Thinking",
+    "active": "Working",
+    "waiting": "Action needed",
+    "error": "Error",
+    "done": "Done",
+    "despawning": "Ending",
+    "removed": "Removed"
   },
   "notifications": {
     "needsPermission": "Needs permission",
@@ -158,7 +158,9 @@
   "completionLog": {
     "title": "Completed Sessions",
     "empty": "No completed sessions yet",
-    "sessionCompleted": "Session completed"
+    "sessionCompleted": "Session completed",
+    "viewAll": "View all →",
+    "tokensShort": "tok"
   },
   "efficio": {
     "title": "Efficio — Size-adjusted Waste",
@@ -354,6 +356,12 @@
       "host-key": "SSH: host key verification failed",
       "host-key-changed": "SSH: remote host identification has changed — possible MITM",
       "unknown": "SSH: connection failed"
+    },
+    "resumeConfirm": {
+      "title": "Resume this session?",
+      "message": "This session may still be running in another terminal. Resuming opens a second copy that writes to the same transcript, which can corrupt it. Only continue if you are sure the original is no longer active.",
+      "cancel": "Cancel",
+      "confirm": "Resume anyway"
     }
   },
   "chat": {
@@ -370,7 +378,8 @@
     "prompt": "Prompt",
     "efficio": "Efficio",
     "spread": "Spread",
-    "jarvis": "Jarvis"
+    "jarvis": "Jarvis",
+    "archive": "Archive"
   },
   "spread": {
     "empty": "No open terminals",
@@ -486,6 +495,36 @@
       "minutesAgo": "{{n}}m ago",
       "hoursAgo": "{{n}}h ago",
       "daysAgo": "{{n}}d ago"
+    }
+  },
+  "archive": {
+    "listTitle": "Completed tickets",
+    "searchPlaceholder": "Search by project, name, or prompt",
+    "loading": "Loading…",
+    "empty": "No completed sessions yet",
+    "tokensShort": "tok",
+    "bucket": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Earlier this week",
+      "earlier": "Earlier"
+    },
+    "unreachable": {
+      "title": "Archive unavailable",
+      "body": "Could not reach the server to load the completed-session archive."
+    },
+    "detail": {
+      "empty": "Select a completed session to see its details.",
+      "completedAt": "Completed",
+      "startedAt": "Started",
+      "duration": "Duration",
+      "events": "Events",
+      "toolCalls": "Tool calls",
+      "project": "Project",
+      "session": "Session ID",
+      "tools": "Tools used",
+      "tokens": "Token usage",
+      "lastPrompt": "Last prompt"
     }
   }
 }
