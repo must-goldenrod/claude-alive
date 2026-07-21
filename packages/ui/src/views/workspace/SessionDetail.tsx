@@ -49,13 +49,13 @@ function TerminalTab({ sessionId }: { sessionId: string }): React.ReactElement {
   }, [sessionId]);
 
   if (failed) return <p className="p-6 text-sm text-[var(--accent-red)]">{t('sessionDetail.terminalError')}</p>;
-  if (!link) return <p className="p-6 text-sm text-[var(--text-tertiary)]">{t('sessionDetail.terminalLoading')}</p>;
+  if (!link) return <p className="p-6 text-sm text-[var(--text-secondary)]">{t('sessionDetail.terminalLoading')}</p>;
 
   if (!link.available) {
     return (
       <div className="p-6">
         <p className="text-sm text-[var(--text-secondary)]">{t('sessionDetail.noTerminal')}</p>
-        <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+        <p className="mt-1 text-xs text-[var(--text-secondary)]">
           {t(`sessionDetail.reason.${link.reason ?? 'unknown-session'}`)}
         </p>
       </div>
@@ -67,10 +67,10 @@ function TerminalTab({ sessionId }: { sessionId: string }): React.ReactElement {
       <p className="text-sm text-[var(--text-primary)]">
         {link.live ? t('sessionDetail.terminalLive') : t('sessionDetail.terminalExited')}
       </p>
-      <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">
         {t('sessionDetail.terminalTab', { tabId: link.tabId })}
       </p>
-      <p className="mt-3 text-xs text-[var(--text-tertiary)]">{t('sessionDetail.terminalHint')}</p>
+      <p className="mt-3 text-xs text-[var(--text-secondary)]">{t('sessionDetail.terminalHint')}</p>
     </div>
   );
 }
@@ -85,12 +85,12 @@ export function SessionDetail({ sessionId }: { sessionId: string | null }): Reac
   }, [sessionId]);
 
   if (!sessionId) {
-    return <p className="p-6 text-sm text-[var(--text-tertiary)]">{t('conversation.selectPrompt')}</p>;
+    return <p className="p-6 text-sm text-[var(--text-secondary)]">{t('conversation.selectPrompt')}</p>;
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex gap-1 px-3 pt-3 border-b border-[var(--border-primary)]" role="tablist">
+    <div className="h-full flex flex-col" style={{ background: 'var(--bg-primary)' }}>
+      <div className="flex gap-1 px-3 pt-3 border-b border-[var(--border-color)]" role="tablist">
         {(['conversation', 'terminal'] as const).map((id) => (
           <button
             key={id}
@@ -99,8 +99,8 @@ export function SessionDetail({ sessionId }: { sessionId: string | null }): Reac
             onClick={() => setTab(id)}
             className={`px-3 py-1.5 text-sm rounded-t-lg transition-colors ${
               tab === id
-                ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                ? 'bg-[var(--bg-card)] text-[var(--text-primary)]'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {t(`sessionDetail.tab.${id}`)}

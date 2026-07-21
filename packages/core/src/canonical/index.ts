@@ -89,6 +89,7 @@ export { normalizeLegacyState } from './stateMapping.js';
 export { ClaudeCanonicalStream } from './claudeSessionReducer.js';
 
 export { buildConversation } from './conversation.js';
+export { parseTranscriptToConversation } from './transcriptConversation.js';
 export type { ConversationItem, ConversationItemStatus } from './conversation.js';
 
 export { emptyProjection, applyCanonicalEvent, buildProjection } from './projection.js';

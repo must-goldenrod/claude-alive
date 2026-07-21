@@ -52,6 +52,12 @@ export interface CanonicalPipelineOptions {
   runner?: CommandRunner;
   locationId?: string;
   /**
+   * Reads a session's full conversation from its Claude transcript (§F.7 "1순위").
+   * Injected so the pure pipeline stays testable; the server supplies the real
+   * filesystem locator.
+   */
+  readTranscript?: (providerSessionId: string) => { items: unknown[]; transcriptPath: string } | null;
+  /**
    * Called after the read model advances. Debounced by the caller if needed —
    * a busy session emits several events per second.
    */
@@ -90,7 +96,7 @@ export interface ConversationPage {
    * so a hook-derived conversation is partial by construction. Surfaced rather
    * than implied, so the UI never presents it as the whole transcript (§F.7).
    */
-  completeness: 'hook-derived';
+  completeness: 'hook-derived' | 'transcript';
 }
 
 /** A persisted managed session as the legacy store holds it. */
@@ -344,7 +350,22 @@ export function createCanonicalPipeline(options: CanonicalPipelineOptions = {}):
     conversation(sessionId, cursor = 0, limit = 500) {
       // Unknown session → null, so the caller can answer 404 rather than
       // implying an empty-but-valid conversation.
-      if (!refs.findProviderRef(sessionId)) return null;
+      const ref = refs.findProviderRef(sessionId);
+      if (!ref) return null;
+
+      // Prefer the full transcript; the hook-derived events are the fallback for
+      // sessions Claude never wrote a transcript for.
+      const transcript = options.readTranscript?.(ref.providerSessionId);
+      if (transcript && transcript.items.length > 0) {
+        return {
+          sessionId,
+          items: transcript.items as ConversationItem[],
+          cursor: 0,
+          hasMore: false,
+          completeness: 'transcript',
+        };
+      }
+
       const page = events.readSession(sessionId, cursor, limit);
       return {
         sessionId,

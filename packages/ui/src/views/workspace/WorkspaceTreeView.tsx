@@ -1,9 +1,10 @@
 /**
  * Location → Workspace → Session tree over the canonical read model (§F.2, §I.5).
  *
- * Additive by design: this reads `/api/v2/workspace-tree` and does not touch the
- * v1 `AgentInfo` path, so the existing views keep working unchanged while the two
- * models run side by side (§F.4 "1차: 기존 탭 유지").
+ * Additive by design: reads `/api/v2/workspace-tree` and does not touch the v1
+ * `AgentInfo` path, so existing views keep working while the two models run side
+ * by side (§F.4). Follows the app's design language — dark surfaces, rounded-2xl
+ * cards, Pretendard UI / SF Mono for paths (CLAUDE.md design system).
  */
 
 import { useState } from 'react';
@@ -11,20 +12,35 @@ import { useTranslation } from 'react-i18next';
 import { useWorkspaceTree, type TreeSession } from '../../hooks/useWorkspaceTree';
 import { SessionDetail } from './SessionDetail';
 
-/** Dot colour per canonical state; unknown states fall back to neutral. */
+/** Dot colour per canonical state, from the shared accent tokens. */
 const STATE_COLOR: Record<string, string> = {
   'starting': 'var(--accent-blue)',
-  'ready': 'var(--text-tertiary)',
+  'ready': 'var(--text-secondary)',
   'thinking': 'var(--accent-blue)',
   'using-tool': 'var(--accent-green)',
   'waiting-user': 'var(--accent-amber)',
-  'paused': 'var(--text-tertiary)',
+  'paused': 'var(--text-secondary)',
   'completed': 'var(--accent-green)',
   'failed': 'var(--accent-red)',
-  'stopped': 'var(--text-tertiary)',
+  'stopped': 'var(--text-secondary)',
   'disconnected': 'var(--accent-red)',
-  'unknown': 'var(--text-tertiary)',
+  'unknown': 'var(--text-secondary)',
 };
+
+function Centered({ title, hint, tone }: { title: string; hint?: string; tone?: 'error' }): React.ReactElement {
+  return (
+    <div className="h-full flex flex-col items-center justify-center gap-1.5 px-8 text-center">
+      <p className="text-sm" style={{ color: tone === 'error' ? 'var(--accent-red)' : 'var(--text-secondary)' }}>
+        {title}
+      </p>
+      {hint ? (
+        <p className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function SessionRow({
   session,
@@ -48,32 +64,46 @@ function SessionRow({
           onSelect();
         }
       }}
-      className={`flex items-center gap-2 py-1.5 pl-6 pr-3 rounded-lg cursor-pointer transition-colors ${
-        selected ? 'bg-[var(--bg-tertiary)]' : 'hover:bg-[var(--bg-hover)]'
-      }`}
+      className="flex items-center gap-2.5 rounded-xl px-3 py-2 cursor-pointer transition-all duration-200"
+      style={{ background: selected ? 'var(--bg-card)' : 'transparent' }}
+      onMouseEnter={(e) => {
+        if (!selected) e.currentTarget.style.background = 'var(--bg-secondary)';
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) e.currentTarget.style.background = 'transparent';
+      }}
     >
       <span
         aria-hidden
         className="w-2 h-2 rounded-full shrink-0"
         style={{ background: STATE_COLOR[session.state] ?? STATE_COLOR.unknown }}
       />
-      <span className="truncate text-sm" title={session.firstPromptPreview ?? session.title}>
+      <span
+        className="truncate text-sm font-medium flex-1 min-w-0"
+        style={{ color: 'var(--text-primary)' }}
+        title={session.firstPromptPreview ?? session.title}
+      >
         {session.title}
       </span>
       {session.currentTool ? (
-        <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] shrink-0">
+        <span
+          className="text-xs px-2 py-0.5 rounded-full shrink-0 font-medium"
+          style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
+        >
           {session.currentTool}
         </span>
       ) : null}
       {session.pendingApprovals > 0 ? (
-        <span className="text-xs text-[var(--accent-amber)] shrink-0">
+        <span className="text-xs shrink-0 font-semibold" style={{ color: 'var(--accent-amber)' }}>
           {t('workspaceTree.pendingApprovals', { count: session.pendingApprovals })}
         </span>
       ) : null}
-      {/* State confidence is surfaced, never hidden: a heuristic state must not
-          read as fact (§C.8). */}
       {session.stateConfidence === 'heuristic' ? (
-        <span className="text-xs text-[var(--text-tertiary)] shrink-0" title={t('workspaceTree.heuristicHint')}>
+        <span
+          className="text-xs shrink-0"
+          style={{ color: 'var(--text-secondary)', opacity: 0.6 }}
+          title={t('workspaceTree.heuristicHint')}
+        >
           {t('workspaceTree.heuristic')}
         </span>
       ) : null}
@@ -90,74 +120,72 @@ export function WorkspaceTreeView({
 }): React.ReactElement {
   const { t } = useTranslation();
   const { tree, loading, unavailable, error } = useWorkspaceTree({ active, subscribeRaw });
-  // Selecting a session opens its conversation; it never resumes it (§F.7).
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-
-  if (loading) {
-    return <p className="p-6 text-sm text-[var(--text-tertiary)]">{t('workspaceTree.loading')}</p>;
-  }
-
-  // "Cannot read" and "nothing to show" are different facts and get different copy.
-  if (unavailable) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-[var(--text-secondary)]">{t('workspaceTree.unavailable')}</p>
-        <p className="mt-1 text-xs text-[var(--text-tertiary)]">{t('workspaceTree.unavailableHint')}</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-[var(--accent-red)]">{t('workspaceTree.error')}</p>
-        <p className="mt-1 text-xs text-[var(--text-tertiary)]">{error}</p>
-      </div>
-    );
-  }
 
   const locations = tree?.locations ?? [];
   const total = locations.reduce((n, l) => n + l.workspaces.reduce((m, w) => m + w.sessions.length, 0), 0);
 
-  if (total === 0) {
-    return <p className="p-6 text-sm text-[var(--text-tertiary)]">{t('workspaceTree.empty')}</p>;
+  let leftPane: React.ReactElement;
+  if (loading) leftPane = <Centered title={t('workspaceTree.loading')} />;
+  else if (unavailable) leftPane = <Centered title={t('workspaceTree.unavailable')} hint={t('workspaceTree.unavailableHint')} />;
+  else if (error) leftPane = <Centered title={t('workspaceTree.error')} hint={error} tone="error" />;
+  else if (total === 0) leftPane = <Centered title={t('workspaceTree.empty')} />;
+  else {
+    leftPane = (
+      <div className="h-full overflow-y-auto px-3 py-4">
+        {locations.map(({ location, workspaces }) => (
+          <section key={location.locationId} className="mb-6">
+            <div className="flex items-center gap-2 px-2 mb-2.5">
+              <span
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: location.status === 'online' ? 'var(--accent-green)' : 'var(--text-secondary)' }}
+              />
+              <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+                {location.displayName}
+              </h2>
+            </div>
+            {workspaces.map(({ workspace, sessions }) => (
+              <div
+                key={workspace.workspaceId}
+                className="mb-2 rounded-2xl overflow-hidden"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}
+              >
+                <div className="flex items-baseline gap-2 px-4 pt-3 pb-1">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {workspace.displayName}
+                  </span>
+                  <span className="text-xs truncate" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                    {workspace.kind === 'git' ? (workspace.repo?.owner ?? t('workspaceTree.gitRepo')) : t('workspaceTree.folder')}
+                  </span>
+                  <span
+                    className="text-xs ml-auto px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: 'var(--bg-card)', color: 'var(--text-secondary)' }}
+                  >
+                    {t('workspaceTree.sessionCount', { count: sessions.length })}
+                  </span>
+                </div>
+                <ul className="px-2 pb-2">
+                  {sessions.map((session) => (
+                    <SessionRow
+                      key={session.sessionId}
+                      session={session}
+                      selected={session.sessionId === selectedSessionId}
+                      onSelect={() => setSelectedSessionId(session.sessionId)}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </section>
+        ))}
+      </div>
+    );
   }
 
   return (
-    <div className="h-full flex">
-      <div className="w-[340px] shrink-0 h-full overflow-y-auto p-4 border-r border-[var(--border-primary)]">
-      {locations.map(({ location, workspaces }) => (
-        <section key={location.locationId} className="mb-5">
-          <h2 className="px-2 mb-2 text-xs uppercase tracking-wide text-[var(--text-tertiary)]">
-            {location.displayName}
-          </h2>
-          {workspaces.map(({ workspace, sessions }) => (
-            <div key={workspace.workspaceId} className="mb-3">
-              <div className="flex items-baseline gap-2 px-2 py-1">
-                <span className="text-sm font-medium">{workspace.displayName}</span>
-                <span className="text-xs text-[var(--text-tertiary)]">
-                  {workspace.kind === 'git'
-                    ? (workspace.repo?.owner ?? t('workspaceTree.gitRepo'))
-                    : t('workspaceTree.folder')}
-                </span>
-                <span className="text-xs text-[var(--text-tertiary)] ml-auto">
-                  {t('workspaceTree.sessionCount', { count: sessions.length })}
-                </span>
-              </div>
-              <ul>
-                {sessions.map((session) => (
-                  <SessionRow
-                    key={session.sessionId}
-                    session={session}
-                    selected={session.sessionId === selectedSessionId}
-                    onSelect={() => setSelectedSessionId(session.sessionId)}
-                  />
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      ))}
+    <div className="h-full flex" style={{ background: 'var(--bg-primary)', fontFamily: 'var(--font-ui)' }}>
+      <div className="w-[360px] shrink-0 h-full overflow-hidden" style={{ borderRight: '1px solid var(--border-color)' }}>
+        {leftPane}
       </div>
       <div className="flex-1 min-w-0 h-full">
         <SessionDetail sessionId={selectedSessionId} />

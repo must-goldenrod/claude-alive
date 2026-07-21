@@ -27,6 +27,7 @@ import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
 import { resolveSessionTerminal } from './sessionTerminalLink.js';
+import { readTranscriptConversation } from './transcriptLocator.js';
 import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
@@ -117,6 +118,8 @@ const canonicalPipeline = createCanonicalPipeline({
   dbPath: process.env.CLAUDE_ALIVE_EVENT_DB ?? join(ALIVE_DIR, 'alive.db'),
   locationId: 'local',
   onChange: signalCatalogChanged,
+  // Full conversation from the Claude JSONL transcript when one exists (§F.7).
+  readTranscript: (providerSessionId) => readTranscriptConversation(providerSessionId),
   // Read-only git probe for workspace identity; augmentPath so a reduced
   // launchd PATH does not make every workspace look like a plain folder.
   runner: async (command, args) => {
