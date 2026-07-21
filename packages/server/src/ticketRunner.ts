@@ -13,9 +13,21 @@ import type { TicketStore } from './ticketStore.js';
 
 export interface MainOutcome {
   exitCode: number | null;
-  result: { result: string | null; isError: boolean } | null;
+  result: { result: string | null; isError: boolean; model?: string | null } | null;
   sessionId: string | null;
   stderr: string;
+}
+
+/**
+ * Split the agent's raw result into a one-line headline and the body. The main
+ * agent is instructed to end with `HEADLINE: <~30 chars>`; that line is lifted
+ * out for the card front and removed from the body shown in the detail modal.
+ */
+export function extractHeadline(raw: string | null): { headline: string | null; body: string | null } {
+  if (!raw) return { headline: null, body: raw };
+  const m = raw.match(/^[ \t]*HEADLINE:[ \t]*(.+?)[ \t]*$/im);
+  if (!m) return { headline: null, body: raw };
+  return { headline: m[1].slice(0, 80), body: raw.replace(m[0], '').trim() };
 }
 
 export interface RunnerHeadlessHandle {
@@ -202,9 +214,12 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       return;
     }
 
+    const { headline, body } = extractHeadline(r.result);
     const verifying = await apply(id, {
       state: 'verifying',
-      result: r.result ?? undefined,
+      result: body ?? undefined,
+      headline: headline ?? undefined,
+      model: r.model ?? undefined,
       claudeSessionId: outcome.sessionId ?? undefined,
     });
     if (!verifying) {

@@ -310,8 +310,16 @@ const ticketVerifier = createVerifier();
 const ticketRunner = createTicketRunner({
   store: ticketStore,
   // Explicit privileged mode from server config (never from the HTTP body).
+  // Append the one-line headline instruction so the card front has a ~30-char
+  // answer without a second summarization call (parsed by extractHeadline).
   spawnMain: (ticket) =>
-    runHeadlessClaude({ goal: ticket.goal, cwd: ticket.cwd, permissionMode: 'bypassPermissions' }),
+    runHeadlessClaude({
+      goal:
+        ticket.goal +
+        '\n\n---\n작업을 마친 뒤, 마지막 줄에 반드시 다음 형식으로 결과를 30자 이내 한 줄로 요약하세요 (다른 말 없이):\nHEADLINE: <핵심 결과 한 줄>',
+      cwd: ticket.cwd,
+      permissionMode: 'bypassPermissions',
+    }),
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
   concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,

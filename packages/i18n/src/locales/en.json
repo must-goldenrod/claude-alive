@@ -383,16 +383,23 @@
     "retry": "Retry",
     "cancel": "Cancel",
     "delete": "Delete",
+    "detail": "Details",
+    "close": "Close",
+    "goalLabel": "Request",
+    "headlineLabel": "Answer",
+    "resultLabel": "Full result",
+    "verificationLabel": "Verification",
+    "failureLabel": "Failure",
     "columns": {
       "active": "In progress",
-      "done": "Done",
+      "done": "Closed",
       "failed": "Failed"
     },
     "status": {
       "queued": "Queued",
       "running": "Running",
       "verifying": "Verifying",
-      "done": "Done",
+      "done": "Closed",
       "failed": "Failed"
     },
     "failureReason": {

@@ -1,35 +1,36 @@
 import { useTranslation } from 'react-i18next';
-import type { Ticket, TicketState } from '@claude-alive/core';
+import type { Ticket } from '@claude-alive/core';
+import { projectName, formatStarted, statusGroup, type StatusGroup } from './ticketDisplay.ts';
 
 interface TicketCardProps {
   ticket: Ticket;
-  onRetry: (id: string) => void;
-  onCancel: (id: string) => void;
-  onDelete: (id: string) => void;
+  onOpen: (ticket: Ticket) => void;
 }
 
-const STATE_COLOR: Record<TicketState, string> = {
-  queued: 'var(--accent-blue, #58a6ff)',
-  running: 'var(--accent-blue, #58a6ff)',
-  verifying: 'var(--accent-blue, #58a6ff)',
+const GROUP_COLOR: Record<StatusGroup, string> = {
+  active: 'var(--accent-blue, #58a6ff)',
   done: 'var(--accent-green, #3fb950)',
   failed: 'var(--accent-red, #f85149)',
 };
 
-function elapsed(t: Ticket): string {
-  const end = t.endedAt ?? Date.now();
-  const start = t.startedAt ?? t.createdAt;
-  const secs = Math.max(0, Math.round((end - start) / 1000));
-  if (secs < 60) return `${secs}s`;
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}m ${s}s`;
-}
-
-export function TicketCard({ ticket, onRetry, onCancel, onDelete }: TicketCardProps) {
+export function TicketCard({ ticket, onOpen }: TicketCardProps) {
   const { t } = useTranslation();
-  const isActive = ticket.state === 'queued' || ticket.state === 'running' || ticket.state === 'verifying';
-  const color = STATE_COLOR[ticket.state];
+  const group = statusGroup(ticket.state);
+  const color = GROUP_COLOR[group];
+
+  // The one-line answer is the focal point. Fall back per state while it's absent.
+  const line =
+    ticket.headline ??
+    (group === 'active'
+      ? t(`tickets.status.${ticket.state}`) + '…'
+      : group === 'failed'
+        ? ticket.failureReason
+          ? t(`tickets.failureReason.${ticket.failureReason}`)
+          : t('tickets.status.failed')
+        : t('tickets.status.done'));
+
+  const meta: string[] = [formatStarted(ticket)];
+  if (ticket.model) meta.push(ticket.model);
 
   return (
     <div
@@ -43,68 +44,76 @@ export function TicketCard({ ticket, onRetry, onCancel, onDelete }: TicketCardPr
         gap: 8,
       }}
     >
+      {/* top row: #seq + project badge + sub-status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, opacity: 0.55 }}>#{ticket.seq}</span>
         <span
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color,
-            border: `1px solid ${color}`,
+            color: 'var(--accent-blue, #58a6ff)',
+            background: 'color-mix(in srgb, var(--accent-blue, #58a6ff) 15%, transparent)',
             borderRadius: 6,
             padding: '2px 8px',
+            maxWidth: 140,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
+          title={ticket.cwd}
         >
-          {t(`tickets.status.${ticket.state}`)}
-          {ticket.state === 'running' && <span style={{ marginLeft: 4, opacity: 0.7 }}>●</span>}
+          {projectName(ticket.cwd)}
         </span>
-        <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono, monospace)', fontSize: 11, opacity: 0.6 }}>
-          {elapsed(ticket)}
-        </span>
+        {group === 'active' && (
+          <span style={{ fontSize: 11, color, marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, animation: 'pulse 1.4s infinite' }} />
+            {t(`tickets.status.${ticket.state}`)}
+          </span>
+        )}
       </div>
 
-      <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.4, color: 'var(--text-primary, #e6edf3)' }}>
+      {/* the goal (what was asked), muted */}
+      <div style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {ticket.goal}
       </div>
 
-      {/* Result / error summary only on terminal states — the process itself is hidden. */}
-      {ticket.state === 'done' && ticket.result && (
-        <div style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.5 }}>{ticket.result}</div>
-      )}
-      {ticket.state === 'failed' && (
-        <div style={{ fontSize: 12, color: 'var(--accent-red, #f85149)', lineHeight: 1.5 }}>
-          {ticket.failureReason ? t(`tickets.failureReason.${ticket.failureReason}`) : t('tickets.status.failed')}
-          {ticket.error ? `: ${ticket.error}` : ''}
-        </div>
-      )}
+      {/* the one-line answer — the focal point */}
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color,
+          lineHeight: 1.4,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+        }}
+      >
+        {line}
+      </div>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-        {isActive && (
-          <button type="button" onClick={() => onCancel(ticket.id)} style={btnStyle}>
-            {t('tickets.cancel')}
-          </button>
-        )}
-        {ticket.state === 'failed' && (
-          <button type="button" onClick={() => onRetry(ticket.id)} style={btnStyle}>
-            {t('tickets.retry')}
-          </button>
-        )}
-        {!isActive && (
-          <button type="button" onClick={() => onDelete(ticket.id)} style={{ ...btnStyle, marginLeft: 'auto' }}>
-            {t('tickets.delete')}
-          </button>
-        )}
+      {/* footer: date/model + detail button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.5 }}>{meta.join(' · ')}</span>
+        <button
+          type="button"
+          onClick={() => onOpen(ticket)}
+          style={{
+            marginLeft: 'auto',
+            fontSize: 12,
+            padding: '4px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--border-default, #30363d)',
+            background: 'var(--bg-tertiary, #21262d)',
+            color: 'var(--text-secondary, #8b949e)',
+            cursor: 'pointer',
+          }}
+        >
+          {t('tickets.detail')}
+        </button>
       </div>
     </div>
   );
 }
-
-const btnStyle: React.CSSProperties = {
-  fontSize: 12,
-  padding: '4px 10px',
-  borderRadius: 8,
-  border: '1px solid var(--border-default, #30363d)',
-  background: 'var(--bg-tertiary, #21262d)',
-  color: 'var(--text-secondary, #8b949e)',
-  cursor: 'pointer',
-};

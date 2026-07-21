@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Ticket } from '@claude-alive/core';
 import { createTicketStore, type TicketStore } from '../ticketStore.js';
-import { createTicketRunner, isCwdAllowed, type MainOutcome, type TicketRunnerOptions } from '../ticketRunner.js';
+import { createTicketRunner, isCwdAllowed, extractHeadline, type MainOutcome, type TicketRunnerOptions } from '../ticketRunner.js';
 
 let dir: string;
 let store: TicketStore;
@@ -75,10 +75,31 @@ describe('isCwdAllowed', () => {
   });
 });
 
+describe('extractHeadline', () => {
+  it('lifts the HEADLINE line out of the body', () => {
+    expect(extractHeadline('Detailed report.\nmore\nHEADLINE: 빌드 통과, 3건 수정')).toEqual({
+      headline: '빌드 통과, 3건 수정',
+      body: 'Detailed report.\nmore',
+    });
+  });
+  it('returns null headline when absent', () => {
+    expect(extractHeadline('just a body')).toEqual({ headline: null, body: 'just a body' });
+    expect(extractHeadline(null)).toEqual({ headline: null, body: null });
+  });
+});
+
 describe('TicketRunner lifecycle', () => {
-  it('drives a ticket queued → running → verifying → done', async () => {
+  it('drives a ticket queued → running → verifying → done, capturing headline + model', async () => {
     const { runner, broadcasts } = makeRunner({
-      spawnMain: () => ({ kill() {}, done: Promise.resolve(okOutcome('did it')) }),
+      spawnMain: () => ({
+        kill() {},
+        done: Promise.resolve({
+          exitCode: 0,
+          result: { result: 'Full body here.\nHEADLINE: 한 줄 요약', isError: false, model: 'claude-opus-4-8' },
+          sessionId: 'sess',
+          stderr: '',
+        }),
+      }),
       verify: async () => ({ passed: true, reason: 'looks good' }),
     });
     const t = await store.create({ goal: 'g', cwd: '/repo' });
@@ -86,7 +107,9 @@ describe('TicketRunner lifecycle', () => {
     await until(() => store.get(t.id)?.state === 'done');
 
     const final = store.get(t.id)!;
-    expect(final.result).toBe('did it');
+    expect(final.result).toBe('Full body here.');
+    expect(final.headline).toBe('한 줄 요약');
+    expect(final.model).toBe('claude-opus-4-8');
     expect(final.verification).toEqual({ passed: true, reason: 'looks good' });
     expect(final.claudeSessionId).toBe('sess');
     expect(broadcasts.map((b) => b.state)).toEqual(['running', 'verifying', 'done']);

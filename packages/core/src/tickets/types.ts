@@ -30,6 +30,8 @@ export interface TicketVerification {
 
 export interface Ticket {
   id: string;
+  /** Human-friendly sequential number (#1, #2, …). Assigned at creation. */
+  seq: number;
   /** The one-card input: a simple goal statement. */
   goal: string;
   /** Working directory (project root) the agent runs in. */
@@ -38,8 +40,16 @@ export interface Ticket {
   createdAt: number;
   startedAt?: number;
   endedAt?: number;
-  /** Final summary shown on the card (done/failed only). */
+  /** One-line (~30 char) answer, shown on the card front. Parsed from the agent's HEADLINE. */
+  headline?: string;
+  /** Full result body (markdown), shown in the detail modal. */
   result?: string;
+  /** Model that ran the main agent (e.g. "claude-opus-4-8"), when captured. */
+  model?: string;
+  /** Whether extended thinking was used, when the runner can determine it. */
+  thinking?: boolean;
+  /** Reasoning effort level, when available. */
+  effort?: string;
   verification?: TicketVerification;
   failureReason?: TicketFailureReason;
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */

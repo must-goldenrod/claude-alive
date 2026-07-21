@@ -18,8 +18,15 @@ describe('parseStreamJsonLine', () => {
     );
     expect(e).toEqual({
       kind: 'result',
-      result: { result: 'done it', isError: false, sessionId: 's1', subtype: 'success' },
+      result: { result: 'done it', isError: false, sessionId: 's1', subtype: 'success', model: null },
     });
+  });
+
+  it('extracts the model id from modelUsage, stripping the context-window suffix', () => {
+    const e = parseStreamJsonLine(
+      '{"type":"result","subtype":"success","is_error":false,"result":"ok","modelUsage":{"claude-opus-4-8[1m]":{"inputTokens":2}}}',
+    );
+    expect(e).toMatchObject({ kind: 'result', result: { model: 'claude-opus-4-8' } });
   });
 
   it('marks error results', () => {
@@ -54,7 +61,7 @@ describe('createStreamJsonParser', () => {
     expect(events).toHaveLength(0);
     p.push('cess","is_error":false,"result":"ok"}\n');
     expect(events).toEqual([
-      { kind: 'result', result: { result: 'ok', isError: false, sessionId: null, subtype: 'success' } },
+      { kind: 'result', result: { result: 'ok', isError: false, sessionId: null, subtype: 'success', model: null } },
     ]);
   });
 
@@ -66,7 +73,7 @@ describe('createStreamJsonParser', () => {
     p.flush();
     expect(onEvent).toHaveBeenCalledWith({
       kind: 'result',
-      result: { result: 'tail', isError: false, sessionId: null, subtype: 'success' },
+      result: { result: 'tail', isError: false, sessionId: null, subtype: 'success', model: null },
     });
   });
 });

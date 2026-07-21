@@ -42,6 +42,7 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
   const uuid = options.uuid ?? randomUUID;
 
   let tickets = new Map<string, Ticket>();
+  let nextSeq = 1;
   let flushPromise: Promise<void> | null = null;
 
   async function serializedFlush(): Promise<void> {
@@ -75,9 +76,18 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
       try {
         const raw = await readFile(filePath, 'utf-8');
         const arr = JSON.parse(raw) as Ticket[];
+        // Backfill seq for tickets persisted before seq existed, oldest first.
+        let maxSeq = 0;
+        const ordered = [...arr].sort((a, b) => a.createdAt - b.createdAt);
+        for (const t of ordered) {
+          if (typeof t.seq !== 'number') t.seq = ++maxSeq;
+          else maxSeq = Math.max(maxSeq, t.seq);
+        }
+        nextSeq = maxSeq + 1;
         tickets = new Map(arr.map((t) => [t.id, t]));
       } catch {
         tickets = new Map();
+        nextSeq = 1;
       }
     },
 
@@ -92,6 +102,7 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
     async create(input) {
       const ticket: Ticket = {
         id: uuid(),
+        seq: nextSeq++,
         goal: input.goal,
         cwd: input.cwd,
         state: 'queued',

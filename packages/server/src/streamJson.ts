@@ -17,6 +17,8 @@ export interface StreamResult {
   sessionId: string | null;
   /** e.g. "success", "error_max_turns", "error_during_execution". */
   subtype: string | null;
+  /** Model id that ran the turn, e.g. "claude-opus-4-8" (bracket suffix stripped). */
+  model: string | null;
 }
 
 export type StreamEvent =
@@ -50,7 +52,15 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
     case 'assistant':
     case 'user':
       return { kind: 'activity' };
-    case 'result':
+    case 'result': {
+      // modelUsage is keyed by model id (e.g. "claude-opus-4-8[1m]"); take the
+      // first key and strip any "[…]" context-window suffix.
+      const modelUsage = obj.modelUsage;
+      let model: string | null = null;
+      if (modelUsage && typeof modelUsage === 'object') {
+        const first = Object.keys(modelUsage as Record<string, unknown>)[0];
+        if (first) model = first.replace(/\[.*\]$/, '');
+      }
       return {
         kind: 'result',
         result: {
@@ -58,8 +68,10 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
           isError: obj.is_error === true,
           sessionId: asString(obj.session_id),
           subtype: asString(obj.subtype),
+          model,
         },
       };
+    }
     default:
       return null;
   }

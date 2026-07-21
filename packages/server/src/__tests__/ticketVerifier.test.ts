@@ -32,7 +32,7 @@ describe('buildVerificationPrompt', () => {
 describe('createVerifier', () => {
   const outcome = (result: string | null): HeadlessOutcome => ({
     exitCode: 0,
-    result: result === null ? null : { result, isError: false, sessionId: null, subtype: 'success' },
+    result: result === null ? null : { result, isError: false, sessionId: null, subtype: 'success', model: null },
     sessionId: null,
     stderr: '',
   });

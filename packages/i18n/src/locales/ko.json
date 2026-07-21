@@ -383,16 +383,23 @@
     "retry": "재시도",
     "cancel": "취소",
     "delete": "삭제",
+    "detail": "자세히",
+    "close": "닫기",
+    "goalLabel": "요청 내용",
+    "headlineLabel": "한줄 답변",
+    "resultLabel": "전체 결과",
+    "verificationLabel": "검증",
+    "failureLabel": "실패 사유",
     "columns": {
       "active": "진행중",
-      "done": "완료",
+      "done": "종료",
       "failed": "실패"
     },
     "status": {
       "queued": "대기중",
       "running": "실행중",
       "verifying": "검증중",
-      "done": "완료",
+      "done": "종료",
       "failed": "실패"
     },
     "failureReason": {
