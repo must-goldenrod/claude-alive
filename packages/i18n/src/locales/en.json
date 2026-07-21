@@ -369,9 +369,41 @@
     "list": "List",
     "prompt": "Prompt",
     "efficio": "Efficio",
+    "tickets": "Tickets",
     "spread": "Spread",
     "jarvis": "Jarvis",
     "workspace": "Workspaces"
+  },
+  "tickets": {
+    "newGoalPlaceholder": "Describe a goal — the agent runs it autonomously",
+    "cwdPlaceholder": "Working directory (project root)",
+    "create": "Create ticket",
+    "creating": "Creating…",
+    "empty": "None",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "columns": {
+      "active": "In progress",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "verifying": "Verifying",
+      "done": "Done",
+      "failed": "Failed"
+    },
+    "failureReason": {
+      "error": "Agent error",
+      "verification-failed": "Verification failed",
+      "verification-inconclusive": "Verification inconclusive",
+      "timeout": "Timed out",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted (server restart)",
+      "cwd-not-allowed": "Working directory not allowed"
+    }
   },
   "spread": {
     "empty": "No open terminals",

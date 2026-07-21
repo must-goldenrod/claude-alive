@@ -102,11 +102,28 @@ export interface HttpRouterOptions {
 
   /** Whether a server-owned terminal exists for the session, and why not (§F.7). */
   sessionTerminal?: (sessionId: string) => unknown;
+
+  /**
+   * Ticket dashboard wiring (spec 2026-07-21). Absent when the ticket subsystem
+   * is disabled, in which case `/api/tickets*` routes 404.
+   */
+  tickets?: {
+    list: () => unknown[];
+    create: (input: { goal: string; cwd: string }) => Promise<unknown>;
+    retry: (id: string) => Promise<unknown | undefined>;
+    cancel: (id: string) => Promise<unknown | undefined>;
+    remove: (id: string) => Promise<boolean>;
+  };
 }
 
 const ProjectNameBodySchema = z.object({
   cwd: z.string().min(1),
   name: z.string().max(100).nullable(),
+});
+
+const TicketCreateBodySchema = z.object({
+  goal: z.string().min(1).max(8000),
+  cwd: z.string().min(1),
 });
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
@@ -177,6 +194,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     sessionConversation,
     sessionTerminal,
     efficio,
+    tickets,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -294,6 +312,44 @@ export function createHttpServer(options: HttpRouterOptions) {
     if (req.method === 'DELETE' && deleteMatch) {
       const ok = removeAgent(deleteMatch[1]!);
       sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
+      return;
+    }
+
+    // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────
+    if (tickets && req.method === 'GET' && url.pathname === '/api/tickets') {
+      sendJson(res, 200, { tickets: tickets.list() }, req);
+      return;
+    }
+    if (tickets && req.method === 'POST' && url.pathname === '/api/tickets') {
+      try {
+        const parsed = TicketCreateBodySchema.safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
+          return;
+        }
+        const ticket = await tickets.create(parsed.data);
+        sendJson(res, 201, { ticket }, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
+      return;
+    }
+    const ticketRetryMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/retry$/);
+    if (tickets && req.method === 'POST' && ticketRetryMatch) {
+      const ticket = await tickets.retry(ticketRetryMatch[1]!);
+      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      return;
+    }
+    const ticketCancelMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/cancel$/);
+    if (tickets && req.method === 'POST' && ticketCancelMatch) {
+      const ticket = await tickets.cancel(ticketCancelMatch[1]!);
+      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      return;
+    }
+    const ticketDeleteMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)$/);
+    if (tickets && req.method === 'DELETE' && ticketDeleteMatch) {
+      const ok = await tickets.remove(ticketDeleteMatch[1]!);
+      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Ticket not found' }, req);
       return;
     }
 

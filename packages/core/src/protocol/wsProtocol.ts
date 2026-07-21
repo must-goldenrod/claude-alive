@@ -1,6 +1,7 @@
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation } from '../events/types.js';
 import type { AgentStats, EventLogEntry } from '../state/sessionStore.js';
 import type { EfficioStatus } from '../efficio/types.js';
+import type { Ticket } from '../tickets/types.js';
 
 export type TerminalMode = 'claude' | 'shell';
 export type TerminalSource = 'local' | 'ssh';
@@ -64,7 +65,13 @@ export type WSServerMessage =
   // Broadcast when the set of resumable (dormant) sessions changes.
   | { type: 'sessions:resumable'; sessions: ResumableSession[] }
   | { type: 'project:names'; names: Record<string, string> }
-  | { type: 'efficio:update'; status: EfficioStatus };
+  | { type: 'efficio:update'; status: EfficioStatus }
+  // Full ticket list, sent on demand (e.g. a newly connected client that opened
+  // the Tickets view). Live changes ride on `ticket:update`.
+  | { type: 'ticket:snapshot'; tickets: Ticket[] }
+  // A single ticket changed state (queued → running → verifying → done/failed).
+  // Carries the whole ticket so the client merges without a refetch.
+  | { type: 'ticket:update'; ticket: Ticket };
 
 export type WSClientMessage =
   | { type: 'ping' }

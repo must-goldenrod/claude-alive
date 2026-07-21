@@ -16,6 +16,10 @@ export type {
   ResumableSession,
 } from './protocol/wsProtocol.js';
 export { parseTranscriptTokens } from './transcript/parser.js';
+export { TICKET_ACTIVE_STATES, isTicketActive } from './tickets/types.js';
+export type {
+  Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput,
+} from './tickets/types.js';
 export * from './canonical/index.js';
 export { augmentPath } from './env/path.js';
 export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';

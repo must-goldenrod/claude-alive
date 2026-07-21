@@ -369,9 +369,41 @@
     "list": "리스트",
     "prompt": "프롬프트",
     "efficio": "Efficio",
+    "tickets": "티켓",
     "spread": "스프레드",
     "jarvis": "자비스",
     "workspace": "워크스페이스"
+  },
+  "tickets": {
+    "newGoalPlaceholder": "목표를 적으세요 — 에이전트가 자율로 처리합니다",
+    "cwdPlaceholder": "작업 디렉터리 (프로젝트 루트)",
+    "create": "티켓 만들기",
+    "creating": "생성 중…",
+    "empty": "없음",
+    "retry": "재시도",
+    "cancel": "취소",
+    "delete": "삭제",
+    "columns": {
+      "active": "진행중",
+      "done": "완료",
+      "failed": "실패"
+    },
+    "status": {
+      "queued": "대기중",
+      "running": "실행중",
+      "verifying": "검증중",
+      "done": "완료",
+      "failed": "실패"
+    },
+    "failureReason": {
+      "error": "에이전트 오류",
+      "verification-failed": "검증 불통과",
+      "verification-inconclusive": "검증 불확실",
+      "timeout": "시간 초과",
+      "cancelled": "취소됨",
+      "interrupted": "중단됨 (서버 재시작)",
+      "cwd-not-allowed": "허용되지 않은 작업 디렉터리"
+    }
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",

@@ -31,6 +31,10 @@ import { readTranscriptConversation } from './transcriptLocator.js';
 import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
+import { createTicketStore } from './ticketStore.js';
+import { createTicketRunner } from './ticketRunner.js';
+import { runHeadlessClaude } from './headlessClaude.js';
+import { createVerifier } from './ticketVerifier.js';
 import { watch, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -296,9 +300,38 @@ function removeAgent(sessionId: string): boolean {
   return ok;
 }
 
+// ── Ticket dashboard (spec 2026-07-21) ───────────────────────────────────────
+// Autonomous headless agents driven by cards. `broadcast` forward-references
+// `broadcaster` (assigned below); it's only invoked at runtime, long after both
+// are initialised — same pattern as TerminalManager's `send`.
+const ticketStore = createTicketStore();
+await ticketStore.load();
+const ticketVerifier = createVerifier();
+const ticketRunner = createTicketRunner({
+  store: ticketStore,
+  spawnMain: (ticket) => runHeadlessClaude({ goal: ticket.goal, cwd: ticket.cwd }),
+  verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
+  broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
+  concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,
+  // Optional cwd allowlist (colon-separated). Unset = unrestricted (local tool).
+  allowedRoots: process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean),
+});
+
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
+  tickets: {
+    list: () => ticketStore.list(),
+    create: async (input) => {
+      const ticket = await ticketStore.create(input);
+      ticketRunner.enqueue(ticket);
+      broadcaster.broadcast({ type: 'ticket:update', ticket });
+      return ticket;
+    },
+    retry: (id) => ticketRunner.retry(id),
+    cancel: (id) => ticketRunner.cancel(id),
+    remove: (id) => ticketStore.remove(id),
+  },
   renameAgent,
   removeAgent,
   getStats: () => store.getStats(),
@@ -507,6 +540,11 @@ if (existsSync(efficioDir)) {
 // the worker shares the server process lifecycle. Errors inside the loop
 // are logged but never bubble up to take the server down.
 const stopWorkerLoop = startWorkerLoop();
+
+// Reconcile tickets left in flight by a previous run: in-flight → failed
+// (interrupted, not reattachable), queued → re-scheduled. Runs now that the
+// broadcaster exists so state changes reach connected clients.
+void ticketRunner.recover();
 
 httpServer.listen(PORT, () => {
   console.log(`
