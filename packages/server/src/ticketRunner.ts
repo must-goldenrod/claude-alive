@@ -7,7 +7,7 @@
  * machine runs deterministically in tests with no `claude` and no wall clock.
  */
 import { resolve, sep } from 'node:path';
-import { realpathSync } from 'node:fs';
+import { realpathSync, existsSync } from 'node:fs';
 import type { Ticket, TicketFailureReason } from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
 
@@ -46,6 +46,8 @@ export interface TicketRunnerOptions {
    * Defaults to fs.realpathSync; injectable so tests stay hermetic.
    */
   canonicalize?: (path: string) => string;
+  /** Existence check for a ticket's cwd; injectable for tests. Defaults to fs.existsSync. */
+  cwdExists?: (path: string) => boolean;
 }
 
 export interface TicketRunner {
@@ -87,6 +89,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const allowedRoots = options.allowedRoots;
   const canonicalize = options.canonicalize ?? ((p: string) => realpathSync(p));
+  const cwdExists = options.cwdExists ?? existsSync;
   const now = options.now ?? Date.now;
   const setTimer =
     options.setTimer ??
@@ -137,6 +140,14 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     const ticket = store.get(id);
     if (!ticket || ticket.state !== 'queued') return;
     running.add(id); // reserve the slot synchronously so pump() can't oversubscribe
+
+    // A nonexistent cwd would otherwise fail deep in spawn as a cryptic ENOENT.
+    // Catch it here with a clear message (also covers retry/recover of tickets
+    // created before cwd validation existed).
+    if (!cwdExists(ticket.cwd)) {
+      await fail(id, 'error', `working directory does not exist: ${ticket.cwd}`);
+      return;
+    }
 
     // Canonicalize (resolve symlinks) before the allowlist check when a list is
     // set; a path that fails to resolve is rejected (fail-closed).

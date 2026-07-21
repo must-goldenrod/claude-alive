@@ -35,8 +35,8 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { runHeadlessClaude } from './headlessClaude.js';
 import { createVerifier } from './ticketVerifier.js';
-import { watch, existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
+import { dirname, join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -331,6 +331,18 @@ const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
   tickets: {
+    // Reject a bad cwd up front with a clear message. Without this, a
+    // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
+    // ("failed to spawn claude").
+    validateCwd: (cwd) => {
+      if (!isAbsolute(cwd)) return 'Working directory must be an absolute path (e.g. /Users/you/project)';
+      try {
+        if (!statSync(cwd).isDirectory()) return 'Working directory is not a directory';
+      } catch {
+        return `Working directory does not exist: ${cwd}`;
+      }
+      return null;
+    },
     list: () => ticketStore.list(),
     create: async (input) => {
       const ticket = await ticketStore.create(input);

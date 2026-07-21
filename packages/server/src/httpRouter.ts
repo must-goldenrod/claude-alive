@@ -113,6 +113,8 @@ export interface HttpRouterOptions {
     retry: (id: string) => Promise<unknown | undefined>;
     cancel: (id: string) => Promise<unknown | undefined>;
     remove: (id: string) => Promise<boolean>;
+    /** Validate cwd before creating; returns an error message, or null when valid. */
+    validateCwd?: (cwd: string) => string | null;
   };
 }
 
@@ -340,6 +342,11 @@ export function createHttpServer(options: HttpRouterOptions) {
         const parsed = TicketCreateBodySchema.safeParse(JSON.parse(await readBody(req)));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
+          return;
+        }
+        const cwdError = tickets.validateCwd?.(parsed.data.cwd);
+        if (cwdError) {
+          sendJson(res, 400, { error: cwdError }, req);
           return;
         }
         const ticket = await tickets.create(parsed.data);

@@ -11,15 +11,21 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
   const [goal, setGoal] = useState('');
   const [cwd, setCwd] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const canSubmit = goal.trim().length > 0 && cwd.trim().length > 0 && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
-    const ok = await onCreate(goal.trim(), cwd.trim());
+    const err = await onCreate(goal.trim(), cwd.trim());
     setSubmitting(false);
-    if (ok) setGoal(''); // keep cwd for the next ticket in the same project
+    if (err) {
+      setError(err); // surface the server's specific reason (e.g. bad cwd)
+      return;
+    }
+    setError(null);
+    setGoal(''); // keep cwd for the next ticket in the same project
   };
 
   return (
@@ -88,6 +94,9 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
           {submitting ? t('tickets.creating') : t('tickets.create')}
         </button>
       </div>
+      {error && (
+        <div style={{ fontSize: 12, color: 'var(--accent-red, #f85149)', lineHeight: 1.5 }}>{error}</div>
+      )}
     </div>
   );
 }

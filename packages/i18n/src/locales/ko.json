@@ -376,7 +376,7 @@
   },
   "tickets": {
     "newGoalPlaceholder": "목표를 적으세요 — 에이전트가 자율로 처리합니다",
-    "cwdPlaceholder": "작업 디렉터리 (프로젝트 루트)",
+    "cwdPlaceholder": "절대경로 프로젝트 경로, 예: /Users/you/project",
     "create": "티켓 만들기",
     "creating": "생성 중…",
     "empty": "없음",

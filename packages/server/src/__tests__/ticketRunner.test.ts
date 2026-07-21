@@ -43,6 +43,7 @@ function makeRunner(overrides: Partial<TicketRunnerOptions>) {
     now,
     setTimer: () => () => {},
     canonicalize: (p) => p, // identity keeps the allowlist tests off the real fs
+    cwdExists: () => true, // tests use synthetic paths like /repo
     ...overrides,
   });
   return { runner, broadcasts };
@@ -127,6 +128,15 @@ describe('TicketRunner lifecycle', () => {
     await until(() => store.get(t.id)?.state === 'failed');
     expect(store.get(t.id)?.failureReason).toBe('cwd-not-allowed');
     await until(() => runner.activeCount() === 0); // slot released (after the flush settles)
+  });
+
+  it('fails with a clear error when the cwd does not exist', async () => {
+    const { runner } = makeRunner({ cwdExists: () => false });
+    const t = await store.create({ goal: 'g', cwd: '/no/such/dir' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'failed');
+    expect(store.get(t.id)).toMatchObject({ failureReason: 'error' });
+    expect(store.get(t.id)?.error).toContain('working directory does not exist');
   });
 
   it('honors the concurrency limit', async () => {

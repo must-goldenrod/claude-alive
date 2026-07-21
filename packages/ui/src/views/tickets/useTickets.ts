@@ -5,10 +5,10 @@ import type { RawMessageSubscribe } from '../../App.tsx';
 // Same origin convention as EfficioView: the server serves the UI and proxies in dev.
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
-/** Creates a ticket; resolves true on success. Declared here (a .ts file) so
- * consumers avoid writing `=> Promise<…>` in a .tsx file, which trips the i18n
- * raw-text guard's JSX heuristic. */
-export type TicketCreateFn = (goal: string, cwd: string) => Promise<boolean>;
+/** Creates a ticket; resolves null on success or an error message on failure.
+ * Declared here (a .ts file) so consumers avoid writing `=> Promise<…>` in a
+ * .tsx file, which trips the i18n raw-text guard's JSX heuristic. */
+export type TicketCreateFn = (goal: string, cwd: string) => Promise<string | null>;
 
 export interface UseTicketsResult {
   tickets: Ticket[];
@@ -56,19 +56,22 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     });
   }, [subscribeRaw]);
 
-  const createTicket = useCallback(async (goal: string, cwd: string): Promise<boolean> => {
+  const createTicket = useCallback(async (goal: string, cwd: string): Promise<string | null> => {
     try {
       const res = await fetch(`${API_BASE}/api/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goal, cwd }),
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        return body.error ?? `Request failed (${res.status})`;
+      }
       const { ticket } = (await res.json()) as { ticket: Ticket };
       setById((prev) => ({ ...prev, [ticket.id]: ticket }));
-      return true;
+      return null;
     } catch {
-      return false;
+      return 'Network error — is the server running?';
     }
   }, []);
 

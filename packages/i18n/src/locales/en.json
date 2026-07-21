@@ -376,7 +376,7 @@
   },
   "tickets": {
     "newGoalPlaceholder": "Describe a goal — the agent runs it autonomously",
-    "cwdPlaceholder": "Working directory (project root)",
+    "cwdPlaceholder": "Absolute project path, e.g. /Users/you/project",
     "create": "Create ticket",
     "creating": "Creating…",
     "empty": "None",
