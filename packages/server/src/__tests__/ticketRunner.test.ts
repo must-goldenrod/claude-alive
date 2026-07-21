@@ -42,6 +42,7 @@ function makeRunner(overrides: Partial<TicketRunnerOptions>) {
     verify: async () => ({ passed: true, reason: 'ok' }),
     now,
     setTimer: () => () => {},
+    canonicalize: (p) => p, // identity keeps the allowlist tests off the real fs
     ...overrides,
   });
   return { runner, broadcasts };
@@ -66,6 +67,10 @@ describe('isCwdAllowed', () => {
     expect(isCwdAllowed('/home/user', ['/home/user'])).toBe(true);
     expect(isCwdAllowed('/home/userevil', ['/home/user'])).toBe(false);
     expect(isCwdAllowed('/etc', ['/home/user'])).toBe(false);
+  });
+  it('rejects traversal via .. segments', () => {
+    expect(isCwdAllowed('/home/user/../../etc', ['/home/user'])).toBe(false);
+    expect(isCwdAllowed('/home/user/sub/../ok', ['/home/user'])).toBe(false); // any .. is refused
   });
 });
 

@@ -309,13 +309,23 @@ await ticketStore.load();
 const ticketVerifier = createVerifier();
 const ticketRunner = createTicketRunner({
   store: ticketStore,
-  spawnMain: (ticket) => runHeadlessClaude({ goal: ticket.goal, cwd: ticket.cwd }),
+  // Explicit privileged mode from server config (never from the HTTP body).
+  spawnMain: (ticket) =>
+    runHeadlessClaude({ goal: ticket.goal, cwd: ticket.cwd, permissionMode: 'bypassPermissions' }),
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
   concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,
   // Optional cwd allowlist (colon-separated). Unset = unrestricted (local tool).
   allowedRoots: process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean),
 });
+if (!process.env.CLAUDE_ALIVE_TICKET_ROOTS) {
+  // bypassPermissions is RCE-equivalent; the ticket routes are loopback-only
+  // (see httpRouter) and this warns that no cwd allowlist is narrowing them.
+  console.warn(
+    '[tickets] CLAUDE_ALIVE_TICKET_ROOTS is unset — autonomous agents may run in any cwd. ' +
+      'Ticket routes are loopback-only; set an allowlist to further restrict.',
+  );
+}
 
 const httpServer = createHttpServer({
   onEvent,

@@ -6,6 +6,8 @@
  * (spawning the agent, verifying, broadcasting, timers) is injected so the whole
  * machine runs deterministically in tests with no `claude` and no wall clock.
  */
+import { resolve, sep } from 'node:path';
+import { realpathSync } from 'node:fs';
 import type { Ticket, TicketFailureReason } from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
 
@@ -38,6 +40,12 @@ export interface TicketRunnerOptions {
   now?: () => number;
   /** Injectable timer (returns a clear fn) for deterministic timeout tests. */
   setTimer?: (cb: () => void, ms: number) => () => void;
+  /**
+   * Canonicalize a cwd before the allowlist check (resolves symlinks). Only
+   * invoked when allowedRoots is non-empty. Throwing = reject (fail-closed).
+   * Defaults to fs.realpathSync; injectable so tests stay hermetic.
+   */
+  canonicalize?: (path: string) => string;
 }
 
 export interface TicketRunner {
@@ -51,12 +59,21 @@ export interface TicketRunner {
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 
-/** True when cwd is within some allowed root (path-boundary aware). Empty roots = unrestricted. */
+/**
+ * True when cwd is within some allowed root. Empty roots = unrestricted.
+ *
+ * Hardened against allowlist bypass: a `..` segment is rejected outright, and
+ * both sides are normalized with path.resolve so a crafted relative path cannot
+ * escape a root by prefix trickery (e.g. `/allowed-evil` vs root `/allowed`).
+ */
 export function isCwdAllowed(cwd: string, roots: readonly string[] | undefined): boolean {
   if (!roots || roots.length === 0) return true;
+  if (cwd.split(/[\\/]+/).includes('..')) return false;
+  const target = resolve(cwd);
   return roots.some((root) => {
-    const base = root.endsWith('/') ? root : root + '/';
-    return cwd === root || cwd.startsWith(base);
+    const r = resolve(root);
+    const base = r.endsWith(sep) ? r : r + sep;
+    return target === r || target.startsWith(base);
   });
 }
 
@@ -69,6 +86,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const allowedRoots = options.allowedRoots;
+  const canonicalize = options.canonicalize ?? ((p: string) => realpathSync(p));
   const now = options.now ?? Date.now;
   const setTimer =
     options.setTimer ??
@@ -120,7 +138,18 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     if (!ticket || ticket.state !== 'queued') return;
     running.add(id); // reserve the slot synchronously so pump() can't oversubscribe
 
-    if (!isCwdAllowed(ticket.cwd, allowedRoots)) {
+    // Canonicalize (resolve symlinks) before the allowlist check when a list is
+    // set; a path that fails to resolve is rejected (fail-closed).
+    let checkCwd = ticket.cwd;
+    if (allowedRoots && allowedRoots.length > 0) {
+      try {
+        checkCwd = canonicalize(ticket.cwd);
+      } catch {
+        await fail(id, 'cwd-not-allowed', `cwd does not resolve: ${ticket.cwd}`);
+        return;
+      }
+    }
+    if (!isCwdAllowed(checkCwd, allowedRoots)) {
       await fail(id, 'cwd-not-allowed', `cwd not in allowlist: ${ticket.cwd}`);
       return;
     }

@@ -32,8 +32,13 @@ export interface HeadlessSpawnArgs {
 export interface HeadlessRunOptions {
   goal: string;
   cwd: string;
-  /** Defaults to full autonomy. */
-  permissionMode?: string;
+  /**
+   * Required, no default. The privileged `bypassPermissions` mode must be an
+   * explicit, visible choice at each call site — never a silent library default
+   * (security review #1). Callers pass a mode from trusted server config, not
+   * from an HTTP body.
+   */
+  permissionMode: string;
   /** Injectable spawn for tests. Production builds a real `claude` child process. */
   spawnProcess?: (args: HeadlessSpawnArgs) => HeadlessProcessHandle;
   /** Observe each classified stream event (activity is intentionally opaque). */

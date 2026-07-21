@@ -128,6 +128,16 @@ const TicketCreateBodySchema = z.object({
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
 
+/**
+ * Ticket routes spawn fully-autonomous agents (RCE-equivalent), so they are
+ * restricted to loopback callers regardless of what interface the server bound.
+ * Covers IPv4, IPv6, and IPv4-mapped-IPv6 loopback.
+ */
+function isLoopbackRequest(req: IncomingMessage): boolean {
+  const addr = req.socket.remoteAddress ?? '';
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1' || addr.startsWith('127.');
+}
+
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
@@ -316,6 +326,11 @@ export function createHttpServer(options: HttpRouterOptions) {
     }
 
     // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────
+    // These routes drive RCE-equivalent autonomous agents → loopback callers only.
+    if (tickets && url.pathname.startsWith('/api/tickets') && !isLoopbackRequest(req)) {
+      sendJson(res, 403, { error: 'Ticket API is restricted to loopback' }, req);
+      return;
+    }
     if (tickets && req.method === 'GET' && url.pathname === '/api/tickets') {
       sendJson(res, 200, { tickets: tickets.list() }, req);
       return;
