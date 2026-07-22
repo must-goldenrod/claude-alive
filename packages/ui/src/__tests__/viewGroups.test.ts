@@ -21,6 +21,7 @@ describe('viewGroups', () => {
       'prompt',
       'efficio',
       'archive',
+      'ticketMgmt',
       'backends',
     ]);
   });

@@ -21,6 +21,8 @@ export interface AgentSpawnRequest {
   resumeSessionId?: string;
   /** Dir prepended to the agent PATH (local only) so an orchestrator can call `ca-delegate`. */
   pathPrepend?: string;
+  /** Extra env vars for the agent process (e.g. CA_TICKET_ID for delegation tagging). */
+  extraEnv?: Record<string, string>;
 }
 
 export interface Executor {

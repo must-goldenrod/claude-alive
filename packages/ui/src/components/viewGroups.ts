@@ -9,7 +9,7 @@ import type { ViewMode } from '../App.tsx';
  * - intervene: observation / hands-on views you drop into when a ticket needs
  *              a closer look or direct intervention (animation, list, spread).
  * - tools:     productivity features managed separately from the main flow
- *              (workspace, prompt, efficio, archive).
+ *              (workspace, prompt, efficio, session management, ticket management).
  */
 export type ViewGroup = 'primary' | 'intervene' | 'tools';
 
@@ -31,7 +31,10 @@ export const VIEW_MODE_META: readonly ViewModeMeta[] = [
   { mode: 'workspace', labelKey: 'viewMode.workspace', group: 'tools' },
   { mode: 'prompt', labelKey: 'viewMode.prompt', group: 'tools' },
   { mode: 'efficio', labelKey: 'viewMode.efficio', group: 'tools' },
+  // `archive` is the session-management surface (kept id for low churn); its label
+  // now reads "Session Management". `ticketMgmt` is the ticket-centric companion.
   { mode: 'archive', labelKey: 'viewMode.archive', group: 'tools' },
+  { mode: 'ticketMgmt', labelKey: 'viewMode.ticketMgmt', group: 'tools' },
   { mode: 'backends', labelKey: 'viewMode.backends', group: 'tools' },
 ];
 

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TicketLocation } from '@claude-alive/core';
 import type { TicketCreateFn } from './useTickets.ts';
 import { FolderPicker } from './FolderPicker.tsx';
-import { loadPresets } from '../chat/sshPresets.ts';
+import { RemoteFolderPicker } from './RemoteFolderPicker.tsx';
+import { loadPresets, SSH_PRESETS_CHANGED } from '../chat/sshPresets.ts';
 
 interface NewTicketFormProps {
   onCreate: TicketCreateFn;
@@ -18,11 +19,19 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
   const [goal, setGoal] = useState('');
   const [cwd, setCwd] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [remotePickerOpen, setRemotePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Only presets with structured host info can be a ticket location (headless SSH
   // needs the host server-side; command-only presets stay terminal-only).
-  const [sshHosts] = useState(() => loadPresets().filter((p) => p.host));
+  const [sshHosts, setSshHosts] = useState(() => loadPresets().filter((p) => p.host));
+  // Refresh the location picker when SSH hosts are added/removed elsewhere (e.g. the
+  // Backends onboarding screen) — the form stays mounted, so re-read on the event.
+  useEffect(() => {
+    const onChange = () => setSshHosts(loadPresets().filter((p) => p.host));
+    window.addEventListener(SSH_PRESETS_CHANGED, onChange);
+    return () => window.removeEventListener(SSH_PRESETS_CHANGED, onChange);
+  }, []);
   const [locId, setLocId] = useState('local');
   const [orchestrated, setOrchestrated] = useState(false);
   const preset = sshHosts.find((p) => p.id === locId);
@@ -116,30 +125,49 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
           </select>
         )}
         {isRemote ? (
-          // Remote path can't be browsed with the local folder picker — plain input.
-          <input
-            type="text"
-            value={cwd}
-            onChange={(e) => {
-              setCwd(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void submit();
-            }}
-            placeholder={t('tickets.remotePathPlaceholder')}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 12,
-              fontFamily: 'var(--font-mono, monospace)',
-              padding: '8px 10px',
-              borderRadius: 8,
-              border: '1px solid var(--border-default, #30363d)',
-              background: 'var(--bg-primary, #0d1117)',
-              color: 'var(--text-primary, #e6edf3)',
-            }}
-          />
+          // Remote path: manual entry + a folder picker that browses the host over SSH.
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 6 }}>
+            <input
+              type="text"
+              value={cwd}
+              onChange={(e) => {
+                setCwd(e.target.value);
+                setError(null);
+              }}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void submit();
+              }}
+              placeholder={t('tickets.remotePathPlaceholder')}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: 12,
+                fontFamily: 'var(--font-mono, monospace)',
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: '1px solid var(--border-default, #30363d)',
+                background: 'var(--bg-primary, #0d1117)',
+                color: 'var(--text-primary, #e6edf3)',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setRemotePickerOpen(true)}
+              title={t('tickets.remotePickerTitle')}
+              style={{
+                fontSize: 13,
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border-default, #30363d)',
+                background: 'var(--bg-primary, #0d1117)',
+                color: 'var(--text-secondary, #8b949e)',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              📁
+            </button>
+          </div>
         ) : (
           <button
             type="button"
@@ -224,6 +252,16 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
             setError(null);
           }}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+      {remotePickerOpen && preset && (
+        <RemoteFolderPicker
+          ssh={{ host: preset.host!, user: preset.user, port: preset.port, identityFile: preset.identityFile }}
+          onSelect={(path) => {
+            setCwd(path);
+            setError(null);
+          }}
+          onClose={() => setRemotePickerOpen(false)}
         />
       )}
     </div>

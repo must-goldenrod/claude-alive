@@ -19,7 +19,7 @@ export { parseTranscriptTokens } from './transcript/parser.js';
 export { TICKET_ACTIVE_STATES, isTicketActive, addUsage } from './tickets/types.js';
 export { sshTargetDisplay, isRemoteLocation } from './tickets/location.js';
 export type { LocationKind, SshTarget, TicketLocation } from './tickets/location.js';
-export type { BackendId, BackendKind, BackendStatus } from './tickets/orchestration.js';
+export type { BackendId, BackendKind, BackendStatus, TicketDelegation } from './tickets/orchestration.js';
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
   TicketTurn, TicketTurnRole, TicketTurnKind,

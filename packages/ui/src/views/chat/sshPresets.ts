@@ -64,11 +64,20 @@ export function loadPresets(): SSHPreset[] {
   }
 }
 
+/** Fired after presets change so already-mounted views (e.g. the ticket form's
+ *  location picker) refresh without a page reload. */
+export const SSH_PRESETS_CHANGED = 'ca:ssh-presets-changed';
+
 function persist(presets: SSHPreset[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(presets));
   } catch {
     // localStorage may be full or disabled (private mode) — fail silently.
+  }
+  try {
+    window.dispatchEvent(new Event(SSH_PRESETS_CHANGED));
+  } catch {
+    // no window (SSR/tests) — nothing to notify.
   }
 }
 

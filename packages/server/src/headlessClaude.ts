@@ -45,6 +45,8 @@ export interface HeadlessRunOptions {
   resumeSessionId?: string;
   /** Dir prepended to the agent's PATH (e.g. so an orchestrator can call `ca-delegate`). */
   pathPrepend?: string;
+  /** Extra env vars for the agent process (e.g. CA_TICKET_ID for delegation tagging). */
+  extraEnv?: Record<string, string>;
   /** Injectable spawn for tests. Production builds a real `claude` child process. */
   spawnProcess?: (args: HeadlessSpawnArgs) => HeadlessProcessHandle;
   /** Observe each classified stream event (activity is intentionally opaque). */
@@ -144,6 +146,7 @@ export function runHeadlessClaude(options: HeadlessRunOptions): HeadlessRunHandl
   const spawnProcess = options.spawnProcess ?? realSpawn;
   const env = cleanEnv();
   if (options.pathPrepend) env.PATH = `${options.pathPrepend}:${env.PATH ?? ''}`;
+  if (options.extraEnv) Object.assign(env, options.extraEnv);
   const proc = spawnProcess({
     goal: options.goal,
     cwd: options.cwd,

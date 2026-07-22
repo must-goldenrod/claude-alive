@@ -41,9 +41,11 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
+import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
 import { ensureDelegateCli } from './orchestrator/delegateCli.js';
+import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
 import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
@@ -386,7 +388,9 @@ const ticketRunner = createTicketRunner({
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
-      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+      // Only the orchestrator run gets the delegate tool + a ticket tag; the
+      // verifier deliberately omits CA_TICKET_ID so its re-delegations aren't logged.
+      ...(orchestrated ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } } : {}),
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
@@ -395,6 +399,14 @@ const ticketRunner = createTicketRunner({
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
   // Record an evaluation whenever a ticket settles; broadcast it so clients update.
   onSettled: async (ticket) => {
+    // Attach the orchestrator's sub-agent delegations (which models did what).
+    if (ticket.orchestrated) {
+      const delegations = readDelegations(ticket.id);
+      if (delegations.length > 0) {
+        const updated = await ticketStore.update(ticket.id, { delegations });
+        if (updated) broadcaster.broadcast({ type: 'ticket:update', ticket: updated });
+      }
+    }
     const evaluation = await evalStore.upsertFromTicket(ticket);
     broadcaster.broadcast({ type: 'evaluation:update', evaluation });
   },
@@ -441,8 +453,15 @@ const httpServer = createHttpServer({
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
     // ("failed to spawn claude").
-    validateCwd: (cwd) => {
-      if (!isAbsolute(cwd)) return 'Working directory must be an absolute path (e.g. /Users/you/project)';
+    validateCwd: (cwd, isRemote) => {
+      if (!isAbsolute(cwd)) {
+        return isRemote
+          ? 'Remote path must be absolute (e.g. /Users/dev/project). "~" is not expanded.'
+          : 'Working directory must be an absolute path (e.g. /Users/you/project)';
+      }
+      // Remote (ssh) paths live on another machine — don't stat the local fs.
+      // The runner validates the remote directory over SSH (`ssh test -d`).
+      if (isRemote) return null;
       try {
         if (!statSync(cwd).isDirectory()) return 'Working directory is not a directory';
       } catch {
@@ -473,6 +492,12 @@ const httpServer = createHttpServer({
       if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
       return evaluation;
     },
+    setReflected: async (id, reflected) => {
+      const evaluation = await evalStore.setReflected(id, reflected);
+      if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
+      return evaluation;
+    },
+    guideFor: (route) => evalStore.guideFor(route),
     listEvaluations: () => evalStore.list(),
   },
   renameAgent,
@@ -487,6 +512,13 @@ const httpServer = createHttpServer({
     list: () => backendRegistry.list(),
     check: async (id: string) =>
       id === 'claude-local' || id === 'litellm' || id === 'ssh' ? backendRegistry.check(id) : null,
+  },
+  sshBrowse: async (target, path) => {
+    try {
+      return await sshListDirs(target, path);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'ssh browse failed' };
+    }
   },
   workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
   sessionConversation: canonicalPipeline.enabled

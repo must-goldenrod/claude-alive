@@ -88,14 +88,16 @@ describe('createEvalStore.setLabel', () => {
 });
 
 describe('createEvalStore persistence + guideFor', () => {
-  it('survives reload and exposes a route guide', async () => {
+  it('survives reload and exposes a route guide once opted into the bias', async () => {
     const store = makeStore();
     await store.load();
     await store.upsertFromTicket(ticket({ headline: 'shipped' }));
+    await store.setReflected('t1', true);
 
     const reloaded = makeStore();
     await reloaded.load();
     expect(reloaded.get('t1')?.headline).toBe('shipped');
+    expect(reloaded.get('t1')?.reflected).toBe(true);
 
     const guide = reloaded.guideFor('/proj/a');
     expect(guide.goodCount).toBe(1);
@@ -103,5 +105,49 @@ describe('createEvalStore persistence + guideFor', () => {
 
     // A different route has nothing learned.
     expect(reloaded.guideFor('/proj/other').text).toBe('');
+  });
+});
+
+describe('createEvalStore bias-reflection gate', () => {
+  it('captures a result snapshot and completedAt from the ticket', async () => {
+    const store = makeStore();
+    await store.load();
+    const rec = await store.upsertFromTicket(ticket({ result: '## done\nbody', endedAt: 555 }));
+    expect(rec.result).toBe('## done\nbody');
+    expect(rec.completedAt).toBe(555);
+  });
+
+  it('defaults reflected to false so a finished ticket does not shape the guide', async () => {
+    const store = makeStore();
+    await store.load();
+    const rec = await store.upsertFromTicket(ticket({ headline: 'shipped' }));
+    expect(rec.reflected).toBe(false);
+    // Labelled good but not reflected → no injection.
+    expect(store.guideFor('/proj/a').goodCount).toBe(0);
+    expect(store.guideFor('/proj/a').text).toBe('');
+  });
+
+  it('setReflected toggles the gate and is preserved across re-upsert', async () => {
+    const store = makeStore();
+    await store.load();
+    await store.upsertFromTicket(ticket({ headline: 'shipped' }));
+
+    const on = await store.setReflected('t1', true);
+    expect(on?.reflected).toBe(true);
+    expect(store.guideFor('/proj/a').goodCount).toBe(1);
+
+    // A retry re-upsert must not silently reset the human's decision.
+    const reupserted = await store.upsertFromTicket(ticket({ headline: 'shipped again' }));
+    expect(reupserted.reflected).toBe(true);
+
+    const off = await store.setReflected('t1', false);
+    expect(off?.reflected).toBe(false);
+    expect(store.guideFor('/proj/a').goodCount).toBe(0);
+  });
+
+  it('returns undefined for an unknown ticket', async () => {
+    const store = makeStore();
+    await store.load();
+    expect(await store.setReflected('nope', true)).toBeUndefined();
   });
 });

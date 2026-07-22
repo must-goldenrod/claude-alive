@@ -127,12 +127,16 @@ export interface HttpRouterOptions {
     cancel: (id: string) => Promise<unknown | undefined>;
     remove: (id: string) => Promise<boolean>;
     /** Validate cwd before creating; returns an error message, or null when valid. */
-    validateCwd?: (cwd: string) => string | null;
+    validateCwd?: (cwd: string, isRemote: boolean) => string | null;
     /** Apply a human good/bad label to a settled ticket. Undefined = unknown id. */
     evaluate?: (
       id: string,
       input: { label: 'good' | 'bad' | 'unrated'; weight?: number; note?: string },
     ) => Promise<unknown | undefined>;
+    /** Toggle the bias-reflection gate for a ticket. Undefined = unknown id. */
+    setReflected?: (id: string, reflected: boolean) => Promise<unknown | undefined>;
+    /** Synthesised RouteGuide (bias) preview for a route (cwd). */
+    guideFor?: (route: string) => unknown;
     /** All evaluation records (dataset), newest activity first is up to the caller. */
     listEvaluations?: () => unknown[];
   };
@@ -145,6 +149,12 @@ export interface HttpRouterOptions {
     list: () => unknown[];
     check: (id: string) => Promise<unknown | null>;
   };
+
+  /** Remote directory listing over SSH, for the ticket's remote folder picker. */
+  sshBrowse?: (
+    target: { host: string; user?: string; port?: number; identityFile?: string },
+    path?: string,
+  ) => Promise<unknown>;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -180,6 +190,10 @@ const EvaluateBodySchema = z.object({
   label: z.enum(['good', 'bad', 'unrated']),
   weight: z.number().int().min(1).max(5).optional(),
   note: z.string().max(2000).optional(),
+});
+
+const ReflectBodySchema = z.object({
+  reflected: z.boolean(),
 });
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
@@ -263,6 +277,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     efficio,
     tickets,
     backends,
+    sshBrowse,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -400,7 +415,7 @@ export function createHttpServer(options: HttpRouterOptions) {
           sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
           return;
         }
-        const cwdError = tickets.validateCwd?.(parsed.data.cwd);
+        const cwdError = tickets.validateCwd?.(parsed.data.cwd, parsed.data.location?.kind === 'ssh');
         if (cwdError) {
           sendJson(res, 400, { error: cwdError }, req);
           return;
@@ -458,6 +473,36 @@ export function createHttpServer(options: HttpRouterOptions) {
       }
       return;
     }
+    // POST /api/tickets/:id/reflect — toggle the bias-reflection gate (opt-in).
+    // Only reflected tickets shape the route's RouteGuide (spec 2026-07-22).
+    const ticketReflectMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/reflect$/);
+    if (tickets?.setReflected && req.method === 'POST' && ticketReflectMatch) {
+      try {
+        const parsed = ReflectBodySchema.safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: reflected must be a boolean' }, req);
+          return;
+        }
+        const evaluation = await tickets.setReflected(ticketReflectMatch[1]!, parsed.data.reflected);
+        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: 'Ticket not found' }, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
+      return;
+    }
+
+    // GET /api/tickets/guide?route=<cwd> — current synthesised RouteGuide (bias)
+    // for a route, so the ticket-management view can preview what is injected.
+    if (tickets?.guideFor && req.method === 'GET' && url.pathname === '/api/tickets/guide') {
+      const route = url.searchParams.get('route');
+      if (!route) {
+        sendJson(res, 400, { error: 'route query parameter required' }, req);
+        return;
+      }
+      sendJson(res, 200, { guide: tickets.guideFor(route) }, req);
+      return;
+    }
+
     const ticketDeleteMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)$/);
     if (tickets && req.method === 'DELETE' && ticketDeleteMatch) {
       const ok = await tickets.remove(ticketDeleteMatch[1]!);
@@ -483,6 +528,28 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, { backends: backends.list() }, req);
+      return;
+    }
+    // POST /api/ssh/browse — list remote sub-directories for the remote folder
+    // picker (loopback-only; the ssh target comes from the local user's preset).
+    if (sshBrowse && req.method === 'POST' && url.pathname === '/api/ssh/browse') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'SSH browse is restricted to loopback' }, req);
+        return;
+      }
+      try {
+        const parsed = z
+          .object({ ssh: SshTargetSchema, path: z.string().max(4096).optional() })
+          .safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: ssh target required' }, req);
+          return;
+        }
+        const result = await sshBrowse(parsed.data.ssh, parsed.data.path);
+        sendJson(res, 200, result, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
       return;
     }
     const backendCheckMatch = url.pathname.match(/^\/api\/backends\/([^/]+)\/check$/);

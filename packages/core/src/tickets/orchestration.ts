@@ -20,3 +20,20 @@ export interface BackendStatus {
   /** For subagent backends (litellm): available model ids. */
   models?: string[];
 }
+
+/**
+ * One sub-agent delegation an orchestrator ticket made (via the `ca-delegate`
+ * tool). Captured so the ticket can expose WHICH models did WHAT — not just the
+ * orchestrator's own model.
+ */
+export interface TicketDelegation {
+  /** Sub-agent model id, e.g. "gemini/gemini-2.5-flash-lite". */
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  costUsd?: number;
+  /** First chars of the delegated prompt, so the process is legible. */
+  promptPreview?: string;
+  at: number;
+}

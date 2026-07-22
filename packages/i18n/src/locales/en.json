@@ -383,7 +383,8 @@
     "spread": "Spread",
     "jarvis": "Jarvis",
     "workspace": "Workspaces",
-    "archive": "Archive",
+    "archive": "Session Management",
+    "ticketMgmt": "Ticket Management",
     "backends": "Backends"
   },
   "backends": {
@@ -399,7 +400,14 @@
       "orchestrator": "orchestrator",
       "subagent": "sub-agent",
       "location": "location"
-    }
+    },
+    "sshHosts": "SSH hosts",
+    "sshHostsHint": "Hosts registered here become selectable as a ticket 'location' (run remotely). The remote host must have claude installed and authenticated.",
+    "sshLabel": "Name (optional)",
+    "sshHost": "Host (e.g. 192.168.100.99)",
+    "sshUser": "User (e.g. dev)",
+    "sshAdd": "Add host",
+    "remove": "Remove"
   },
   "tickets": {
     "heroPrompt": "What do you want to solve?",
@@ -408,6 +416,7 @@
     "changeFolder": "Change",
     "location": "Location",
     "locationLocal": "Local",
+    "remotePickerTitle": "Select remote folder",
     "remotePathPlaceholder": "Remote path, e.g. /home/dev/project",
     "pickerTitle": "Choose project folder",
     "useThisFolder": "Use this folder",
@@ -440,6 +449,7 @@
     "orchestrateHint": "(may delegate to sub-agents)",
     "evaluatePrompt": "Rate:",
     "runInfoLabel": "Run info",
+    "delegationsLabel": "Delegations (sub-agents)",
     "runModel": "Model",
     "runEffort": "Effort",
     "runThinking": "Extended thinking",
@@ -660,6 +670,61 @@
       "not-spawned-by-alive": "It was started outside Alive, so there is no process of ours to attach to. Its conversation is still readable from hooks.",
       "lookup-failed": "The terminal registry could not be read; see the server logs."
     }
+  },
+  "ticketMgmt": {
+    "listTitle": "By project",
+    "searchPlaceholder": "Search by goal, headline, or project",
+    "loading": "Loading…",
+    "empty": "No ticket records yet",
+    "unreachable": {
+      "title": "Ticket management unavailable",
+      "body": "Could not reach the server to load ticket records. This view is available on the local dashboard only."
+    },
+    "reflected": "Reflected",
+    "pending": "Pending",
+    "stat": {
+      "total": "total",
+      "good": "good",
+      "bad": "bad",
+      "reflected": "reflected"
+    },
+    "detail": {
+      "empty": "Select a ticket to dissect its result and score.",
+      "goal": "Request",
+      "result": "Result",
+      "noResult": "No result snapshot (older record).",
+      "verdict": "Verification",
+      "verdictPassed": "Passed",
+      "verdictFailed": "Failed",
+      "model": "Model",
+      "effort": "Effort",
+      "thinking": "Thinking",
+      "completedAt": "Completed"
+    },
+    "score": {
+      "title": "Score",
+      "good": "Good",
+      "bad": "Bad",
+      "unrated": "Unrated",
+      "weight": "Weight",
+      "notePlaceholder": "Note (optional) — reason",
+      "auto": "Auto",
+      "save": "Save",
+      "saved": "Saved"
+    },
+    "reflect": {
+      "title": "Bias reflection",
+      "on": "Reflected into bias",
+      "off": "Reflect into bias",
+      "hint": "Only reflected tickets shape this project's injected guide."
+    },
+    "guide": {
+      "title": "Current bias (injected guide)",
+      "empty": "Nothing reflected into bias yet for this project.",
+      "counts": "{{good}} good · {{bad}} bad reflected"
+    },
+    "viewSession": "View the process in the session",
+    "noSession": "No linked session"
   },
   "archive": {
     "listTitle": "Completed tickets",

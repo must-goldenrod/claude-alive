@@ -7,13 +7,22 @@
  * A shell wrapper is written to ~/.claude-alive/bin/ca-delegate at startup
  * (ensureDelegateCli); its absolute path is embedded in the orchestrator prompt.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createLitellmClient } from './litellmClient.js';
 
 export const DEFAULT_DELEGATE_MODEL = 'gemini/gemini-2.5-flash-lite';
+
+/** Where ca-delegate appends one JSON line per delegation (server reads by ticketId). */
+export const DELEGATION_LOG = join(homedir(), '.claude-alive', 'delegations.jsonl');
+
+interface DelegateUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
 
 export interface DelegateResult {
   code: number;
@@ -23,7 +32,9 @@ export interface DelegateResult {
 
 export interface DelegateDeps {
   /** Override the model call (tests inject; production uses litellm). */
-  chat?: (model: string, prompt: string) => Promise<{ content: string; usage?: unknown }>;
+  chat?: (model: string, prompt: string) => Promise<{ content: string; usage?: DelegateUsage }>;
+  /** Override the delegation-record append (tests spy; production writes the log). */
+  appendLog?: (line: string) => void;
 }
 
 /**
@@ -63,6 +74,31 @@ export async function runDelegateCli(
 
   try {
     const r = await chat(model, prompt);
+    // Record the delegation so the server can attach it to the ticket (which
+    // models did what). Keyed by CA_TICKET_ID, set only for orchestrated main runs
+    // (not the verifier), so verifier re-delegations don't pollute the ticket.
+    const ticketId = env.CA_TICKET_ID;
+    if (ticketId) {
+      const u = r.usage;
+      const record = {
+        ticketId,
+        model,
+        inputTokens: u?.promptTokens,
+        outputTokens: u?.completionTokens,
+        totalTokens: u?.totalTokens,
+        promptPreview: prompt.replace(/\s+/g, ' ').slice(0, 80),
+        at: Date.now(),
+      };
+      const appendLog = deps.appendLog ?? ((line: string) => {
+        try {
+          mkdirSync(join(homedir(), '.claude-alive'), { recursive: true });
+          appendFileSync(env.CA_DELEGATE_LOG ?? DELEGATION_LOG, line + '\n');
+        } catch {
+          // logging is best-effort; never fail the delegation over it
+        }
+      });
+      appendLog(JSON.stringify(record));
+    }
     return { code: 0, stdout: r.content, stderr: JSON.stringify({ model, usage: r.usage }) };
   } catch (e) {
     return { code: 1, stdout: '', stderr: `ca-delegate: ${e instanceof Error ? e.message : 'failed'}` };
