@@ -6,6 +6,7 @@
  * only status + a final summary — the intermediate process (grep, SQL, tool
  * calls) is never surfaced.
  */
+import type { TicketLocation } from './location.js';
 
 /**
  * Internal lifecycle state (5). The UI collapses `queued`+`running`+`verifying`
@@ -28,14 +29,29 @@ export interface TicketVerification {
   reason: string;
 }
 
+/** Token/cost/turn accounting for a ticket's main-agent run, when the model reports it. */
+export interface TicketUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  /** Sum of the four token buckets above. */
+  totalTokens?: number;
+  costUsd?: number;
+  numTurns?: number;
+  durationMs?: number;
+}
+
 export interface Ticket {
   id: string;
   /** Human-friendly sequential number (#1, #2, …). Assigned at creation. */
   seq: number;
   /** The one-card input: a simple goal statement. */
   goal: string;
-  /** Working directory (project root) the agent runs in. */
+  /** Working directory the agent runs in. Local path, or a REMOTE path when `location` is ssh. */
   cwd: string;
+  /** Where the agent runs. Absent = local (backward-compatible). */
+  location?: TicketLocation;
   state: TicketState;
   createdAt: number;
   startedAt?: number;
@@ -50,6 +66,8 @@ export interface Ticket {
   thinking?: boolean;
   /** Reasoning effort level, when available. */
   effort?: string;
+  /** Token/cost/turn accounting, when the model reports it. */
+  usage?: TicketUsage;
   verification?: TicketVerification;
   failureReason?: TicketFailureReason;
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */
@@ -60,6 +78,7 @@ export interface Ticket {
 export interface TicketCreateInput {
   goal: string;
   cwd: string;
+  location?: TicketLocation;
 }
 
 /** States the UI renders as "in progress". */

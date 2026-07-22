@@ -18,7 +18,7 @@ describe('parseStreamJsonLine', () => {
     );
     expect(e).toEqual({
       kind: 'result',
-      result: { result: 'done it', isError: false, sessionId: 's1', subtype: 'success', model: null },
+      result: { result: 'done it', isError: false, sessionId: 's1', subtype: 'success', model: null, usage: null },
     });
   });
 
@@ -27,6 +27,49 @@ describe('parseStreamJsonLine', () => {
       '{"type":"result","subtype":"success","is_error":false,"result":"ok","modelUsage":{"claude-opus-4-8[1m]":{"inputTokens":2}}}',
     );
     expect(e).toMatchObject({ kind: 'result', result: { model: 'claude-opus-4-8' } });
+  });
+
+  it('extracts token/cost/turn usage from the result event', () => {
+    const e = parseStreamJsonLine(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        result: 'ok',
+        total_cost_usd: 0.1234,
+        num_turns: 7,
+        duration_ms: 4200,
+        modelUsage: {
+          'claude-opus-4-8[1m]': {
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheReadInputTokens: 800,
+            cacheCreationInputTokens: 20,
+          },
+        },
+      }),
+    );
+    expect(e).toMatchObject({
+      kind: 'result',
+      result: {
+        model: 'claude-opus-4-8',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheReadTokens: 800,
+          cacheCreationTokens: 20,
+          totalTokens: 970,
+          costUsd: 0.1234,
+          numTurns: 7,
+          durationMs: 4200,
+        },
+      },
+    });
+  });
+
+  it('reports null usage when the result event has no accounting', () => {
+    const e = parseStreamJsonLine('{"type":"result","subtype":"success","is_error":false,"result":"ok"}');
+    expect(e).toMatchObject({ kind: 'result', result: { usage: null } });
   });
 
   it('marks error results', () => {
@@ -61,7 +104,7 @@ describe('createStreamJsonParser', () => {
     expect(events).toHaveLength(0);
     p.push('cess","is_error":false,"result":"ok"}\n');
     expect(events).toEqual([
-      { kind: 'result', result: { result: 'ok', isError: false, sessionId: null, subtype: 'success', model: null } },
+      { kind: 'result', result: { result: 'ok', isError: false, sessionId: null, subtype: 'success', model: null, usage: null } },
     ]);
   });
 
@@ -73,7 +116,7 @@ describe('createStreamJsonParser', () => {
     p.flush();
     expect(onEvent).toHaveBeenCalledWith({
       kind: 'result',
-      result: { result: 'tail', isError: false, sessionId: null, subtype: 'success', model: null },
+      result: { result: 'tail', isError: false, sessionId: null, subtype: 'success', model: null, usage: null },
     });
   });
 });

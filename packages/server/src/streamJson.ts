@@ -10,6 +10,17 @@
  * otherwise-healthy run (spec §에러 처리).
  */
 
+export interface StreamUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  totalTokens?: number;
+  costUsd?: number;
+  numTurns?: number;
+  durationMs?: number;
+}
+
 export interface StreamResult {
   /** The agent's final summary text. */
   result: string | null;
@@ -19,6 +30,8 @@ export interface StreamResult {
   subtype: string | null;
   /** Model id that ran the turn, e.g. "claude-opus-4-8" (bracket suffix stripped). */
   model: string | null;
+  /** Token/cost/turn accounting from the result event, when present. */
+  usage: StreamUsage | null;
 }
 
 export type StreamEvent =
@@ -28,6 +41,49 @@ export type StreamEvent =
 
 function asString(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
+}
+
+function asNum(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/**
+ * Pull token/cost/turn accounting out of a result event. `modelUsage` is keyed by
+ * model id and holds camelCase token counts; cost/turns/duration sit at the top
+ * level (snake_case). Returns null when nothing usable is present.
+ */
+function extractUsage(obj: Record<string, unknown>): StreamUsage | null {
+  const modelUsage = obj.modelUsage;
+  let mu: Record<string, unknown> | undefined;
+  if (modelUsage && typeof modelUsage === 'object') {
+    const firstKey = Object.keys(modelUsage as Record<string, unknown>)[0];
+    if (firstKey) mu = (modelUsage as Record<string, Record<string, unknown>>)[firstKey];
+  }
+
+  const inputTokens = asNum(mu?.inputTokens);
+  const outputTokens = asNum(mu?.outputTokens);
+  const cacheReadTokens = asNum(mu?.cacheReadInputTokens);
+  const cacheCreationTokens = asNum(mu?.cacheCreationInputTokens);
+  const costUsd = asNum(obj.total_cost_usd) ?? asNum(mu?.costUSD);
+  const numTurns = asNum(obj.num_turns);
+  const durationMs = asNum(obj.duration_ms);
+
+  const tokenParts = [inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens].filter(
+    (n): n is number => n !== undefined,
+  );
+  const totalTokens = tokenParts.length > 0 ? tokenParts.reduce((a, b) => a + b, 0) : undefined;
+
+  const usage: StreamUsage = {
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    totalTokens,
+    costUsd,
+    numTurns,
+    durationMs,
+  };
+  return Object.values(usage).some((v) => v !== undefined) ? usage : null;
 }
 
 /** Parse a single stream-json line. Returns null for blank / malformed / unclassified lines. */
@@ -69,6 +125,7 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
           sessionId: asString(obj.session_id),
           subtype: asString(obj.subtype),
           model,
+          usage: extractUsage(obj),
         },
       };
     }

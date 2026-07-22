@@ -285,3 +285,32 @@ describe('TicketRunner onSettled hook', () => {
     expect(settledStates).toEqual(['done']);
   });
 });
+
+describe('TicketRunner injected validateCwd (location-aware)', () => {
+  it('fails the ticket with the validator message, never spawning', async () => {
+    let spawned = false;
+    const { runner } = makeRunner({
+      validateCwd: async () => 'remote cwd unavailable on host: /nope',
+      spawnMain: () => {
+        spawned = true;
+        return { kill() {}, done: Promise.resolve(okOutcome()) };
+      },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/nope' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'failed');
+    expect(store.get(t.id)).toMatchObject({ state: 'failed', failureReason: 'error' });
+    expect(spawned).toBe(false);
+  });
+
+  it('spawns normally when the validator passes', async () => {
+    const { runner } = makeRunner({
+      validateCwd: async () => null,
+      verify: async () => ({ passed: true, reason: 'ok' }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/srv/app' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'done');
+    expect(store.get(t.id)?.state).toBe('done');
+  });
+});

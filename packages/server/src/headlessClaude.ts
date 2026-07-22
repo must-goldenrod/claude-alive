@@ -62,13 +62,56 @@ export function buildHeadlessArgs(goal: string, permissionMode: string): string[
   return ['-p', goal, '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
 }
 
-function cleanEnv(): NodeJS.ProcessEnv {
+export function cleanEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (v !== undefined && !CLAUDE_ENV_KEYS.includes(k)) env[k] = v;
   }
   env.PATH = augmentPath(env.PATH);
   return env;
+}
+
+/**
+ * Reduce a spawned headless process to an outcome: consume its newline-delimited
+ * stream-json on stdout, capture the session id / final result, accumulate stderr,
+ * and resolve on exit. Shared by the local `claude` spawn and the SSH executor —
+ * they differ only in how the process is created (local child vs `ssh` child).
+ */
+export function consumeHeadless(
+  proc: HeadlessProcessHandle,
+  onEvent?: (e: StreamEvent) => void,
+): HeadlessRunHandle {
+  let lastResult: StreamResult | null = null;
+  let sessionId: string | null = null;
+  let stderr = '';
+  let settled = false;
+
+  const parser = createStreamJsonParser((e) => {
+    if (e.kind === 'init' && e.sessionId) sessionId = e.sessionId;
+    if (e.kind === 'result') {
+      lastResult = e.result;
+      if (e.result.sessionId) sessionId = e.result.sessionId;
+    }
+    onEvent?.(e);
+  });
+
+  proc.stdout.setEncoding('utf-8');
+  proc.stdout.on('data', (chunk: string) => parser.push(chunk));
+  proc.stderr.setEncoding('utf-8');
+  proc.stderr.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const done = new Promise<HeadlessOutcome>((resolve) => {
+    proc.onExit((code) => {
+      if (settled) return;
+      settled = true;
+      parser.flush();
+      resolve({ exitCode: code, result: lastResult, sessionId, stderr });
+    });
+  });
+
+  return { kill: () => proc.kill(), done };
 }
 
 function realSpawn(args: HeadlessSpawnArgs): HeadlessProcessHandle {
@@ -92,36 +135,5 @@ export function runHeadlessClaude(options: HeadlessRunOptions): HeadlessRunHandl
   const permissionMode = options.permissionMode ?? 'bypassPermissions';
   const spawnProcess = options.spawnProcess ?? realSpawn;
   const proc = spawnProcess({ goal: options.goal, cwd: options.cwd, permissionMode, env: cleanEnv() });
-
-  let lastResult: StreamResult | null = null;
-  let sessionId: string | null = null;
-  let stderr = '';
-  let settled = false;
-
-  const parser = createStreamJsonParser((e) => {
-    if (e.kind === 'init' && e.sessionId) sessionId = e.sessionId;
-    if (e.kind === 'result') {
-      lastResult = e.result;
-      if (e.result.sessionId) sessionId = e.result.sessionId;
-    }
-    options.onEvent?.(e);
-  });
-
-  proc.stdout.setEncoding('utf-8');
-  proc.stdout.on('data', (chunk: string) => parser.push(chunk));
-  proc.stderr.setEncoding('utf-8');
-  proc.stderr.on('data', (chunk: string) => {
-    stderr += chunk;
-  });
-
-  const done = new Promise<HeadlessOutcome>((resolve) => {
-    proc.onExit((code) => {
-      if (settled) return;
-      settled = true;
-      parser.flush();
-      resolve({ exitCode: code, result: lastResult, sessionId, stderr });
-    });
-  });
-
-  return { kill: () => proc.kill(), done };
+  return consumeHeadless(proc, options.onEvent);
 }

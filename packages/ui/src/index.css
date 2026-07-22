@@ -95,7 +95,29 @@ html, body, #root {
   100% { background-position: -200% 0; }
 }
 
+/* Active ticket card: a continuously flowing rainbow gradient border that
+   signals live, in-progress work. The padding-box fill keeps the card body
+   opaque while the border-box gradient scrolls under `ticket-border-flow`. */
+@keyframes ticket-border-flow {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+.ticket-card--active {
+  border: 1.5px solid transparent !important;
+  background:
+    linear-gradient(var(--bg-secondary, #161b22), var(--bg-secondary, #161b22)) padding-box,
+    linear-gradient(90deg, #58a6ff, #3fb950, #d2a8ff, #f778ba, #ffa657, #58a6ff) border-box !important;
+  background-size: 300% 100% !important;
+  animation: ticket-border-flow 3.2s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* Motion-sensitive users get a static blue border instead of the flow. */
+  .ticket-card--active {
+    animation: none !important;
+    background: var(--bg-secondary, #161b22) !important;
+    border: 1.5px solid var(--accent-blue, #58a6ff) !important;
+  }
   /* Fall back to a static green tint for motion-sensitive users */
   [style*="claude-tab-sweep"] {
     animation: none !important;

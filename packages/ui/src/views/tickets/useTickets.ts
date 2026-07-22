@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Ticket, TicketEvaluation, EvalLabel, WSServerMessage } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation, EvalLabel, TicketLocation, WSServerMessage } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
 
 // Same origin convention as EfficioView: the server serves the UI and proxies in dev.
@@ -8,7 +8,11 @@ const API_BASE = `${window.location.protocol}//${window.location.hostname}:${win
 /** Creates a ticket; resolves null on success or an error message on failure.
  * Declared here (a .ts file) so consumers avoid writing `=> Promise<…>` in a
  * .tsx file, which trips the i18n raw-text guard's JSX heuristic. */
-export type TicketCreateFn = (goal: string, cwd: string) => Promise<string | null>;
+export type TicketCreateFn = (
+  goal: string,
+  cwd: string,
+  location?: TicketLocation,
+) => Promise<string | null>;
 
 /** Applies a human evaluation label; resolves the updated record or null on failure. */
 export type EvaluateFn = (
@@ -75,12 +79,12 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     });
   }, [subscribeRaw]);
 
-  const createTicket = useCallback(async (goal: string, cwd: string): Promise<string | null> => {
+  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation): Promise<string | null> => {
     try {
       const res = await fetch(`${API_BASE}/api/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, cwd }),
+        body: JSON.stringify(location && location.kind !== 'local' ? { goal, cwd, location } : { goal, cwd }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
