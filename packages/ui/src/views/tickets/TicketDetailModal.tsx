@@ -160,7 +160,7 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
 
           {evaluation && onEvaluate && (
             <Section label={t('tickets.evaluateLabel')}>
-              <EvalSection ticketId={ticket.id} evaluation={evaluation} onEvaluate={onEvaluate} t={t} />
+              <EvalSection ticketId={ticket.id} evaluation={evaluation} onEvaluate={onEvaluate} onClose={onClose} t={t} />
             </Section>
           )}
         </div>
@@ -213,83 +213,83 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
 }
 
 /**
- * Human good/bad labelling for a settled ticket. Clicking Good/Bad saves
- * immediately with the current weight + note; the label feeds the project's
- * learned guide (guideSynthesizer on the server).
+ * One-click human rating for a settled ticket: a single 5-point scale that
+ * encodes both the label (good/bad/neutral) and its weight (intensity). Clicking
+ * any point saves immediately with the optional note and closes the modal — the
+ * label feeds the project's learned guide (guideSynthesizer on the server).
  */
+const EVAL_SCALE: { key: string; label: EvalLabel; weight: number; accent: string }[] = [
+  { key: 'tickets.evalVeryBad', label: 'bad', weight: 5, accent: 'var(--accent-red, #f85149)' },
+  { key: 'tickets.evalBad', label: 'bad', weight: 3, accent: 'var(--accent-red, #f85149)' },
+  { key: 'tickets.evalNeutral', label: 'unrated', weight: 1, accent: 'var(--text-secondary, #8b949e)' },
+  { key: 'tickets.evalGood', label: 'good', weight: 3, accent: 'var(--accent-green, #3fb950)' },
+  { key: 'tickets.evalVeryGood', label: 'good', weight: 5, accent: 'var(--accent-green, #3fb950)' },
+];
+
 function EvalSection({
   ticketId,
   evaluation,
   onEvaluate,
+  onClose,
   t,
 }: {
   ticketId: string;
   evaluation: TicketEvaluation;
   onEvaluate: EvaluateFn;
+  onClose: () => void;
   t: (key: string) => string;
 }) {
-  const [weight, setWeight] = useState(evaluation.weight);
   const [note, setNote] = useState(evaluation.note ?? '');
-  const [saving, setSaving] = useState<EvalLabel | null>(null);
-  const [savedAt, setSavedAt] = useState(0);
+  const [saving, setSaving] = useState(false);
 
-  const save = async (label: EvalLabel) => {
-    setSaving(label);
+  // One-cue: save the label+weight (and any note) in a single click, then close.
+  const commit = async (label: EvalLabel, weight: number) => {
+    if (saving) return;
+    setSaving(true);
     const result = await onEvaluate(ticketId, { label, weight, note: note.trim() || undefined });
-    setSaving(null);
-    if (result) setSavedAt(Date.now());
+    setSaving(false);
+    if (result) onClose();
   };
 
-  const labelBtn = (label: EvalLabel, accent: string): React.CSSProperties => {
-    const on = evaluation.label === label;
-    return {
-      ...btnStyle,
-      color: on ? '#fff' : accent,
-      borderColor: accent,
-      background: on ? accent : 'transparent',
-      opacity: saving && saving !== label ? 0.5 : 1,
-      cursor: saving ? 'wait' : 'pointer',
-    };
-  };
+  const isCurrent = (label: EvalLabel, weight: number) =>
+    evaluation.humanLabeled && evaluation.label === label && evaluation.weight === weight;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button type="button" disabled={!!saving} onClick={() => save('good')} style={labelBtn('good', 'var(--accent-green, #3fb950)')}>
-          {t('tickets.evalGood')}
-        </button>
-        <button type="button" disabled={!!saving} onClick={() => save('bad')} style={labelBtn('bad', 'var(--accent-red, #f85149)')}>
-          {t('tickets.evalBad')}
-        </button>
-        {!evaluation.humanLabeled && (
-          <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)', opacity: 0.7 }}>
-            {t('tickets.evalAuto')}: {evaluation.autoLabel}
-          </span>
-        )}
-        {savedAt > 0 && (
-          <span style={{ fontSize: 11, color: 'var(--accent-green, #3fb950)' }}>{t('tickets.evalSaved')}</span>
-        )}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {EVAL_SCALE.map((s) => {
+          const on = isCurrent(s.label, s.weight);
+          return (
+            <button
+              key={s.key}
+              type="button"
+              disabled={saving}
+              onClick={() => commit(s.label, s.weight)}
+              title={t(s.key)}
+              style={{
+                ...btnStyle,
+                flex: 1,
+                padding: '9px 4px',
+                fontWeight: 600,
+                textAlign: 'center',
+                color: on ? '#0d1117' : s.accent,
+                borderColor: s.accent,
+                background: on ? s.accent : `color-mix(in srgb, ${s.accent} 10%, transparent)`,
+                cursor: saving ? 'wait' : 'pointer',
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {t(s.key)}
+            </button>
+          );
+        })}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)' }}>{t('tickets.evalWeight')}</span>
-        {[1, 2, 3, 4, 5].map((w) => (
-          <button
-            key={w}
-            type="button"
-            onClick={() => setWeight(w)}
-            style={{
-              ...btnStyle,
-              padding: '2px 9px',
-              color: weight === w ? 'var(--text-primary, #e6edf3)' : 'var(--text-secondary, #8b949e)',
-              background: weight === w ? 'rgba(88,166,255,0.15)' : 'transparent',
-              borderColor: weight === w ? 'var(--accent-blue, #58a6ff)' : 'var(--border-default, #30363d)',
-            }}
-          >
-            {w}
-          </button>
-        ))}
-      </div>
+      {!evaluation.humanLabeled && (
+        <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)', opacity: 0.7 }}>
+          {t('tickets.evalAuto')}: {evaluation.autoLabel}
+        </span>
+      )}
 
       <input
         type="text"
