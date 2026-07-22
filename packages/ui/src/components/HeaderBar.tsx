@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ViewMode } from '../App.tsx';
 import type { SystemMetrics } from '../views/dashboard/hooks/useWebSocket.ts';
+import { viewsInGroup } from './viewGroups.ts';
 import {
   currentPermission,
   notificationsEnabled as readNotificationsEnabled,
@@ -95,16 +96,160 @@ function MetricPill({ label, ratio, primary, secondary }: MetricPillProps) {
   );
 }
 
-const VIEW_MODES: { mode: ViewMode; labelKey: string }[] = [
-  { mode: 'animation', labelKey: 'viewMode.animation' },
-  { mode: 'list', labelKey: 'viewMode.list' },
-  { mode: 'prompt', labelKey: 'viewMode.prompt' },
-  { mode: 'efficio', labelKey: 'viewMode.efficio' },
-  { mode: 'archive', labelKey: 'viewMode.archive' },
-  { mode: 'tickets', labelKey: 'viewMode.tickets' },
-  { mode: 'spread', labelKey: 'viewMode.spread' },
-  { mode: 'workspace', labelKey: 'viewMode.workspace' },
-];
+/** A single segmented pill inside a nav group (intervene group). */
+function NavPill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        padding: '6px 12px',
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: 'inherit',
+        border: 'none',
+        borderRadius: 6,
+        cursor: 'pointer',
+        color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+        background: active ? 'var(--bg-primary)' : 'transparent',
+        boxShadow: active ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+        transition: 'all 0.15s ease',
+        letterSpacing: '-0.01em',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * The "도구/Tools" dropdown — productivity views (workspace/prompt/efficio/archive)
+ * are managed separately from the ticket→intervene flow, so they collapse into a
+ * single de-emphasised menu instead of taking header real estate. Closes on outside
+ * click and Escape.
+ */
+function ToolsMenu({
+  viewMode,
+  onSelect,
+  t,
+}: {
+  viewMode: ViewMode;
+  onSelect: (mode: ViewMode) => void;
+  t: (key: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, [open]);
+
+  const tools = viewsInGroup('tools');
+  const activeMeta = tools.find((m) => m.mode === viewMode);
+  const isActive = Boolean(activeMeta);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={{
+          padding: '6px 12px',
+          fontSize: 12,
+          fontWeight: 600,
+          fontFamily: 'inherit',
+          borderRadius: 8,
+          cursor: 'pointer',
+          border: '1px solid var(--border-color)',
+          color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+          background: isActive ? 'var(--bg-primary)' : 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          whiteSpace: 'nowrap',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        <span>
+          {t('viewMode.groupTools')}
+          {activeMeta ? ` · ${t(activeMeta.labelKey)}` : ''}
+        </span>
+        <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0,
+            minWidth: 168,
+            zIndex: 1100,
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 10,
+            padding: 4,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+          }}
+        >
+          {tools.map((m) => {
+            const active = m.mode === viewMode;
+            return (
+              <button
+                key={m.mode}
+                role="menuitem"
+                onClick={() => {
+                  onSelect(m.mode);
+                  setOpen(false);
+                }}
+                style={{
+                  textAlign: 'left',
+                  padding: '7px 10px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  fontFamily: 'inherit',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  background: active ? 'rgba(88,166,255,0.12)' : 'transparent',
+                }}
+              >
+                {t(m.labelKey)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function HeaderBar({
   viewMode,
@@ -202,45 +347,80 @@ export function HeaderBar({
         />
       </div>
 
-      {/* View mode segmented control */}
+      {/* View navigation — three tiers by usage frequency:
+          primary (ticket hub) · intervene (drop-in observation) · tools (managed separately). */}
       <div
-        role="tablist"
+        role="group"
         aria-label={t('viewMode.label')}
-        style={{
-          display: 'flex',
-          background: 'rgba(255, 255, 255, 0.04)',
-          border: '1px solid var(--border-color)',
-          borderRadius: 8,
-          padding: 2,
-        }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10 }}
       >
-        {VIEW_MODES.map(({ mode, labelKey }) => {
-          const active = viewMode === mode;
+        {/* Tier 1 — Tickets: the default surface, accent-emphasised. */}
+        {(() => {
+          const active = viewMode === 'tickets';
           return (
             <button
-              key={mode}
               role="tab"
               aria-selected={active}
-              onClick={() => onViewModeChange(mode)}
+              onClick={() => onViewModeChange('tickets')}
               style={{
-                padding: '6px 14px',
+                padding: '6px 16px',
                 fontSize: 12,
-                fontWeight: 600,
+                fontWeight: 700,
                 fontFamily: 'inherit',
-                border: 'none',
-                borderRadius: 6,
+                borderRadius: 8,
                 cursor: 'pointer',
-                color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                background: active ? 'var(--bg-primary)' : 'transparent',
-                boxShadow: active ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+                border: '1px solid var(--accent-blue)',
+                color: active ? '#fff' : 'var(--accent-blue)',
+                background: active ? 'var(--accent-blue)' : 'rgba(88, 166, 255, 0.10)',
                 transition: 'all 0.15s ease',
                 letterSpacing: '-0.01em',
+                whiteSpace: 'nowrap',
               }}
             >
-              {t(labelKey)}
+              {t('viewMode.tickets')}
             </button>
           );
-        })}
+        })()}
+
+        <div style={{ width: 1, height: 22, background: 'var(--border-color)' }} />
+
+        {/* Tier 2 — Intervene: one click away for when a ticket needs a closer look. */}
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--text-secondary)',
+            opacity: 0.6,
+            letterSpacing: '0.02em',
+          }}
+        >
+          {t('viewMode.groupIntervene')}
+        </span>
+        <div
+          role="tablist"
+          aria-label={t('viewMode.groupIntervene')}
+          style={{
+            display: 'flex',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 8,
+            padding: 2,
+          }}
+        >
+          {viewsInGroup('intervene').map(({ mode, labelKey }) => (
+            <NavPill
+              key={mode}
+              active={viewMode === mode}
+              label={t(labelKey)}
+              onClick={() => onViewModeChange(mode)}
+            />
+          ))}
+        </div>
+
+        <div style={{ width: 1, height: 22, background: 'var(--border-color)' }} />
+
+        {/* Tier 3 — Tools: productivity views, collapsed into a menu. */}
+        <ToolsMenu viewMode={viewMode} onSelect={onViewModeChange} t={t} />
       </div>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>

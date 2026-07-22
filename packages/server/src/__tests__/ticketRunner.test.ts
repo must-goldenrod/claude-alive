@@ -245,3 +245,43 @@ describe('TicketRunner lifecycle', () => {
     await until(() => store.get(q.id)?.state === 'done'); // queued one gets scheduled and completes
   });
 });
+
+describe('TicketRunner onSettled hook', () => {
+  it('fires once with the done ticket when a ticket completes', async () => {
+    const settled: Ticket[] = [];
+    const { runner } = makeRunner({
+      verify: async () => ({ passed: true, reason: 'ok' }),
+      onSettled: (t) => { settled.push(t); },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => settled.length > 0);
+    expect(settled).toHaveLength(1);
+    expect(settled[0]).toMatchObject({ id: t.id, state: 'done' });
+  });
+
+  it('fires with the failed ticket when verification fails', async () => {
+    const settled: Ticket[] = [];
+    const { runner } = makeRunner({
+      verify: async () => ({ passed: false, reason: 'nope' }),
+      onSettled: (t) => { settled.push(t); },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => settled.length > 0);
+    expect(settled[0]).toMatchObject({ state: 'failed', failureReason: 'verification-failed' });
+  });
+
+  it('does not fire on non-terminal transitions (running/verifying)', async () => {
+    const settledStates: string[] = [];
+    const { runner } = makeRunner({
+      verify: async () => ({ passed: true, reason: 'ok' }),
+      onSettled: (t) => { settledStates.push(t.state); },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => settledStates.length > 0);
+    // Only the terminal state ever reaches onSettled — never 'running' or 'verifying'.
+    expect(settledStates).toEqual(['done']);
+  });
+});

@@ -117,6 +117,13 @@ export interface HttpRouterOptions {
     remove: (id: string) => Promise<boolean>;
     /** Validate cwd before creating; returns an error message, or null when valid. */
     validateCwd?: (cwd: string) => string | null;
+    /** Apply a human good/bad label to a settled ticket. Undefined = unknown id. */
+    evaluate?: (
+      id: string,
+      input: { label: 'good' | 'bad' | 'unrated'; weight?: number; note?: string },
+    ) => Promise<unknown | undefined>;
+    /** All evaluation records (dataset), newest activity first is up to the caller. */
+    listEvaluations?: () => unknown[];
   };
 }
 
@@ -128,6 +135,12 @@ const ProjectNameBodySchema = z.object({
 const TicketCreateBodySchema = z.object({
   goal: z.string().min(1).max(8000),
   cwd: z.string().min(1),
+});
+
+const EvaluateBodySchema = z.object({
+  label: z.enum(['good', 'bad', 'unrated']),
+  weight: z.number().int().min(1).max(5).optional(),
+  note: z.string().max(2000).optional(),
 });
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
@@ -371,10 +384,38 @@ export function createHttpServer(options: HttpRouterOptions) {
       sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
       return;
     }
+    // POST /api/tickets/:id/evaluate — human good/bad label. Under the /api/tickets
+    // prefix so the loopback guard above already applies.
+    const ticketEvalMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/evaluate$/);
+    if (tickets?.evaluate && req.method === 'POST' && ticketEvalMatch) {
+      try {
+        const parsed = EvaluateBodySchema.safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: label must be good|bad|unrated' }, req);
+          return;
+        }
+        const evaluation = await tickets.evaluate(ticketEvalMatch[1]!, parsed.data);
+        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: 'Ticket not found' }, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
+      return;
+    }
     const ticketDeleteMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)$/);
     if (tickets && req.method === 'DELETE' && ticketDeleteMatch) {
       const ok = await tickets.remove(ticketDeleteMatch[1]!);
       sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Ticket not found' }, req);
+      return;
+    }
+
+    // GET /api/evaluations — the evaluation dataset (read-only). Loopback-only:
+    // it echoes ticket content (goals/results), matching the /api/tickets guard.
+    if (tickets?.listEvaluations && req.method === 'GET' && url.pathname === '/api/evaluations') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Evaluation API is restricted to loopback' }, req);
+        return;
+      }
+      sendJson(res, 200, { evaluations: tickets.listEvaluations() }, req);
       return;
     }
 

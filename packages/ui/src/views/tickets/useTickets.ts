@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Ticket, WSServerMessage } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation, EvalLabel, WSServerMessage } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
 
 // Same origin convention as EfficioView: the server serves the UI and proxies in dev.
@@ -10,14 +10,22 @@ const API_BASE = `${window.location.protocol}//${window.location.hostname}:${win
  * .tsx file, which trips the i18n raw-text guard's JSX heuristic. */
 export type TicketCreateFn = (goal: string, cwd: string) => Promise<string | null>;
 
+/** Applies a human evaluation label; resolves the updated record or null on failure. */
+export type EvaluateFn = (
+  id: string,
+  input: { label: EvalLabel; weight?: number; note?: string },
+) => Promise<TicketEvaluation | null>;
+
 export interface UseTicketsResult {
   tickets: Ticket[];
+  evaluations: Record<string, TicketEvaluation>;
   loading: boolean;
   refresh: () => Promise<void>;
   createTicket: TicketCreateFn;
   retryTicket: (id: string) => Promise<boolean>;
   cancelTicket: (id: string) => Promise<boolean>;
   deleteTicket: (id: string) => Promise<boolean>;
+  evaluateTicket: EvaluateFn;
 }
 
 /**
@@ -27,6 +35,7 @@ export interface UseTicketsResult {
  */
 export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): UseTicketsResult {
   const [byId, setById] = useState<Record<string, Ticket>>({});
+  const [evalById, setEvalById] = useState<Record<string, TicketEvaluation>>({});
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -40,6 +49,14 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     } finally {
       setLoading(false);
     }
+    // Evaluations are best-effort; a failure here must not block the ticket list.
+    try {
+      const res = await fetch(`${API_BASE}/api/evaluations`);
+      const data = (await res.json()) as { evaluations: TicketEvaluation[] };
+      setEvalById(Object.fromEntries((data.evaluations ?? []).map((e) => [e.ticketId, e])));
+    } catch {
+      // ignore — evaluation:update will reconcile
+    }
   }, []);
 
   useEffect(() => {
@@ -52,6 +69,8 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
         setById((prev) => ({ ...prev, [msg.ticket.id]: msg.ticket }));
       } else if (msg.type === 'ticket:snapshot') {
         setById(Object.fromEntries(msg.tickets.map((t) => [t.id, t])));
+      } else if (msg.type === 'evaluation:update') {
+        setEvalById((prev) => ({ ...prev, [msg.evaluation.ticketId]: msg.evaluation }));
       }
     });
   }, [subscribeRaw]);
@@ -95,15 +114,33 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     }
   }, []);
 
+  const evaluateTicket = useCallback<EvaluateFn>(async (id, input) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/tickets/${id}/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) return null;
+      const { evaluation } = (await res.json()) as { evaluation: TicketEvaluation };
+      setEvalById((prev) => ({ ...prev, [evaluation.ticketId]: evaluation }));
+      return evaluation;
+    } catch {
+      return null;
+    }
+  }, []);
+
   const tickets = Object.values(byId).sort((a, b) => b.createdAt - a.createdAt);
 
   return {
     tickets,
+    evaluations: evalById,
     loading,
     refresh,
     createTicket,
     retryTicket: (id) => mutate(id, '/retry', 'POST'),
     cancelTicket: (id) => mutate(id, '/cancel', 'POST'),
     deleteTicket: (id) => mutate(id, '', 'DELETE'),
+    evaluateTicket,
   };
 }
