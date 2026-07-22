@@ -92,7 +92,12 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
                   borderRight: i < COLUMNS.length - 1 ? '1px solid var(--border-color, #21262d)' : 'none',
                 }}
               >
-                <ColumnHeader status={col} label={t(`tickets.columns.${col}`)} count={grouped[col].length} />
+                <ColumnHeader
+                  status={col}
+                  label={t(`tickets.columns.${col}`)}
+                  count={grouped[col].length}
+                  onClear={col === 'closed' ? () => grouped.closed.forEach((x) => void deleteTicket(x.id)) : undefined}
+                />
                 {grouped[col].length === 0 ? (
                   <div style={{ fontSize: 12, opacity: 0.35, padding: '10px 2px', textAlign: 'center' }}>{t('tickets.empty')}</div>
                 ) : (
@@ -130,7 +135,18 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
 
 /** Status lane header: a color dot + label + a filled count pill, all tinted by
  *  the lane's status so each column is identifiable at a glance. */
-function ColumnHeader({ status, label, count }: { status: DisplayStatus; label: string; count: number }) {
+function ColumnHeader({
+  status,
+  label,
+  count,
+  onClear,
+}: {
+  status: DisplayStatus;
+  label: string;
+  count: number;
+  onClear?: () => void;
+}) {
+  const { t } = useTranslation();
   const color = STATUS_COLOR[status];
   return (
     <div
@@ -160,6 +176,26 @@ function ColumnHeader({ status, label, count }: { status: DisplayStatus; label: 
       >
         {count}
       </span>
+      {onClear && count > 0 && (
+        <button
+          type="button"
+          onClick={onClear}
+          title={t('tickets.clearClosed')}
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '2px 8px',
+            borderRadius: 6,
+            border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+            background: 'transparent',
+            color: 'var(--text-secondary, #8b949e)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          {t('tickets.clearClosed')}
+        </button>
+      )}
     </div>
   );
 }

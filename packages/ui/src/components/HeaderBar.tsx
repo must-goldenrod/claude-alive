@@ -384,18 +384,9 @@ export function HeaderBar({
 
         <div style={{ width: 1, height: 22, background: 'var(--border-color)' }} />
 
-        {/* Tier 2 — Intervene: one click away for when a ticket needs a closer look. */}
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--text-secondary)',
-            opacity: 0.6,
-            letterSpacing: '0.02em',
-          }}
-        >
-          {t('viewMode.groupIntervene')}
-        </span>
+        {/* Tier 2 — Intervene: one click away for when a ticket needs a closer look.
+            The group label is intentionally not shown; the tablist keeps it as an
+            aria-label for screen readers only. */}
         <div
           role="tablist"
           aria-label={t('viewMode.groupIntervene')}
