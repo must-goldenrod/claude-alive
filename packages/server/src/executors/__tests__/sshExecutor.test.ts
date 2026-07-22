@@ -41,7 +41,8 @@ describe('sshBaseArgs', () => {
 describe('buildRemoteCommand', () => {
   it('cd + headless claude with -p (prompt via stdin)', () => {
     expect(buildRemoteCommand('/srv/app', 'bypassPermissions')).toBe(
-      "cd '/srv/app' && claude -p --output-format stream-json --verbose --permission-mode bypassPermissions",
+      'export PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH"; ' +
+        "cd '/srv/app' && claude -p --output-format stream-json --verbose --permission-mode bypassPermissions",
     );
   });
   it('quotes a cwd with spaces/quotes safely', () => {
@@ -67,7 +68,8 @@ describe('createSshExecutor.spawn', () => {
     // goal went to stdin, not into the remote command
     expect(capturedStdin).toBe('multi\nline goal');
     expect(capturedArgs[capturedArgs.length - 1]).toBe(
-      "cd '/srv/app' && claude -p --output-format stream-json --verbose --permission-mode bypassPermissions",
+      'export PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH"; ' +
+        "cd '/srv/app' && claude -p --output-format stream-json --verbose --permission-mode bypassPermissions",
     );
     expect(capturedArgs).toContain('dev@192.168.100.99');
     // stream-json parsed the same as the local path

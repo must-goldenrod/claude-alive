@@ -35,13 +35,24 @@ export function sshBaseArgs(target: SshTarget): string[] {
 }
 
 /**
+ * PATH augmentation for the remote command. A non-interactive SSH shell does not
+ * source the user's interactive rc, so the native-installer location
+ * (`~/.local/bin`) and common package dirs are missing and `claude` resolves to
+ * "command not found" (same root cause as the local launchd fix). Prepending
+ * these keeps the remote invocation working without an interactive shell (which
+ * would corrupt the stream-json output).
+ */
+const REMOTE_PATH_PREFIX =
+  'export PATH="$HOME/.local/bin:$HOME/.claude/local:/opt/homebrew/bin:/usr/local/bin:$PATH"; ';
+
+/**
  * The remote command that launches headless claude in `cwd`. `-p` with no prompt
  * arg makes claude read the prompt from stdin (which the ssh process supplies),
  * so a multi-line goal never touches the remote shell's quoting.
  */
 export function buildRemoteCommand(cwd: string, permissionMode: string): string {
   const flags = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
-  return `cd ${shellQuote(cwd)} && claude ${flags.join(' ')}`;
+  return `${REMOTE_PATH_PREFIX}cd ${shellQuote(cwd)} && claude ${flags.join(' ')}`;
 }
 
 function realSshSpawn(args: string[], stdin?: string): HeadlessProcessHandle {
