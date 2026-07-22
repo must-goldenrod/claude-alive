@@ -11,6 +11,9 @@ function ev(over: Partial<TicketEvaluation>): TicketEvaluation {
     autoLabel: 'unrated',
     label: 'unrated',
     humanLabeled: false,
+    // Default reflected=true so the synthesis assertions below exercise the
+    // gate's happy path; the gate's exclusion is covered by its own test.
+    reflected: true,
     weight: 3,
     createdAt: 1,
     updatedAt: 1,
@@ -58,6 +61,18 @@ describe('synthesizeGuide', () => {
     ], 1);
     expect(g.text).toContain('left debug logs');
     expect(g.text).not.toContain('→ error');
+  });
+
+  it('excludes evaluations that have not been opted into the bias (reflected=false)', () => {
+    const g = synthesizeGuide('/proj/a', [
+      ev({ ticketId: 'a', label: 'good', goal: 'approved', reflected: true }),
+      ev({ ticketId: 'b', label: 'good', goal: 'pending', reflected: false }),
+      ev({ ticketId: 'c', label: 'bad', goal: 'pending-bad', reflected: false }),
+    ], 1);
+    expect(g.goodCount).toBe(1); // only the reflected good counts
+    expect(g.badCount).toBe(0); // the non-reflected bad is ignored
+    expect(g.text).toContain('approved');
+    expect(g.text).not.toContain('pending');
   });
 
   it('caps total text length', () => {

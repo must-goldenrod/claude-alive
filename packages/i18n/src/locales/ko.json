@@ -383,7 +383,8 @@
     "spread": "스프레드",
     "jarvis": "자비스",
     "workspace": "워크스페이스",
-    "archive": "아카이브",
+    "archive": "세션 관리",
+    "ticketMgmt": "티켓 관리",
     "backends": "백엔드 연결"
   },
   "backends": {
@@ -667,6 +668,61 @@
       "not-spawned-by-alive": "Alive 외부에서 시작된 세션이라 붙을 프로세스가 없습니다. 대화 이력은 훅에서 계속 읽을 수 있습니다.",
       "lookup-failed": "터미널 레지스트리를 읽지 못했습니다. 서버 로그를 확인하세요."
     }
+  },
+  "ticketMgmt": {
+    "listTitle": "프로젝트별",
+    "searchPlaceholder": "목표·요약·프로젝트로 검색",
+    "loading": "불러오는 중…",
+    "empty": "아직 티켓 기록이 없습니다",
+    "unreachable": {
+      "title": "티켓 관리를 불러올 수 없습니다",
+      "body": "티켓 기록을 불러오기 위해 서버에 연결하지 못했습니다. 이 화면은 로컬 대시보드에서만 사용할 수 있습니다."
+    },
+    "reflected": "반영됨",
+    "pending": "보류",
+    "stat": {
+      "total": "전체",
+      "good": "good",
+      "bad": "bad",
+      "reflected": "반영"
+    },
+    "detail": {
+      "empty": "티켓을 선택하면 결과와 점수를 해부할 수 있습니다.",
+      "goal": "요청",
+      "result": "결과",
+      "noResult": "결과 스냅샷 없음 (이전 레코드).",
+      "verdict": "검증",
+      "verdictPassed": "통과",
+      "verdictFailed": "실패",
+      "model": "모델",
+      "effort": "Effort",
+      "thinking": "Thinking",
+      "completedAt": "완료 시각"
+    },
+    "score": {
+      "title": "점수",
+      "good": "Good",
+      "bad": "Bad",
+      "unrated": "미평가",
+      "weight": "가중치",
+      "notePlaceholder": "메모(선택) — 이유",
+      "auto": "자동",
+      "save": "저장",
+      "saved": "저장됨"
+    },
+    "reflect": {
+      "title": "편향 반영",
+      "on": "편향에 반영됨",
+      "off": "편향에 반영",
+      "hint": "반영된 티켓만 이 프로젝트의 주입 가이드를 형성합니다."
+    },
+    "guide": {
+      "title": "현재 편향 (주입되는 가이드)",
+      "empty": "이 프로젝트에 아직 편향으로 반영된 티켓이 없습니다.",
+      "counts": "good {{good}} · bad {{bad}} 반영됨"
+    },
+    "viewSession": "세션에서 과정 보기",
+    "noSession": "연결된 세션 없음"
   },
   "archive": {
     "listTitle": "완료된 티켓",

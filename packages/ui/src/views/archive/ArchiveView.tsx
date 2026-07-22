@@ -20,6 +20,9 @@ const STATE_COLOR: Record<string, string> = {
 
 interface ArchiveViewProps {
   active: boolean;
+  /** When set (e.g. from Ticket Management's "view the process" link), select the
+   * matching completed session by its id, best-effort. Ignored if not in the archive. */
+  focusSessionId?: string | null;
 }
 
 function startOfDay(ts: number): number {
@@ -55,7 +58,7 @@ function fmtFull(ts: number | undefined): string {
   }
 }
 
-export function ArchiveView({ active }: ArchiveViewProps) {
+export function ArchiveView({ active, focusSessionId }: ArchiveViewProps) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<CompletedSession[] | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
@@ -118,6 +121,15 @@ export function ArchiveView({ active }: ArchiveViewProps) {
     });
     return buckets.filter((b) => b.items.length > 0);
   }, [filtered, t]);
+
+  // Deep-link from Ticket Management: when a target session id arrives and it is
+  // present in the archive, select it. Best-effort — an id that never terminated
+  // (or predates the archive) simply leaves the current selection untouched.
+  useEffect(() => {
+    if (!active || !focusSessionId) return;
+    const idx = filtered.findIndex((r) => r.sessionId === focusSessionId);
+    if (idx >= 0) setSelectedIdx(idx);
+  }, [active, focusSessionId, filtered]);
 
   const selected = selectedIdx != null ? filtered[selectedIdx] ?? null : null;
 

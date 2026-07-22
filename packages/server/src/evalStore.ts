@@ -43,6 +43,8 @@ export interface EvalStore {
   upsertFromTicket(ticket: Ticket): Promise<TicketEvaluation>;
   /** Apply a human label/weight/note. Returns undefined if the id is unknown. */
   setLabel(ticketId: string, input: EvalLabelInput): Promise<TicketEvaluation | undefined>;
+  /** Toggle the bias-reflection gate. Returns undefined if the id is unknown. */
+  setReflected(ticketId: string, reflected: boolean): Promise<TicketEvaluation | undefined>;
   /** Synthesised guide for a route (cwd). Empty text when nothing is learned. */
   guideFor(route: string): RouteGuide;
 }
@@ -115,6 +117,10 @@ export function createEvalStore(options: EvalStoreOptions = {}): EvalStore {
         verdictPassed: ticket.verification?.passed,
         failureReason: ticket.failureReason,
         autoLabel: auto,
+        // Durable snapshots so the ticket-management view can dissect a record
+        // long after the source ticket is evicted from ticketStore.
+        result: ticket.result,
+        completedAt: ticket.endedAt,
       };
 
       const next: TicketEvaluation = existing
@@ -123,12 +129,15 @@ export function createEvalStore(options: EvalStoreOptions = {}): EvalStore {
             ...captured,
             // A human label sticks; otherwise the effective label follows autoLabel.
             label: existing.humanLabeled ? existing.label : auto,
+            // The bias-reflection gate is a human decision — never reset on re-upsert.
+            reflected: existing.reflected,
             updatedAt: ts,
           }
         : {
             ...captured,
             label: auto,
             humanLabeled: false,
+            reflected: false,
             weight: DEFAULT_EVAL_WEIGHT,
             createdAt: ts,
             updatedAt: ts,
@@ -150,6 +159,15 @@ export function createEvalStore(options: EvalStoreOptions = {}): EvalStore {
         note: input.note ?? existing.note,
         updatedAt: now(),
       };
+      records.set(ticketId, next);
+      await serializedFlush();
+      return next;
+    },
+
+    async setReflected(ticketId, reflected) {
+      const existing = records.get(ticketId);
+      if (!existing) return undefined;
+      const next: TicketEvaluation = { ...existing, reflected, updatedAt: now() };
       records.set(ticketId, next);
       await serializedFlush();
       return next;

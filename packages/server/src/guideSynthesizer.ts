@@ -32,23 +32,28 @@ function badLine(e: TicketEvaluation): string {
 /**
  * Synthesise the guide for a route. `evals` should already be filtered to the
  * route. Returns empty `text` when there is nothing labelled to learn from.
+ *
+ * Only records the human has opted into (`reflected === true`) shape the guide —
+ * an unapproved evaluation, however it was labelled, never leaks into a future
+ * prompt (spec 2026-07-22, bias-reflection gate).
  */
 export function synthesizeGuide(
   route: string,
   evals: readonly TicketEvaluation[],
   now: number,
 ): RouteGuide {
-  const good = evals
+  const reflected = evals.filter((e) => e.reflected === true);
+  const good = reflected
     .filter((e) => e.label === 'good')
     .sort((a, b) => b.weight - a.weight || b.updatedAt - a.updatedAt)
     .slice(0, MAX_GOOD);
-  const bad = evals
+  const bad = reflected
     .filter((e) => e.label === 'bad')
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, MAX_BAD);
 
-  const goodCount = evals.filter((e) => e.label === 'good').length;
-  const badCount = evals.filter((e) => e.label === 'bad').length;
+  const goodCount = reflected.filter((e) => e.label === 'good').length;
+  const badCount = reflected.filter((e) => e.label === 'bad').length;
 
   let text = '';
   if (good.length > 0 || bad.length > 0) {

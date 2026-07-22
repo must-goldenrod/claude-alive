@@ -41,7 +41,11 @@ const ArchiveView = lazy(() =>
   import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends';
+const TicketMgmtView = lazy(() =>
+  import('./views/ticketmgmt/TicketMgmtView.tsx').then(m => ({ default: m.TicketMgmtView })),
+);
+
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -370,6 +374,10 @@ export default function App() {
   const SIDEBAR_WIDTH = 300;
   const listLeftInset = leftPanelOpen ? SIDEBAR_WIDTH : 0;
 
+  // When Ticket Management deep-links "view the process in the session", we switch to
+  // the session-management (archive) view and ask it to focus this Claude session id.
+  const [archiveFocusSessionId, setArchiveFocusSessionId] = useState<string | null>(null);
+
   // The single source of truth for "which session is currently selected" across the
   // three surfaces (sidebar item, pixel character, terminal tab). Click on any of
   // them dispatches `terminal:focusTab` with a sessionId, which we capture here and
@@ -407,10 +415,12 @@ export default function App() {
     };
     const onCreate = () => setChatOpen(true);
     const onResume = () => setChatOpen(true);
-    // Cross-surface view navigation (e.g. CompletionLog's "view all" → Archive).
+    // Cross-surface view navigation (e.g. CompletionLog's "view all" → Archive,
+    // or Ticket Management's "view the process" → session management with a target).
     const onNavigate = (event: Event) => {
-      const mode = (event as CustomEvent).detail?.mode as ViewMode | undefined;
-      if (mode) handleViewModeChange(mode);
+      const detail = (event as CustomEvent).detail as { mode?: ViewMode; sessionId?: string } | undefined;
+      if (detail?.sessionId !== undefined) setArchiveFocusSessionId(detail.sessionId);
+      if (detail?.mode) handleViewModeChange(detail.mode);
     };
     window.addEventListener('terminal:focusTab', onFocus);
     window.addEventListener('terminal:createTab', onCreate);
@@ -489,7 +499,12 @@ export default function App() {
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'archive' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
-              <ArchiveView active={viewMode === 'archive'} />
+              <ArchiveView active={viewMode === 'archive'} focusSessionId={archiveFocusSessionId} />
+            </Suspense>
+          </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'ticketMgmt' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <TicketMgmtView active={viewMode === 'ticketMgmt'} />
             </Suspense>
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'backends' ? 'block' : 'none' }}>
@@ -529,7 +544,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'backends'}
+          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'backends'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}
