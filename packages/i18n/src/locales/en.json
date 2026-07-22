@@ -387,7 +387,10 @@
   },
   "tickets": {
     "newGoalPlaceholder": "Describe a goal — the agent runs it autonomously",
-    "cwdPlaceholder": "Absolute project path, e.g. /Users/you/project",
+    "selectFolder": "Select project folder",
+    "changeFolder": "Change",
+    "pickerTitle": "Choose project folder",
+    "useThisFolder": "Use this folder",
     "create": "Create ticket",
     "creating": "Creating…",
     "empty": "None",
