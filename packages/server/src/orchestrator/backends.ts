@@ -39,7 +39,7 @@ export function createBackendRegistry(deps: BackendRegistryDeps): BackendRegistr
     list() {
       const items: BackendStatus[] = [base('claude-local')];
       if (deps.litellm) items.push(base('litellm'));
-      items.push({ ...base('ssh'), detail: deps.sshConfigured ? undefined : 'configure hosts in the terminal presets' });
+      items.push({ ...base('ssh'), detail: 'register & check hosts below' });
       return items;
     },
 

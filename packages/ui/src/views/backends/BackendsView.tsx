@@ -81,14 +81,43 @@ export function BackendsView({ active }: BackendsViewProps) {
  * host/user/port fields) become selectable ticket locations — the ticket
  * location picker reads exactly these presets. Stored in browser localStorage.
  */
+interface HostCheck {
+  connected?: boolean;
+  detail?: string;
+  checking?: boolean;
+}
+
 function SshHosts({ t }: { t: (key: string) => string }) {
   const [hosts, setHosts] = useState<SSHPreset[]>(() => loadPresets().filter((p) => p.host));
   const [label, setLabel] = useState('');
   const [host, setHost] = useState('');
   const [user, setUser] = useState('');
   const [port, setPort] = useState('');
+  const [checks, setChecks] = useState<Record<string, HostCheck>>({});
 
   const refresh = () => setHosts(loadPresets().filter((p) => p.host));
+
+  // Verify a specific host by asking the server to browse it over SSH. A returned
+  // path means the connection + auth work; an error means it failed.
+  const checkHost = async (h: SSHPreset) => {
+    setChecks((c) => ({ ...c, [h.id]: { ...c[h.id], checking: true } }));
+    try {
+      const res = await fetch(`${API_BASE}/api/ssh/browse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssh: { host: h.host, user: h.user, port: h.port, identityFile: h.identityFile } }),
+      });
+      const data = (await res.json()) as { path?: string; error?: string };
+      setChecks((c) => ({
+        ...c,
+        [h.id]: data.path && !data.error
+          ? { connected: true, detail: data.path }
+          : { connected: false, detail: data.error ?? 'failed' },
+      }));
+    } catch {
+      setChecks((c) => ({ ...c, [h.id]: { connected: false, detail: 'connection failed' } }));
+    }
+  };
 
   const add = () => {
     if (!host.trim()) return;
@@ -144,31 +173,62 @@ function SshHosts({ t }: { t: (key: string) => string }) {
 
       {hosts.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {hosts.map((h) => (
+          {hosts.map((h) => {
+            const st = checks[h.id];
+            const dot =
+              st?.connected === true
+                ? 'var(--accent-green, #3fb950)'
+                : st?.connected === false
+                  ? 'var(--accent-red, #f85149)'
+                  : 'var(--text-secondary, #8b949e)';
+            return (
             <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, flexShrink: 0 }} />
               <span style={{ fontWeight: 600, color: 'var(--accent-purple, #bc8cff)' }}>⬈ {h.label}</span>
-              <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-secondary, #8b949e)', opacity: 0.7 }}>
+              <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-secondary, #8b949e)', opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={st?.detail}>
                 {h.user ? `${h.user}@${h.host}` : h.host}
                 {h.port && h.port !== 22 ? `:${h.port}` : ''}
+                {st?.connected === true && st.detail ? `  →  ${st.detail}` : ''}
+                {st?.connected === false && st.detail ? `  →  ${st.detail}` : ''}
               </span>
+              <button
+                type="button"
+                onClick={() => checkHost(h)}
+                disabled={st?.checking}
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  border: '1px solid var(--accent-blue, #58a6ff)',
+                  background: 'rgba(88,166,255,0.10)',
+                  color: 'var(--accent-blue, #58a6ff)',
+                  cursor: st?.checking ? 'wait' : 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {st?.checking ? t('backends.checking') : t('backends.check')}
+              </button>
               <button
                 type="button"
                 onClick={() => remove(h.id)}
                 style={{
-                  marginLeft: 'auto',
                   fontSize: 11,
-                  padding: '2px 8px',
+                  padding: '3px 8px',
                   borderRadius: 6,
                   border: '1px solid var(--border-default, #30363d)',
                   background: 'transparent',
                   color: 'var(--accent-red, #f85149)',
                   cursor: 'pointer',
+                  flexShrink: 0,
                 }}
               >
                 {t('backends.remove')}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -268,25 +328,29 @@ function BackendCard({
           </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onCheck}
-        disabled={checking}
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          padding: '7px 14px',
-          borderRadius: 8,
-          border: '1px solid var(--accent-blue, #58a6ff)',
-          background: 'rgba(88,166,255,0.10)',
-          color: 'var(--accent-blue, #58a6ff)',
-          cursor: checking ? 'wait' : 'pointer',
-          whiteSpace: 'nowrap',
-          flexShrink: 0,
-        }}
-      >
-        {checking ? t('backends.checking') : t('backends.check')}
-      </button>
+      {/* SSH is a location, not a single connectable endpoint — its hosts are
+          checked individually in the SSH hosts list below. */}
+      {backend.kind !== 'location' && (
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={checking}
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '7px 14px',
+            borderRadius: 8,
+            border: '1px solid var(--accent-blue, #58a6ff)',
+            background: 'rgba(88,166,255,0.10)',
+            color: 'var(--accent-blue, #58a6ff)',
+            cursor: checking ? 'wait' : 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {checking ? t('backends.checking') : t('backends.check')}
+        </button>
+      )}
     </div>
   );
 }
