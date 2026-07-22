@@ -40,4 +40,23 @@ describe('runDelegateCli', () => {
     expect(r.code).toBe(1);
     expect(r.stderr).toContain('gateway down');
   });
+
+  it('logs a delegation record when CA_TICKET_ID is set', async () => {
+    let logged = '';
+    await runDelegateCli(['--model', 'gemini/x', 'do a thing'], { CA_TICKET_ID: 'T7' }, noStdin, {
+      chat: async () => ({ content: 'ok', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } }),
+      appendLog: (line) => { logged = line; },
+    });
+    const rec = JSON.parse(logged);
+    expect(rec).toMatchObject({ ticketId: 'T7', model: 'gemini/x', inputTokens: 10, outputTokens: 5, totalTokens: 15, promptPreview: 'do a thing' });
+  });
+
+  it('does NOT log when CA_TICKET_ID is absent (e.g. verifier run)', async () => {
+    let logged = false;
+    await runDelegateCli(['hi'], {}, noStdin, {
+      chat: async () => ({ content: 'ok' }),
+      appendLog: () => { logged = true; },
+    });
+    expect(logged).toBe(false);
+  });
 });

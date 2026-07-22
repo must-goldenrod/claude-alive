@@ -449,6 +449,7 @@
     "orchestrateHint": "(may delegate to sub-agents)",
     "evaluatePrompt": "Rate:",
     "runInfoLabel": "Run info",
+    "delegationsLabel": "Delegations (sub-agents)",
     "runModel": "Model",
     "runEffort": "Effort",
     "runThinking": "Extended thinking",

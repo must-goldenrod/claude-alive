@@ -45,6 +45,7 @@ import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
 import { ensureDelegateCli } from './orchestrator/delegateCli.js';
+import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
 import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
@@ -387,7 +388,9 @@ const ticketRunner = createTicketRunner({
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
-      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+      // Only the orchestrator run gets the delegate tool + a ticket tag; the
+      // verifier deliberately omits CA_TICKET_ID so its re-delegations aren't logged.
+      ...(orchestrated ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } } : {}),
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
@@ -396,6 +399,14 @@ const ticketRunner = createTicketRunner({
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
   // Record an evaluation whenever a ticket settles; broadcast it so clients update.
   onSettled: async (ticket) => {
+    // Attach the orchestrator's sub-agent delegations (which models did what).
+    if (ticket.orchestrated) {
+      const delegations = readDelegations(ticket.id);
+      if (delegations.length > 0) {
+        const updated = await ticketStore.update(ticket.id, { delegations });
+        if (updated) broadcaster.broadcast({ type: 'ticket:update', ticket: updated });
+      }
+    }
     const evaluation = await evalStore.upsertFromTicket(ticket);
     broadcaster.broadcast({ type: 'evaluation:update', evaluation });
   },

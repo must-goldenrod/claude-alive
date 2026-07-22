@@ -82,7 +82,20 @@ export function runMetaShort(ticket: Ticket): string {
   if (tok) parts.push(`${tok} tok`);
   const cost = formatCost(ticket.usage?.costUsd);
   if (cost) parts.push(cost);
+  // Surface sub-agent delegation so the card doesn't read as "opus only".
+  if (ticket.delegations && ticket.delegations.length > 0) {
+    parts.push(`⇢ ${ticket.delegations.length}`);
+  }
   return parts.join(' · ');
+}
+
+/** Distinct sub-agent models used across a ticket's delegations, in first-use order. */
+export function delegatedModels(ticket: Ticket): string[] {
+  const seen: string[] = [];
+  for (const d of ticket.delegations ?? []) {
+    if (!seen.includes(d.model)) seen.push(d.model);
+  }
+  return seen;
 }
 
 /** Compact "MM-DD HH:mm" for the card. Uses startedAt, falling back to createdAt. */
