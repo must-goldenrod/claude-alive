@@ -106,6 +106,7 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
         goal: input.goal,
         cwd: input.cwd,
         ...(input.location ? { location: input.location } : {}),
+        ...(input.orchestrated ? { orchestrated: true } : {}),
         state: 'queued',
         createdAt: now(),
       };

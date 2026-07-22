@@ -43,8 +43,9 @@ import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
+import { ensureDelegateCli } from './orchestrator/delegateCli.js';
 import { createEvalStore } from './evalStore.js';
-import { buildMainPrompt } from './ticketPrompt.js';
+import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
@@ -338,6 +339,9 @@ const ticketStore = createTicketStore();
 await ticketStore.load();
 const evalStore = createEvalStore();
 await evalStore.load();
+// Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
+// in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
+const delegateCmd = ensureDelegateCli();
 
 // Local cwd allowlist (colon-separated). Applies to LOCAL tickets only; remote
 // (ssh) tickets are gated by the loopback-only create route + host ownership.
@@ -358,17 +362,24 @@ const ticketRunner = createTicketRunner({
   // Prepend the route's learned guide (from past good/bad evaluations) and append
   // the one-line headline instruction (parsed by extractHeadline). The guide is
   // read at spawn time, so newer labels take effect on the next ticket.
-  spawnMain: (ticket, opts) =>
-    executorFor(ticket.location).spawn({
-      // Follow-up reply: wrap the user's raw answer with the marker instruction
-      // and resume the session. Initial run: goal + the route's learned guide.
-      goal: opts?.prompt
-        ? buildMainPrompt(opts.prompt)
-        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text),
+  spawnMain: (ticket, opts) => {
+    // Orchestrated tickets run with the orchestrator prompt + delegation tool.
+    // Only for local execution (the ca-delegate CLI lives on the server host, so
+    // an SSH-run agent couldn't call it — remote orchestration is a follow-up).
+    const orchestrated = Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh';
+    const goal = opts?.prompt
+      ? // Follow-up reply: wrap the raw answer and resume the same session.
+        buildMainPrompt(opts.prompt)
+      : orchestrated
+        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd)
+        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text);
+    return executorFor(ticket.location).spawn({
+      goal,
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
-    }),
+    });
+  },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   // Location-aware cwd validation (local fs, or remote `ssh test -d`).
   validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),

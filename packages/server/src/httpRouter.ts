@@ -119,6 +119,7 @@ export interface HttpRouterOptions {
         ssh?: { host: string; user?: string; port?: number; identityFile?: string };
         label?: string;
       };
+      orchestrated?: boolean;
     }) => Promise<unknown>;
     retry: (id: string) => Promise<unknown | undefined>;
     /** Continue a `decision` ticket with a follow-up prompt. Undefined = unknown id. */
@@ -172,6 +173,7 @@ const TicketCreateBodySchema = z.object({
   goal: z.string().min(1).max(8000),
   cwd: z.string().min(1),
   location: TicketLocationSchema.optional(),
+  orchestrated: z.boolean().optional(),
 });
 
 const EvaluateBodySchema = z.object({
