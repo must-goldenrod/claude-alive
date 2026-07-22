@@ -9,7 +9,7 @@
  * 핸들을 캐싱하지 않고 매 요청마다 열고 닫는다: efficio collect가 동시에 쓰기를
  * 할 수 있으므로 항상 최신 스냅샷을 읽고, read-only라 쓰기 잠금 경합이 없다.
  */
-import { DatabaseSync } from 'node:sqlite';
+import BetterSqlite3, { type Database as SqliteDatabase } from 'better-sqlite3';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -80,10 +80,10 @@ function parseRepeats(json: string | null): EfficioRepeat[] {
 }
 
 export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): EfficioReader {
-  function open(): DatabaseSync | null {
+  function open(): SqliteDatabase | null {
     if (!existsSync(dbPath)) return null;
     try {
-      return new DatabaseSync(dbPath, { readOnly: true });
+      return new BetterSqlite3(dbPath, { readonly: true, fileMustExist: true });
     } catch {
       return null;
     }
