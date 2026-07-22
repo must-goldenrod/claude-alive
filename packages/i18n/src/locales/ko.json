@@ -387,7 +387,10 @@
   },
   "tickets": {
     "newGoalPlaceholder": "목표를 적으세요 — 에이전트가 자율로 처리합니다",
-    "cwdPlaceholder": "절대경로 프로젝트 경로, 예: /Users/you/project",
+    "selectFolder": "프로젝트 폴더 선택",
+    "changeFolder": "변경",
+    "pickerTitle": "프로젝트 폴더 선택",
+    "useThisFolder": "이 폴더로 지정",
     "create": "티켓 만들기",
     "creating": "생성 중…",
     "empty": "없음",

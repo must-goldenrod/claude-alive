@@ -2,7 +2,53 @@
 
 All notable changes to claude-alive.
 
+## Unreleased (2026-07-22)
 
+### New Features
+
+-  종료 티켓 아카이빙 + 시점별 상세 뷰, 완료 신호 일원화 등 P0 (#42)
+-  스프레드 뷰 인라인 입력·리사이즈 타일링·단축키·호버 힌트 / Interactive spread view: inline input, resizable tiling, shortcuts, hover hints
+-  에이전트 카드에서 이름 변경 (프로젝트 이름과 통일) / Rename from agent card, unified with project name
+-  세션 영속화·재개 + 에이전트 대시보드 / Session persistence, resume + agent dashboard
+-  리포트 4종 — 프로젝트 비교·추세 회귀·캐시 효율·주간 요약 / Four reports: project, trend, cache, weekly (#40)
+-  개선 후보 + numpy 제거 + 세션 종료 자동 collect / Improvement candidates, drop numpy, auto-collect (#39)
+-  개선 후보(L1) — 세션 내 반복 Bash·편집 식별 + 터미널 뷰 충돌 처리 / Improvement candidates (L1) + terminal view-conflict handling
+-  전용 대시보드 뷰 — 다축 프로파일·산점도·분포·다축시계열 / Dedicated Efficio dashboard view
+-  점수 영속화 + 서버 읽기 브리지 + RightPanel efficio 패널 / Persist scores, server read bridge, efficio panel
+-  기준선 노출 + 라운드3 사전등록 / Expose counterfactual baseline + round-3 pre-registration
+-  MTMM 3번째 방법 + 2차원(체감/행동) 축 / MTMM 3rd method + two-dimension axes
+-  M0 단일세션 효율 평가 도구 + H1 기준타당도 검증 / Efficio M0 single-session eval tool + H1 criterion validation
+
+### Bug Fixes
+
+-  launchd 실행 시 `command not found: claude` 수정 (PATH 보강) / Fix "command not found: claude" under launchd (augment PATH)
+-  재시작 후 빈 터미널 수정 — dormant 메시지 미전달 + unknown 탭 자체 재개 / Fix blank terminals after restart — undelivered dormant + client self-resume
+-  세션 영속화·재개 코드 리뷰 지적 전면 수정 / Fix all review findings in session persistence & resume
+-  재연결 시 빈 화면 복원 수정 (강제 재그리기) + 옛 탭 폐기 / Fix blank restore on reattach (force redraw) + drop legacy tabs
+-  New Chat이 기존 세션에 attach되던 회귀 수정 (tabId 전역 유일화) / Fix New Chat attaching to a stale session (globally-unique tabId)
+-  WC↔rework tautology 검정 + 정직한 다기준 검증상태 / WC-rework tautology check + honest multi-criterion labels
+-  잔차 드리프트 고정 — 고정 기준 모델 도입 / Fix residual drift with frozen reference model
+
+### Documentation
+
+-  LLM 티켓 서비스 생애주기 개발 계획서 (#43)
+-  세션 영속화·재개 + 에이전트 대시보드 설계 / Session persistence, resume + agent dashboard design
+-  전용 뷰 완료 반영 + E2E 증거물 gitignore / Mark dedicated view done, ignore E2E artifacts
+-  README에 Efficio 설치·사용법 섹션 추가 / Add Efficio install & usage section to README
+-  개발 현황 추적 문서 추가 / Add development status & backlog tracker
+-  EFA로 13.5 완화 + 평정자 신뢰도 도구 / EFA tempers 13.5 + multirater reliability tooling
+-  검증 방법론 문헌 대조 리뷰 + 재현 검사 / Methodology literature review + reproducibility checks
+-  13.2 'W2 우위' supersede 포인터(→13.4) / Reconcile W2-primary claim with 13.4 finding
+-  자기점검 #4 — 객관적 rework 프록시 검증 / Objective rework proxy validation
+
+### Maintenance
+
+-  실수로 커밋된 테스트 스크린샷 제거 / Remove accidentally committed test screenshot
+
+### Other
+
+- 멀티 에이전트 canonical 기반 P0 완료 + P1 배선 + Codex 어댑터 / Canonical foundation (P0), wiring (P1), and the Codex adapter (#41)
+- test+docs(efficio): W2 작업유형 교란 검증 + profile 통합테스트 / W2 task-type confound check + profile integration tests
 
 ## v0.5.8 (2026-06-10)
 
