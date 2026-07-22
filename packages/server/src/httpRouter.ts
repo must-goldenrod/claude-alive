@@ -127,7 +127,7 @@ export interface HttpRouterOptions {
     cancel: (id: string) => Promise<unknown | undefined>;
     remove: (id: string) => Promise<boolean>;
     /** Validate cwd before creating; returns an error message, or null when valid. */
-    validateCwd?: (cwd: string) => string | null;
+    validateCwd?: (cwd: string, isRemote: boolean) => string | null;
     /** Apply a human good/bad label to a settled ticket. Undefined = unknown id. */
     evaluate?: (
       id: string,
@@ -145,6 +145,12 @@ export interface HttpRouterOptions {
     list: () => unknown[];
     check: (id: string) => Promise<unknown | null>;
   };
+
+  /** Remote directory listing over SSH, for the ticket's remote folder picker. */
+  sshBrowse?: (
+    target: { host: string; user?: string; port?: number; identityFile?: string },
+    path?: string,
+  ) => Promise<unknown>;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -263,6 +269,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     efficio,
     tickets,
     backends,
+    sshBrowse,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -400,7 +407,7 @@ export function createHttpServer(options: HttpRouterOptions) {
           sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
           return;
         }
-        const cwdError = tickets.validateCwd?.(parsed.data.cwd);
+        const cwdError = tickets.validateCwd?.(parsed.data.cwd, parsed.data.location?.kind === 'ssh');
         if (cwdError) {
           sendJson(res, 400, { error: cwdError }, req);
           return;
@@ -483,6 +490,28 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, { backends: backends.list() }, req);
+      return;
+    }
+    // POST /api/ssh/browse — list remote sub-directories for the remote folder
+    // picker (loopback-only; the ssh target comes from the local user's preset).
+    if (sshBrowse && req.method === 'POST' && url.pathname === '/api/ssh/browse') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'SSH browse is restricted to loopback' }, req);
+        return;
+      }
+      try {
+        const parsed = z
+          .object({ ssh: SshTargetSchema, path: z.string().max(4096).optional() })
+          .safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: ssh target required' }, req);
+          return;
+        }
+        const result = await sshBrowse(parsed.data.ssh, parsed.data.path);
+        sendJson(res, 200, result, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
       return;
     }
     const backendCheckMatch = url.pathname.match(/^\/api\/backends\/([^/]+)\/check$/);

@@ -41,6 +41,7 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
+import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
 import { ensureDelegateCli } from './orchestrator/delegateCli.js';
@@ -441,8 +442,15 @@ const httpServer = createHttpServer({
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
     // ("failed to spawn claude").
-    validateCwd: (cwd) => {
-      if (!isAbsolute(cwd)) return 'Working directory must be an absolute path (e.g. /Users/you/project)';
+    validateCwd: (cwd, isRemote) => {
+      if (!isAbsolute(cwd)) {
+        return isRemote
+          ? 'Remote path must be absolute (e.g. /Users/dev/project). "~" is not expanded.'
+          : 'Working directory must be an absolute path (e.g. /Users/you/project)';
+      }
+      // Remote (ssh) paths live on another machine — don't stat the local fs.
+      // The runner validates the remote directory over SSH (`ssh test -d`).
+      if (isRemote) return null;
       try {
         if (!statSync(cwd).isDirectory()) return 'Working directory is not a directory';
       } catch {
@@ -487,6 +495,13 @@ const httpServer = createHttpServer({
     list: () => backendRegistry.list(),
     check: async (id: string) =>
       id === 'claude-local' || id === 'litellm' || id === 'ssh' ? backendRegistry.check(id) : null,
+  },
+  sshBrowse: async (target, path) => {
+    try {
+      return await sshListDirs(target, path);
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'ssh browse failed' };
+    }
   },
   workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
   sessionConversation: canonicalPipeline.enabled

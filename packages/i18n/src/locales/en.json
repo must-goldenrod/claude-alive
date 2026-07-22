@@ -415,6 +415,7 @@
     "changeFolder": "Change",
     "location": "Location",
     "locationLocal": "Local",
+    "remotePickerTitle": "Select remote folder",
     "remotePathPlaceholder": "Remote path, e.g. /home/dev/project",
     "pickerTitle": "Choose project folder",
     "useThisFolder": "Use this folder",
