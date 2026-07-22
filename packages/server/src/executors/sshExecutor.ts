@@ -25,8 +25,23 @@ export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * Reject an ssh target whose fields could be smuggled to `ssh` as options
+ * (argv flag injection). A host/user/identityFile beginning with `-` would let a
+ * caller inject e.g. `-oProxyCommand=…` — arbitrary command execution. Throwing
+ * here protects both spawn and validateCwd (the schema layer rejects these too,
+ * but this is the defence-in-depth choke point).
+ */
+export function assertSafeTarget(target: SshTarget): void {
+  const smuggled = (v?: string) => v !== undefined && v.startsWith('-');
+  if (smuggled(target.host) || smuggled(target.user) || smuggled(target.identityFile)) {
+    throw new Error('invalid ssh target: host/user/identityFile must not start with "-"');
+  }
+}
+
 /** Base `ssh` argv up to and including the target, before the remote command. */
 export function sshBaseArgs(target: SshTarget): string[] {
+  assertSafeTarget(target);
   const args = ['-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new'];
   if (target.identityFile) args.push('-i', target.identityFile);
   if (target.port && target.port !== 22) args.push('-p', String(target.port));
@@ -93,8 +108,14 @@ export function createSshExecutor(target: SshTarget, options: { spawnProcess?: S
 
   return {
     async validateCwd(cwd) {
+      let baseArgs: string[];
+      try {
+        baseArgs = sshBaseArgs(target); // throws on an unsafe (flag-smuggling) target
+      } catch (e) {
+        return e instanceof Error ? e.message : 'invalid ssh target';
+      }
       const remote = `test -d ${shellQuote(cwd)} && echo ${OK_MARKER}`;
-      const { stdout, stderr } = await collect(doSpawn([...sshBaseArgs(target), remote]));
+      const { stdout, stderr } = await collect(doSpawn([...baseArgs, remote]));
       if (stdout.includes(OK_MARKER)) return null;
       const detail = stderr.trim().split('\n')[0] || 'directory not found or host unreachable';
       return `remote cwd unavailable on ${target.host}: ${cwd} (${detail})`;

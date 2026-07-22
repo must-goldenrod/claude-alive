@@ -140,11 +140,15 @@ const ProjectNameBodySchema = z.object({
   name: z.string().max(100).nullable(),
 });
 
+// Reject values starting with `-` at the boundary: they would be smuggled to
+// `ssh` as options (argv flag injection, e.g. `-oProxyCommand=…`). sshExecutor
+// re-checks defensively, but the schema is the first line of defence.
+const noLeadingDash = /^[^-]/;
 const SshTargetSchema = z.object({
-  host: z.string().min(1).max(255),
-  user: z.string().max(64).optional(),
+  host: z.string().min(1).max(255).regex(noLeadingDash),
+  user: z.string().max(64).regex(noLeadingDash).optional(),
   port: z.number().int().min(1).max(65535).optional(),
-  identityFile: z.string().max(1024).optional(),
+  identityFile: z.string().max(1024).regex(noLeadingDash).optional(),
 });
 
 const TicketLocationSchema = z.object({
