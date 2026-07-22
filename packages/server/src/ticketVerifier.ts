@@ -5,7 +5,7 @@
  * is fail-closed: if the verifier can't produce a parseable verdict, the runner
  * treats the ticket as failed('verification-inconclusive'), never done.
  */
-import type { Ticket, TicketVerification } from '@claude-alive/core';
+import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/core';
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
 
 export interface Verifier {
@@ -14,8 +14,11 @@ export interface Verifier {
 }
 
 export interface VerifierOptions {
-  /** Injectable runner for tests; production runs a real headless claude. */
-  run?: (opts: { goal: string; cwd: string }) => Promise<HeadlessOutcome>;
+  /**
+   * Injectable runner for tests; production resolves the ticket's Executor so the
+   * verifier runs at the SAME location as the main agent (local or SSH).
+   */
+  run?: (opts: { goal: string; cwd: string; location?: TicketLocation }) => Promise<HeadlessOutcome>;
 }
 
 export function buildVerificationPrompt(goal: string, mainResult: string | null): string {
@@ -62,7 +65,11 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
 
   return {
     async verify(ticket, mainResult) {
-      const outcome = await run({ goal: buildVerificationPrompt(ticket.goal, mainResult), cwd: ticket.cwd });
+      const outcome = await run({
+        goal: buildVerificationPrompt(ticket.goal, mainResult),
+        cwd: ticket.cwd,
+        location: ticket.location,
+      });
       const verdict = extractVerdict(outcome.result?.result ?? null);
       if (!verdict) {
         throw new Error('verifier produced no parseable verdict');

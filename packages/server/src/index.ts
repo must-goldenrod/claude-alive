@@ -39,8 +39,8 @@ import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
 import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
-import { runHeadlessClaude } from './headlessClaude.js';
 import { createVerifier } from './ticketVerifier.js';
+import { resolveExecutor } from './executors/resolve.js';
 import { createEvalStore } from './evalStore.js';
 import { buildMainPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
@@ -336,7 +336,20 @@ const ticketStore = createTicketStore();
 await ticketStore.load();
 const evalStore = createEvalStore();
 await evalStore.load();
-const ticketVerifier = createVerifier();
+
+// Local cwd allowlist (colon-separated). Applies to LOCAL tickets only; remote
+// (ssh) tickets are gated by the loopback-only create route + host ownership.
+const localAllowedRoots = process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean);
+// Resolve the execution backend for a ticket's location: local child process, or
+// SSH to a remote host. Absent location = local.
+const executorFor = (location: import('@claude-alive/core').TicketLocation | undefined) =>
+  resolveExecutor(location, { localAllowedRoots });
+
+// The verifier runs at the SAME location as the main agent.
+const ticketVerifier = createVerifier({
+  run: ({ goal, cwd, location }) =>
+    executorFor(location).spawn({ goal, cwd, permissionMode: 'bypassPermissions' }).done,
+});
 const ticketRunner = createTicketRunner({
   store: ticketStore,
   // Explicit privileged mode from server config (never from the HTTP body).
@@ -344,12 +357,14 @@ const ticketRunner = createTicketRunner({
   // the one-line headline instruction (parsed by extractHeadline). The guide is
   // read at spawn time, so newer labels take effect on the next ticket.
   spawnMain: (ticket) =>
-    runHeadlessClaude({
+    executorFor(ticket.location).spawn({
       goal: buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text),
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
     }),
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
+  // Location-aware cwd validation (local fs, or remote `ssh test -d`).
+  validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
   // Record an evaluation whenever a ticket settles; broadcast it so clients update.
   onSettled: async (ticket) => {
@@ -357,8 +372,6 @@ const ticketRunner = createTicketRunner({
     broadcaster.broadcast({ type: 'evaluation:update', evaluation });
   },
   concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,
-  // Optional cwd allowlist (colon-separated). Unset = unrestricted (local tool).
-  allowedRoots: process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean),
 });
 if (!process.env.CLAUDE_ALIVE_TICKET_ROOTS) {
   // bypassPermissions is RCE-equivalent; the ticket routes are loopback-only
