@@ -39,19 +39,6 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   if (ticket.thinking) meta.push('thinking');
   if (ticket.effort) meta.push(`effort:${ticket.effort}`);
 
-  // Jump from the ticket into the live intervention surface (animation/terminal)
-  // focused on this ticket's Claude session. Reuses the app-level event handlers
-  // (`claude-alive:navigate` + `terminal:focusTab`) — no new wiring needed. Only
-  // possible when the runner captured the underlying session id.
-  const handleIntervene = () => {
-    if (!ticket.claudeSessionId) return;
-    window.dispatchEvent(new CustomEvent('claude-alive:navigate', { detail: { mode: 'animation' } }));
-    window.dispatchEvent(
-      new CustomEvent('terminal:focusTab', { detail: { sessionId: ticket.claudeSessionId } }),
-    );
-    onClose();
-  };
-
   return (
     <div
       onClick={onClose}
@@ -86,8 +73,21 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
           <span style={{ marginLeft: 'auto', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', opacity: 0.6 }}>
             {meta.join(' · ')}
           </span>
-          <button type="button" onClick={onClose} style={{ ...btnStyle, padding: '4px 10px' }}>
-            {t('tickets.close')}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('tickets.close')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-secondary, #8b949e)',
+              cursor: 'pointer',
+              fontSize: 18,
+              lineHeight: 1,
+              padding: '2px 6px',
+            }}
+          >
+            ✕
           </button>
         </div>
 
@@ -172,20 +172,6 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border-default, #30363d)' }}>
-          {ticket.claudeSessionId && (
-            <button
-              type="button"
-              onClick={handleIntervene}
-              style={{
-                ...btnStyle,
-                color: 'var(--accent-blue, #58a6ff)',
-                borderColor: 'var(--accent-blue, #58a6ff)',
-                background: 'rgba(88, 166, 255, 0.10)',
-              }}
-            >
-              {t('tickets.intervene')}
-            </button>
-          )}
           {isActive && (
             <button type="button" onClick={() => onCancel(ticket.id)} style={btnStyle}>
               {t('tickets.cancel')}
@@ -239,14 +225,13 @@ function EvalSection({
   onClose: () => void;
   t: (key: string) => string;
 }) {
-  const [note, setNote] = useState(evaluation.note ?? '');
   const [saving, setSaving] = useState(false);
 
-  // One-cue: save the label+weight (and any note) in a single click, then close.
+  // One-cue: save the label+weight in a single click, then close.
   const commit = async (label: EvalLabel, weight: number) => {
     if (saving) return;
     setSaving(true);
-    const result = await onEvaluate(ticketId, { label, weight, note: note.trim() || undefined });
+    const result = await onEvaluate(ticketId, { label, weight });
     setSaving(false);
     if (result) onClose();
   };
@@ -290,22 +275,6 @@ function EvalSection({
           {t('tickets.evalAuto')}: {evaluation.autoLabel}
         </span>
       )}
-
-      <input
-        type="text"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder={t('tickets.evalNotePlaceholder')}
-        maxLength={2000}
-        style={{
-          fontSize: 12,
-          padding: '6px 10px',
-          borderRadius: 8,
-          border: '1px solid var(--border-default, #30363d)',
-          background: 'var(--bg-tertiary, #21262d)',
-          color: 'var(--text-primary, #e6edf3)',
-        }}
-      />
     </div>
   );
 }
