@@ -408,8 +408,13 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
-    // GET /api/evaluations — the evaluation dataset (read-only).
+    // GET /api/evaluations — the evaluation dataset (read-only). Loopback-only:
+    // it echoes ticket content (goals/results), matching the /api/tickets guard.
     if (tickets?.listEvaluations && req.method === 'GET' && url.pathname === '/api/evaluations') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Evaluation API is restricted to loopback' }, req);
+        return;
+      }
       sendJson(res, 200, { evaluations: tickets.listEvaluations() }, req);
       return;
     }
