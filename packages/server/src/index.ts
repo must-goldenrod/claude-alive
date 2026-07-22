@@ -341,7 +341,10 @@ const evalStore = createEvalStore();
 await evalStore.load();
 // Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
 // in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
+// Its dir is prepended to the agent PATH (main + verifier) so `command -v
+// ca-delegate` resolves — the verifier must know the delegation tool is real.
 const delegateCmd = ensureDelegateCli();
+const delegateBinDir = dirname(delegateCmd);
 
 // Local cwd allowlist (colon-separated). Applies to LOCAL tickets only; remote
 // (ssh) tickets are gated by the loopback-only create route + host ownership.
@@ -353,8 +356,13 @@ const executorFor = (location: import('@claude-alive/core').TicketLocation | und
 
 // The verifier runs at the SAME location as the main agent.
 const ticketVerifier = createVerifier({
-  run: ({ goal, cwd, location }) =>
-    executorFor(location).spawn({ goal, cwd, permissionMode: 'bypassPermissions' }).done,
+  run: ({ goal, cwd, location, orchestrated }) =>
+    executorFor(location).spawn({
+      goal,
+      cwd,
+      permissionMode: 'bypassPermissions',
+      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+    }).done,
 });
 const ticketRunner = createTicketRunner({
   store: ticketStore,
@@ -378,6 +386,7 @@ const ticketRunner = createTicketRunner({
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
+      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),

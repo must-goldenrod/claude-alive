@@ -18,14 +18,31 @@ export interface VerifierOptions {
    * Injectable runner for tests; production resolves the ticket's Executor so the
    * verifier runs at the SAME location as the main agent (local or SSH).
    */
-  run?: (opts: { goal: string; cwd: string; location?: TicketLocation }) => Promise<HeadlessOutcome>;
+  run?: (opts: {
+    goal: string;
+    cwd: string;
+    location?: TicketLocation;
+    orchestrated?: boolean;
+  }) => Promise<HeadlessOutcome>;
 }
 
-export function buildVerificationPrompt(goal: string, mainResult: string | null): string {
+export function buildVerificationPrompt(goal: string, mainResult: string | null, orchestrated = false): string {
+  const orchestrationNote = orchestrated
+    ? [
+        '',
+        'NOTE: This was an ORCHESTRATION task. The agent is an orchestrator that may have',
+        'delegated subtasks to sub-agents by running the `ca-delegate` tool (on PATH), which',
+        'calls a remote model gateway over the network. Delegation therefore leaves NO local',
+        'file artifacts — an empty working directory is EXPECTED and is not evidence of failure.',
+        'Verify the REPORTED RESULT is coherent and satisfies the goal; do not demand local',
+        'file changes or reject solely because `ca-delegate` output was network-based.',
+      ]
+    : [];
   return [
     'You are a strict verification agent. An autonomous agent was given a goal and reported a result.',
     'Independently inspect the working directory (build, tests, files, git diff as needed) and decide',
     'whether the goal was ACTUALLY achieved. Do not trust the report — verify.',
+    ...orchestrationNote,
     '',
     `GOAL: ${goal}`,
     `REPORTED RESULT: ${mainResult ?? '(none)'}`,
@@ -66,9 +83,10 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
   return {
     async verify(ticket, mainResult) {
       const outcome = await run({
-        goal: buildVerificationPrompt(ticket.goal, mainResult),
+        goal: buildVerificationPrompt(ticket.goal, mainResult, ticket.orchestrated),
         cwd: ticket.cwd,
         location: ticket.location,
+        orchestrated: ticket.orchestrated,
       });
       const verdict = extractVerdict(outcome.result?.result ?? null);
       if (!verdict) {
