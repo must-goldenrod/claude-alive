@@ -28,6 +28,8 @@ export interface TicketEvaluation {
   autoLabel: EvalLabel;
   /** The effective label. Defaults to autoLabel until a human overrides it. */
   label: EvalLabel;
+  /** True once a human has set the label; auto re-seeding then leaves it alone. */
+  humanLabeled: boolean;
   /** 1..5 influence weight on guide synthesis. Default 3. */
   weight: number;
   note?: string;
