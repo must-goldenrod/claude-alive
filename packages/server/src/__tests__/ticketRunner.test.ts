@@ -336,6 +336,24 @@ describe('TicketRunner lifecycle', () => {
     expect(store.get(r.id)).toMatchObject({ state: 'failed', failureReason: 'interrupted' });
     await until(() => store.get(q.id)?.state === 'done'); // queued one gets scheduled and completes
   });
+
+  it('recover() resumes an in-flight ticket that captured a session, instead of failing it', async () => {
+    const r = await store.create({ goal: 'running', cwd: '/repo' });
+    await store.update(r.id, { state: 'running', startedAt: 1, claudeSessionId: 'sess-x' });
+
+    const calls: (SpawnMainOpts | undefined)[] = [];
+    const { runner } = makeRunner({
+      spawnMain: (_t, opts) => {
+        calls.push(opts);
+        return { kill() {}, done: Promise.resolve(okOutcome('이어서 완료\nHEADLINE: 재개 완료')) };
+      },
+      verify: async () => ({ passed: true, reason: 'ok' }),
+    });
+    await runner.recover();
+    await until(() => store.get(r.id)?.state === 'done');
+    expect(calls[0]?.resumeSessionId).toBe('sess-x'); // continued the persisted session
+    expect(store.get(r.id)?.failureReason).toBeUndefined();
+  });
 });
 
 describe('TicketRunner onSettled hook', () => {

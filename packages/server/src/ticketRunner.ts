@@ -75,6 +75,8 @@ export interface TicketRunnerOptions {
   concurrency?: number;
   /** Per-ticket wallclock cap. */
   timeoutMs?: number;
+  /** Continuation prompt for a ticket whose run a server restart cut off (resumed via --resume). */
+  resumePrompt?: string;
   /** cwd allowlist; empty = unrestricted. A ticket outside it fails immediately. */
   allowedRoots?: string[];
   now?: () => number;
@@ -102,6 +104,8 @@ export interface TicketRunner {
 
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_RESUME_PROMPT =
+  '직전 작업이 서버 재시작으로 중단되었습니다. 지금까지의 맥락을 이어받아 목표를 끝까지 완료하세요.';
 
 /**
  * True when cwd is within some allowed root. Empty roots = unrestricted.
@@ -129,6 +133,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
   const { store, spawnMain, verify, broadcast, onSettled } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const resumePrompt = options.resumePrompt ?? DEFAULT_RESUME_PROMPT;
   const allowedRoots = options.allowedRoots;
   const canonicalize = options.canonicalize ?? ((p: string) => realpathSync(p));
   const cwdExists = options.cwdExists ?? existsSync;
@@ -175,6 +180,16 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
   async function fail(id: string, reason: TicketFailureReason, error: string, verification?: Ticket['verification']): Promise<void> {
     await apply(id, { state: 'failed', failureReason: reason, error, verification, endedAt: now() });
     releaseSlot(id);
+  }
+
+  /** Register a live agent run's handle + timeout, and route its completion. */
+  function attach(id: string, handle: RunnerHeadlessHandle): void {
+    handles.set(id, handle);
+    timers.set(id, setTimer(() => void onTimeout(id), timeoutMs));
+    handle.done.then(
+      (outcome) => void onMainDone(id, outcome),
+      (e) => void fail(id, 'error', String(e)),
+    );
   }
 
   function pump(): void {
@@ -226,12 +241,31 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       await fail(id, 'error', `failed to spawn agent: ${String(e)}`);
       return;
     }
-    handles.set(id, handle);
-    timers.set(id, setTimer(() => void onTimeout(id), timeoutMs));
-    handle.done.then(
-      (outcome) => void onMainDone(id, outcome),
-      (e) => void fail(id, 'error', String(e)),
-    );
+    attach(id, handle);
+  }
+
+  /**
+   * Resume a ticket whose run was cut off by a server restart. The `claude`
+   * child process (and its stdout pipe) died with the old server, so the run
+   * cannot be reattached — but the session persisted on disk, so we continue it
+   * with `--resume` and a nudge to finish. Only reachable for tickets that
+   * captured a session id.
+   */
+  async function resumeInterrupted(ticket: Ticket): Promise<void> {
+    running.add(ticket.id);
+    const started = await apply(ticket.id, { state: 'running', startedAt: now(), endedAt: undefined });
+    if (!started) {
+      releaseSlot(ticket.id);
+      return;
+    }
+    let handle: RunnerHeadlessHandle;
+    try {
+      handle = spawnMain(started, { prompt: resumePrompt, resumeSessionId: ticket.claudeSessionId });
+    } catch (e) {
+      await fail(ticket.id, 'error', `failed to resume agent: ${String(e)}`);
+      return;
+    }
+    attach(ticket.id, handle);
   }
 
   async function onMainDone(id: string, outcome: MainOutcome): Promise<void> {
@@ -339,12 +373,18 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     async recover() {
       for (const t of store.list()) {
         if (t.state === 'running' || t.state === 'verifying') {
-          await apply(t.id, {
-            state: 'failed',
-            failureReason: 'interrupted',
-            error: 'server restarted while this ticket was in flight',
-            endedAt: now(),
-          });
+          if (t.claudeSessionId) {
+            // Session persisted on disk → continue it instead of failing.
+            await resumeInterrupted(t);
+          } else {
+            // No session captured yet (died very early) → can't resume.
+            await apply(t.id, {
+              state: 'failed',
+              failureReason: 'interrupted',
+              error: 'server restarted before this ticket captured a resumable session',
+              endedAt: now(),
+            });
+          }
         }
       }
       // Re-enqueue anything still queued so a restart resumes the backlog.
@@ -407,12 +447,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         await fail(id, 'error', `failed to resume agent: ${String(e)}`);
         return store.get(id);
       }
-      handles.set(id, handle);
-      timers.set(id, setTimer(() => void onTimeout(id), timeoutMs));
-      handle.done.then(
-        (outcome) => void onMainDone(id, outcome),
-        (e) => void fail(id, 'error', String(e)),
-      );
+      attach(id, handle);
       return started;
     },
 
