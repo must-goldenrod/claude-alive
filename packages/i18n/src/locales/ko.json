@@ -386,7 +386,7 @@
     "archive": "아카이브"
   },
   "tickets": {
-    "heroPrompt": "무엇을 해결하고 싶으세요?",
+    "heroPrompt": "What do you want to solve?",
     "newGoalPlaceholder": "목표를 적으세요 — 에이전트가 자율로 처리합니다",
     "selectFolder": "프로젝트 폴더 선택",
     "changeFolder": "변경",

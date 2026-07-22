@@ -25,6 +25,7 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
   const { t } = useTranslation();
   const status = displayStatus(ticket.state, evaluation);
   const color = STATUS_COLOR[status];
+  const isActive = status === 'active';
 
   // Focal line: the one-line result. While active, show the live sub-status;
   // on failure, the reason; otherwise the headline/derived summary.
@@ -50,6 +51,7 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
       onClick={() => onOpen(ticket)}
       role="button"
       tabIndex={0}
+      className={isActive ? 'ticket-card--active' : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -59,26 +61,32 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
       style={{
         height: CARD_HEIGHT,
         boxSizing: 'border-box',
+        // Active cards get their surface + flowing rainbow border from the
+        // `.ticket-card--active` class; static statuses keep the left accent.
         background: 'var(--bg-secondary, #161b22)',
         border: '1px solid var(--border-default, #30363d)',
-        boxShadow: `inset 3px 0 0 ${color}`,
+        boxShadow: isActive ? 'none' : `inset 3px 0 0 ${color}`,
         borderRadius: 12,
         padding: '12px 14px 12px 16px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
         cursor: 'pointer',
-        transition: 'background 0.15s ease, transform 0.12s ease, border-color 0.15s ease',
+        transition: 'transform 0.12s ease, border-color 0.15s ease',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'var(--bg-tertiary, #1c2230)';
         e.currentTarget.style.transform = 'translateY(-1px)';
-        e.currentTarget.style.borderColor = `color-mix(in srgb, ${color} 45%, var(--border-default, #30363d))`;
+        if (!isActive) {
+          e.currentTarget.style.background = 'var(--bg-tertiary, #1c2230)';
+          e.currentTarget.style.borderColor = `color-mix(in srgb, ${color} 45%, var(--border-default, #30363d))`;
+        }
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'var(--bg-secondary, #161b22)';
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = 'var(--border-default, #30363d)';
+        if (!isActive) {
+          e.currentTarget.style.background = 'var(--bg-secondary, #161b22)';
+          e.currentTarget.style.borderColor = 'var(--border-default, #30363d)';
+        }
       }}
     >
       {/* top row: #seq + project badge ............... time */}
