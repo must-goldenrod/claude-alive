@@ -1,18 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Ticket } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation, EvalLabel } from '@claude-alive/core';
 import { Markdown } from './Markdown.tsx';
 import { projectName, formatStarted, statusGroup } from './ticketDisplay.ts';
+import type { EvaluateFn } from './useTickets.ts';
 
 interface TicketDetailModalProps {
   ticket: Ticket;
+  evaluation?: TicketEvaluation | null;
   onClose: () => void;
   onRetry: (id: string) => void;
   onCancel: (id: string) => void;
   onDelete: (id: string) => void;
+  onEvaluate?: EvaluateFn;
 }
 
-export function TicketDetailModal({ ticket, onClose, onRetry, onCancel, onDelete }: TicketDetailModalProps) {
+export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCancel, onDelete, onEvaluate }: TicketDetailModalProps) {
   const { t } = useTranslation();
   const group = statusGroup(ticket.state);
   const isActive = group === 'active';
@@ -118,6 +121,12 @@ export function TicketDetailModal({ ticket, onClose, onRetry, onCancel, onDelete
               </div>
             </Section>
           )}
+
+          {evaluation && onEvaluate && (
+            <Section label={t('tickets.evaluateLabel')}>
+              <EvalSection ticketId={ticket.id} evaluation={evaluation} onEvaluate={onEvaluate} t={t} />
+            </Section>
+          )}
         </div>
 
         {/* Actions */}
@@ -158,6 +167,104 @@ export function TicketDetailModal({ ticket, onClose, onRetry, onCancel, onDelete
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Human good/bad labelling for a settled ticket. Clicking Good/Bad saves
+ * immediately with the current weight + note; the label feeds the project's
+ * learned guide (guideSynthesizer on the server).
+ */
+function EvalSection({
+  ticketId,
+  evaluation,
+  onEvaluate,
+  t,
+}: {
+  ticketId: string;
+  evaluation: TicketEvaluation;
+  onEvaluate: EvaluateFn;
+  t: (key: string) => string;
+}) {
+  const [weight, setWeight] = useState(evaluation.weight);
+  const [note, setNote] = useState(evaluation.note ?? '');
+  const [saving, setSaving] = useState<EvalLabel | null>(null);
+  const [savedAt, setSavedAt] = useState(0);
+
+  const save = async (label: EvalLabel) => {
+    setSaving(label);
+    const result = await onEvaluate(ticketId, { label, weight, note: note.trim() || undefined });
+    setSaving(null);
+    if (result) setSavedAt(Date.now());
+  };
+
+  const labelBtn = (label: EvalLabel, accent: string): React.CSSProperties => {
+    const on = evaluation.label === label;
+    return {
+      ...btnStyle,
+      color: on ? '#fff' : accent,
+      borderColor: accent,
+      background: on ? accent : 'transparent',
+      opacity: saving && saving !== label ? 0.5 : 1,
+      cursor: saving ? 'wait' : 'pointer',
+    };
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button type="button" disabled={!!saving} onClick={() => save('good')} style={labelBtn('good', 'var(--accent-green, #3fb950)')}>
+          {t('tickets.evalGood')}
+        </button>
+        <button type="button" disabled={!!saving} onClick={() => save('bad')} style={labelBtn('bad', 'var(--accent-red, #f85149)')}>
+          {t('tickets.evalBad')}
+        </button>
+        {!evaluation.humanLabeled && (
+          <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)', opacity: 0.7 }}>
+            {t('tickets.evalAuto')}: {evaluation.autoLabel}
+          </span>
+        )}
+        {savedAt > 0 && (
+          <span style={{ fontSize: 11, color: 'var(--accent-green, #3fb950)' }}>{t('tickets.evalSaved')}</span>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)' }}>{t('tickets.evalWeight')}</span>
+        {[1, 2, 3, 4, 5].map((w) => (
+          <button
+            key={w}
+            type="button"
+            onClick={() => setWeight(w)}
+            style={{
+              ...btnStyle,
+              padding: '2px 9px',
+              color: weight === w ? 'var(--text-primary, #e6edf3)' : 'var(--text-secondary, #8b949e)',
+              background: weight === w ? 'rgba(88,166,255,0.15)' : 'transparent',
+              borderColor: weight === w ? 'var(--accent-blue, #58a6ff)' : 'var(--border-default, #30363d)',
+            }}
+          >
+            {w}
+          </button>
+        ))}
+      </div>
+
+      <input
+        type="text"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={t('tickets.evalNotePlaceholder')}
+        maxLength={2000}
+        style={{
+          fontSize: 12,
+          padding: '6px 10px',
+          borderRadius: 8,
+          border: '1px solid var(--border-default, #30363d)',
+          background: 'var(--bg-tertiary, #21262d)',
+          color: 'var(--text-primary, #e6edf3)',
+        }}
+      />
     </div>
   );
 }

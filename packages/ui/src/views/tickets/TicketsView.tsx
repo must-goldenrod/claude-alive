@@ -17,7 +17,7 @@ const COLUMNS: StatusGroup[] = ['active', 'done', 'failed'];
 
 export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
   const { t } = useTranslation();
-  const { tickets, createTicket, retryTicket, cancelTicket, deleteTicket } = useTickets(active, subscribeRaw);
+  const { tickets, evaluations, createTicket, retryTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
@@ -54,10 +54,12 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
       {selected && (
         <TicketDetailModal
           ticket={selected}
+          evaluation={evaluations[selected.id] ?? null}
           onClose={() => setSelectedId(null)}
           onRetry={retryTicket}
           onCancel={cancelTicket}
           onDelete={deleteTicket}
+          onEvaluate={evaluateTicket}
         />
       )}
     </div>
