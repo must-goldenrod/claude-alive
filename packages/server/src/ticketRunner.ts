@@ -90,6 +90,13 @@ export interface TicketRunnerOptions {
   canonicalize?: (path: string) => string;
   /** Existence check for a ticket's cwd; injectable for tests. Defaults to fs.existsSync. */
   cwdExists?: (path: string) => boolean;
+  /**
+   * Location-aware cwd validation. When provided it supersedes the local
+   * cwdExists/canonicalize/allowlist path — the caller resolves an Executor from
+   * the ticket's location and validates there (local fs or remote `ssh test -d`).
+   * Returns an error message, or null when valid.
+   */
+  validateCwd?: (ticket: Ticket) => Promise<string | null>;
 }
 
 export interface TicketRunner {
@@ -130,7 +137,7 @@ function isTerminal(t: Ticket | undefined): boolean {
 }
 
 export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
-  const { store, spawnMain, verify, broadcast, onSettled } = options;
+  const { store, spawnMain, verify, broadcast, onSettled, validateCwd } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const resumePrompt = options.resumePrompt ?? DEFAULT_RESUME_PROMPT;
@@ -204,28 +211,36 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     if (!ticket || ticket.state !== 'queued') return;
     running.add(id); // reserve the slot synchronously so pump() can't oversubscribe
 
-    // A nonexistent cwd would otherwise fail deep in spawn as a cryptic ENOENT.
-    // Catch it here with a clear message (also covers retry/recover of tickets
-    // created before cwd validation existed).
-    if (!cwdExists(ticket.cwd)) {
-      await fail(id, 'error', `working directory does not exist: ${ticket.cwd}`);
-      return;
-    }
-
-    // Canonicalize (resolve symlinks) before the allowlist check when a list is
-    // set; a path that fails to resolve is rejected (fail-closed).
-    let checkCwd = ticket.cwd;
-    if (allowedRoots && allowedRoots.length > 0) {
-      try {
-        checkCwd = canonicalize(ticket.cwd);
-      } catch {
-        await fail(id, 'cwd-not-allowed', `cwd does not resolve: ${ticket.cwd}`);
+    // Validate the cwd before spawning — an invalid path would otherwise fail
+    // deep in spawn as a cryptic ENOENT. When a location-aware validator is
+    // injected it decides (local fs or remote `ssh test -d`); otherwise fall back
+    // to the built-in local check. `cwd-not-allowed` is used for allowlist/resolve
+    // failures, `error` for a missing/unreachable directory.
+    if (validateCwd) {
+      const err = await validateCwd(ticket);
+      if (err) {
+        const reason: TicketFailureReason = /allowlist|resolve/.test(err) ? 'cwd-not-allowed' : 'error';
+        await fail(id, reason, err);
         return;
       }
-    }
-    if (!isCwdAllowed(checkCwd, allowedRoots)) {
-      await fail(id, 'cwd-not-allowed', `cwd not in allowlist: ${ticket.cwd}`);
-      return;
+    } else {
+      if (!cwdExists(ticket.cwd)) {
+        await fail(id, 'error', `working directory does not exist: ${ticket.cwd}`);
+        return;
+      }
+      let checkCwd = ticket.cwd;
+      if (allowedRoots && allowedRoots.length > 0) {
+        try {
+          checkCwd = canonicalize(ticket.cwd);
+        } catch {
+          await fail(id, 'cwd-not-allowed', `cwd does not resolve: ${ticket.cwd}`);
+          return;
+        }
+      }
+      if (!isCwdAllowed(checkCwd, allowedRoots)) {
+        await fail(id, 'cwd-not-allowed', `cwd not in allowlist: ${ticket.cwd}`);
+        return;
+      }
     }
 
     const started = await apply(id, { state: 'running', startedAt: now() });

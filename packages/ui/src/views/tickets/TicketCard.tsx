@@ -1,5 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import type { Ticket, TicketEvaluation } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation, SshTarget } from '@claude-alive/core';
+
+/** `dev@host` / `host:port` — inlined (avoid a core runtime import in the browser bundle). */
+function sshDisplay(t: SshTarget): string {
+  const at = t.user ? `${t.user}@${t.host}` : t.host;
+  return t.port && t.port !== 22 ? `${at}:${t.port}` : at;
+}
 import {
   projectName,
   formatStarted,
@@ -111,6 +117,23 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
         >
           {projectName(ticket.cwd)}
         </span>
+        {ticket.location?.kind === 'ssh' && ticket.location.ssh && (
+          <span
+            title={sshDisplay(ticket.location.ssh)}
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--accent-purple, #bc8cff)',
+              background: 'color-mix(in srgb, var(--accent-purple, #bc8cff) 15%, transparent)',
+              borderRadius: 6,
+              padding: '1px 6px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            ⬈ {ticket.location.label || ticket.location.ssh.host}
+          </span>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 10, fontFamily: 'var(--font-mono, monospace)', opacity: 0.45, whiteSpace: 'nowrap', flexShrink: 0 }}>
           {formatStarted(ticket)}
         </span>

@@ -111,7 +111,15 @@ export interface HttpRouterOptions {
    */
   tickets?: {
     list: () => unknown[];
-    create: (input: { goal: string; cwd: string }) => Promise<unknown>;
+    create: (input: {
+      goal: string;
+      cwd: string;
+      location?: {
+        kind: 'local' | 'ssh';
+        ssh?: { host: string; user?: string; port?: number; identityFile?: string };
+        label?: string;
+      };
+    }) => Promise<unknown>;
     retry: (id: string) => Promise<unknown | undefined>;
     /** Continue a `decision` ticket with a follow-up prompt. Undefined = unknown id. */
     reply?: (id: string, prompt: string) => Promise<unknown | undefined>;
@@ -134,9 +142,23 @@ const ProjectNameBodySchema = z.object({
   name: z.string().max(100).nullable(),
 });
 
+const SshTargetSchema = z.object({
+  host: z.string().min(1).max(255),
+  user: z.string().max(64).optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  identityFile: z.string().max(1024).optional(),
+});
+
+const TicketLocationSchema = z.object({
+  kind: z.enum(['local', 'ssh']),
+  ssh: SshTargetSchema.optional(),
+  label: z.string().max(120).optional(),
+});
+
 const TicketCreateBodySchema = z.object({
   goal: z.string().min(1).max(8000),
   cwd: z.string().min(1),
+  location: TicketLocationSchema.optional(),
 });
 
 const EvaluateBodySchema = z.object({
