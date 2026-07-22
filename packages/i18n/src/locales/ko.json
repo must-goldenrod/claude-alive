@@ -415,6 +415,7 @@
     "changeFolder": "변경",
     "location": "실행 위치",
     "locationLocal": "로컬",
+    "remotePickerTitle": "원격 폴더 선택",
     "remotePathPlaceholder": "원격 경로, 예: /home/dev/project",
     "pickerTitle": "프로젝트 폴더 선택",
     "useThisFolder": "이 폴더로 지정",

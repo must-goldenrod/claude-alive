@@ -145,6 +145,12 @@ export interface HttpRouterOptions {
     list: () => unknown[];
     check: (id: string) => Promise<unknown | null>;
   };
+
+  /** Remote directory listing over SSH, for the ticket's remote folder picker. */
+  sshBrowse?: (
+    target: { host: string; user?: string; port?: number; identityFile?: string },
+    path?: string,
+  ) => Promise<unknown>;
 }
 
 const ProjectNameBodySchema = z.object({
@@ -263,6 +269,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     efficio,
     tickets,
     backends,
+    sshBrowse,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -483,6 +490,28 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, { backends: backends.list() }, req);
+      return;
+    }
+    // POST /api/ssh/browse — list remote sub-directories for the remote folder
+    // picker (loopback-only; the ssh target comes from the local user's preset).
+    if (sshBrowse && req.method === 'POST' && url.pathname === '/api/ssh/browse') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'SSH browse is restricted to loopback' }, req);
+        return;
+      }
+      try {
+        const parsed = z
+          .object({ ssh: SshTargetSchema, path: z.string().max(4096).optional() })
+          .safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: ssh target required' }, req);
+          return;
+        }
+        const result = await sshBrowse(parsed.data.ssh, parsed.data.path);
+        sendJson(res, 200, result, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
       return;
     }
     const backendCheckMatch = url.pathname.match(/^\/api\/backends\/([^/]+)\/check$/);
