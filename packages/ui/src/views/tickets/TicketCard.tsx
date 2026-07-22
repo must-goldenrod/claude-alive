@@ -1,6 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation } from '@claude-alive/core';
-import { projectName, formatStarted, displayStatus, oneLineSummary, runMetaShort, type DisplayStatus } from './ticketDisplay.ts';
+import {
+  projectName,
+  formatStarted,
+  displayStatus,
+  oneLineSummary,
+  runMetaShort,
+  STATUS_COLOR,
+  type DisplayStatus,
+} from './ticketDisplay.ts';
 import type { EvaluateFn } from './useTickets.ts';
 
 interface TicketCardProps {
@@ -10,12 +18,8 @@ interface TicketCardProps {
   onEvaluate?: EvaluateFn;
 }
 
-const STATUS_COLOR: Record<DisplayStatus, string> = {
-  active: 'var(--accent-blue, #58a6ff)',
-  complete: 'var(--accent-green, #3fb950)',
-  closed: 'var(--text-secondary, #8b949e)',
-  failed: 'var(--accent-red, #f85149)',
-};
+/** Every card is the same height so lanes stay a tidy grid regardless of content. */
+const CARD_HEIGHT = 150;
 
 export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCardProps) {
   const { t } = useTranslation();
@@ -33,25 +37,53 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
           : t('tickets.status.failed')
         : oneLineSummary(ticket) ?? t('tickets.noResult');
 
-  const doEval = (label: 'good' | 'bad') => {
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const doEval = (e: React.MouseEvent, label: 'good' | 'bad') => {
+    e.stopPropagation();
     onEvaluate?.(ticket.id, { label });
   };
 
+  const meta = runMetaShort(ticket);
+
   return (
     <div
+      onClick={() => onOpen(ticket)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(ticket);
+        }
+      }}
       style={{
+        height: CARD_HEIGHT,
+        boxSizing: 'border-box',
         background: 'var(--bg-secondary, #161b22)',
         border: '1px solid var(--border-default, #30363d)',
+        boxShadow: `inset 3px 0 0 ${color}`,
         borderRadius: 12,
-        padding: 14,
+        padding: '12px 14px 12px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 6,
+        cursor: 'pointer',
+        transition: 'background 0.15s ease, transform 0.12s ease, border-color 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--bg-tertiary, #1c2230)';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        e.currentTarget.style.borderColor = `color-mix(in srgb, ${color} 45%, var(--border-default, #30363d))`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'var(--bg-secondary, #161b22)';
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.borderColor = 'var(--border-default, #30363d)';
       }}
     >
-      {/* top row: #seq + project badge ............... time (top-right) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, opacity: 0.55 }}>#{ticket.seq}</span>
+      {/* top row: #seq + project badge ............... time */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 11, opacity: 0.55, flexShrink: 0 }}>#{ticket.seq}</span>
         <span
           style={{
             fontSize: 11,
@@ -59,33 +91,46 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
             color: 'var(--accent-blue, #58a6ff)',
             background: 'color-mix(in srgb, var(--accent-blue, #58a6ff) 15%, transparent)',
             borderRadius: 6,
-            padding: '2px 8px',
-            maxWidth: 140,
+            padding: '1px 7px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            minWidth: 0,
           }}
           title={ticket.cwd}
         >
           {projectName(ticket.cwd)}
         </span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.5, whiteSpace: 'nowrap' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 10, fontFamily: 'var(--font-mono, monospace)', opacity: 0.45, whiteSpace: 'nowrap', flexShrink: 0 }}>
           {formatStarted(ticket)}
         </span>
       </div>
 
-      {/* the goal (what was asked), muted */}
-      <div style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {/* goal (what was asked), muted — one line */}
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--text-secondary, #8b949e)',
+          lineHeight: 1.35,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          flexShrink: 0,
+        }}
+        title={ticket.goal}
+      >
         {ticket.goal}
       </div>
 
-      {/* the one-line result — the focal point */}
+      {/* one-line result — the focal point, clamped to two lines to keep height uniform */}
       <div
         style={{
-          fontSize: 14,
+          flex: 1,
+          minHeight: 0,
+          fontSize: 13.5,
           fontWeight: 600,
           color,
-          lineHeight: 1.4,
+          lineHeight: 1.35,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           display: '-webkit-box',
@@ -96,55 +141,53 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
         {line}
       </div>
 
-      {/* status chip row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      {/* footer — always a single row so cards line up */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, minWidth: 0 }}>
         <StatusChip status={status} label={t(`tickets.columns.${status}`)} />
-        {status === 'closed' && evaluation && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: evaluation.label === 'good' ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)',
-            }}
-          >
-            {evaluation.label === 'good' ? t('tickets.evalGood') : t('tickets.evalBad')}
-          </span>
+        {status === 'complete' && onEvaluate ? (
+          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
+            <button type="button" onClick={(e) => doEval(e, 'good')} style={evalBtn('var(--accent-green, #3fb950)')}>
+              {t('tickets.evalGood')}
+            </button>
+            <button type="button" onClick={(e) => doEval(e, 'bad')} style={evalBtn('var(--accent-red, #f85149)')}>
+              {t('tickets.evalBad')}
+            </button>
+          </div>
+        ) : (
+          <>
+            {status === 'closed' && evaluation && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: evaluation.label === 'good' ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)',
+                  flexShrink: 0,
+                }}
+              >
+                {evaluation.label === 'good' ? t('tickets.evalGood') : t('tickets.evalBad')}
+              </span>
+            )}
+            {meta && (
+              <span
+                onClick={stop}
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 10,
+                  fontFamily: 'var(--font-mono, monospace)',
+                  opacity: 0.5,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}
+                title={meta}
+              >
+                {meta}
+              </span>
+            )}
+          </>
         )}
-        {runMetaShort(ticket) && (
-          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.5 }} title={runMetaShort(ticket)}>
-            {runMetaShort(ticket)}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => onOpen(ticket)}
-          style={{
-            marginLeft: 'auto',
-            fontSize: 12,
-            padding: '4px 10px',
-            borderRadius: 8,
-            border: '1px solid var(--border-default, #30363d)',
-            background: 'var(--bg-tertiary, #21262d)',
-            color: 'var(--text-secondary, #8b949e)',
-            cursor: 'pointer',
-          }}
-        >
-          {t('tickets.detail')}
-        </button>
       </div>
-
-      {/* evaluation row — only while 완료 (complete): Good/Bad closes the ticket */}
-      {status === 'complete' && onEvaluate && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)', opacity: 0.8 }}>{t('tickets.evaluatePrompt')}</span>
-          <button type="button" onClick={() => doEval('good')} style={evalBtn('var(--accent-green, #3fb950)')}>
-            {t('tickets.evalGood')}
-          </button>
-          <button type="button" onClick={() => doEval('bad')} style={evalBtn('var(--accent-red, #f85149)')}>
-            {t('tickets.evalBad')}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -163,6 +206,7 @@ function StatusChip({ status, label }: { status: DisplayStatus; label: string })
         display: 'inline-flex',
         alignItems: 'center',
         gap: 4,
+        flexShrink: 0,
       }}
     >
       {status === 'active' && (

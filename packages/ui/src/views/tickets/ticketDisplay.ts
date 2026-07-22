@@ -27,6 +27,18 @@ export function displayStatus(state: TicketState, evaluation?: TicketEvaluation 
   return 'active';
 }
 
+/**
+ * One accent color per status, shared by the column header and every card in
+ * that lane so the board reads by color at a glance. Values are CSS-var backed
+ * so they track the theme.
+ */
+export const STATUS_COLOR: Record<DisplayStatus, string> = {
+  active: 'var(--accent-blue, #58a6ff)',
+  complete: 'var(--accent-green, #3fb950)',
+  closed: 'var(--text-secondary, #8b949e)',
+  failed: 'var(--accent-red, #f85149)',
+};
+
 /** Project badge = the cwd's last path segment. */
 export function projectName(cwd: string): string {
   const parts = cwd.replace(/\/+$/, '').split('/');

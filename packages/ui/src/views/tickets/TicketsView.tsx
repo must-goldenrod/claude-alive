@@ -6,7 +6,7 @@ import { useTickets } from './useTickets.ts';
 import { TicketCard } from './TicketCard.tsx';
 import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
-import { displayStatus, type DisplayStatus } from './ticketDisplay.ts';
+import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
 
 interface TicketsViewProps {
   active: boolean;
@@ -39,7 +39,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           style={{
             maxWidth: 640,
             width: '100%',
-            margin: '16px auto 8px',
+            margin: '56px auto 20px',
             display: 'flex',
             flexDirection: 'column',
             gap: 18,
@@ -62,28 +62,53 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           <NewTicketForm onCreate={createTicket} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-          {COLUMNS.map((col) => (
-            <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary, #8b949e)', display: 'flex', gap: 8, alignItems: 'center' }}>
-                {t(`tickets.columns.${col}`)}
-                <span style={{ opacity: 0.5, fontFamily: 'var(--font-mono, monospace)' }}>{grouped[col].length}</span>
+        {/* Board region: a single bordered surface holds the four status lanes.
+            minmax(240px,…) + horizontal scroll keeps lanes from being crushed on
+            narrow screens instead of letting them squish. */}
+        <div
+          style={{
+            border: '1px solid var(--border-default, #30363d)',
+            borderRadius: 16,
+            background: 'var(--bg-primary, #0d1117)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(240px, 1fr))',
+              overflowX: 'auto',
+            }}
+          >
+            {COLUMNS.map((col, i) => (
+              <div
+                key={col}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 10,
+                  padding: 14,
+                  minWidth: 0,
+                  borderRight: i < COLUMNS.length - 1 ? '1px solid var(--border-color, #21262d)' : 'none',
+                }}
+              >
+                <ColumnHeader status={col} label={t(`tickets.columns.${col}`)} count={grouped[col].length} />
+                {grouped[col].length === 0 ? (
+                  <div style={{ fontSize: 12, opacity: 0.35, padding: '10px 2px', textAlign: 'center' }}>{t('tickets.empty')}</div>
+                ) : (
+                  grouped[col].map((ticket) => (
+                    <TicketCard
+                      key={ticket.id}
+                      ticket={ticket}
+                      evaluation={evaluations[ticket.id] ?? null}
+                      onOpen={(x) => setSelectedId(x.id)}
+                      onEvaluate={evaluateTicket}
+                    />
+                  ))
+                )}
               </div>
-              {grouped[col].length === 0 ? (
-                <div style={{ fontSize: 12, opacity: 0.4, padding: '8px 2px' }}>{t('tickets.empty')}</div>
-              ) : (
-                grouped[col].map((ticket) => (
-                  <TicketCard
-                    key={ticket.id}
-                    ticket={ticket}
-                    evaluation={evaluations[ticket.id] ?? null}
-                    onOpen={(x) => setSelectedId(x.id)}
-                    onEvaluate={evaluateTicket}
-                  />
-                ))
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -98,6 +123,42 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           onEvaluate={evaluateTicket}
         />
       )}
+    </div>
+  );
+}
+
+/** Status lane header: a color dot + label + a filled count pill, all tinted by
+ *  the lane's status so each column is identifiable at a glance. */
+function ColumnHeader({ status, label, count }: { status: DisplayStatus; label: string; count: number }) {
+  const color = STATUS_COLOR[status];
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        paddingBottom: 10,
+        borderBottom: `2px solid color-mix(in srgb, ${color} 35%, transparent)`,
+      }}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 13, fontWeight: 700, color, letterSpacing: '0.01em' }}>{label}</span>
+      <span
+        style={{
+          marginLeft: 'auto',
+          fontSize: 11,
+          fontWeight: 700,
+          fontFamily: 'var(--font-mono, monospace)',
+          color,
+          background: `color-mix(in srgb, ${color} 16%, transparent)`,
+          borderRadius: 999,
+          minWidth: 22,
+          textAlign: 'center',
+          padding: '1px 7px',
+        }}
+      >
+        {count}
+      </span>
     </div>
   );
 }
