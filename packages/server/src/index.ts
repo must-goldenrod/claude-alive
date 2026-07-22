@@ -441,8 +441,15 @@ const httpServer = createHttpServer({
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
     // ("failed to spawn claude").
-    validateCwd: (cwd) => {
-      if (!isAbsolute(cwd)) return 'Working directory must be an absolute path (e.g. /Users/you/project)';
+    validateCwd: (cwd, isRemote) => {
+      if (!isAbsolute(cwd)) {
+        return isRemote
+          ? 'Remote path must be absolute (e.g. /Users/dev/project). "~" is not expanded.'
+          : 'Working directory must be an absolute path (e.g. /Users/you/project)';
+      }
+      // Remote (ssh) paths live on another machine — don't stat the local fs.
+      // The runner validates the remote directory over SSH (`ssh test -d`).
+      if (isRemote) return null;
       try {
         if (!statSync(cwd).isDirectory()) return 'Working directory is not a directory';
       } catch {

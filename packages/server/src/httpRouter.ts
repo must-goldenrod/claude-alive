@@ -127,7 +127,7 @@ export interface HttpRouterOptions {
     cancel: (id: string) => Promise<unknown | undefined>;
     remove: (id: string) => Promise<boolean>;
     /** Validate cwd before creating; returns an error message, or null when valid. */
-    validateCwd?: (cwd: string) => string | null;
+    validateCwd?: (cwd: string, isRemote: boolean) => string | null;
     /** Apply a human good/bad label to a settled ticket. Undefined = unknown id. */
     evaluate?: (
       id: string,
@@ -400,7 +400,7 @@ export function createHttpServer(options: HttpRouterOptions) {
           sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
           return;
         }
-        const cwdError = tickets.validateCwd?.(parsed.data.cwd);
+        const cwdError = tickets.validateCwd?.(parsed.data.cwd, parsed.data.location?.kind === 'ssh');
         if (cwdError) {
           sendJson(res, 400, { error: cwdError }, req);
           return;
