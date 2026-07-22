@@ -41,8 +41,11 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
+import { createLitellmClient } from './orchestrator/litellmClient.js';
+import { createBackendRegistry } from './orchestrator/backends.js';
+import { ensureDelegateCli } from './orchestrator/delegateCli.js';
 import { createEvalStore } from './evalStore.js';
-import { buildMainPrompt } from './ticketPrompt.js';
+import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
@@ -336,6 +339,12 @@ const ticketStore = createTicketStore();
 await ticketStore.load();
 const evalStore = createEvalStore();
 await evalStore.load();
+// Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
+// in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
+// Its dir is prepended to the agent PATH (main + verifier) so `command -v
+// ca-delegate` resolves — the verifier must know the delegation tool is real.
+const delegateCmd = ensureDelegateCli();
+const delegateBinDir = dirname(delegateCmd);
 
 // Local cwd allowlist (colon-separated). Applies to LOCAL tickets only; remote
 // (ssh) tickets are gated by the loopback-only create route + host ownership.
@@ -347,8 +356,13 @@ const executorFor = (location: import('@claude-alive/core').TicketLocation | und
 
 // The verifier runs at the SAME location as the main agent.
 const ticketVerifier = createVerifier({
-  run: ({ goal, cwd, location }) =>
-    executorFor(location).spawn({ goal, cwd, permissionMode: 'bypassPermissions' }).done,
+  run: ({ goal, cwd, location, orchestrated }) =>
+    executorFor(location).spawn({
+      goal,
+      cwd,
+      permissionMode: 'bypassPermissions',
+      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+    }).done,
 });
 const ticketRunner = createTicketRunner({
   store: ticketStore,
@@ -356,17 +370,25 @@ const ticketRunner = createTicketRunner({
   // Prepend the route's learned guide (from past good/bad evaluations) and append
   // the one-line headline instruction (parsed by extractHeadline). The guide is
   // read at spawn time, so newer labels take effect on the next ticket.
-  spawnMain: (ticket, opts) =>
-    executorFor(ticket.location).spawn({
-      // Follow-up reply: wrap the user's raw answer with the marker instruction
-      // and resume the session. Initial run: goal + the route's learned guide.
-      goal: opts?.prompt
-        ? buildMainPrompt(opts.prompt)
-        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text),
+  spawnMain: (ticket, opts) => {
+    // Orchestrated tickets run with the orchestrator prompt + delegation tool.
+    // Only for local execution (the ca-delegate CLI lives on the server host, so
+    // an SSH-run agent couldn't call it — remote orchestration is a follow-up).
+    const orchestrated = Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh';
+    const goal = opts?.prompt
+      ? // Follow-up reply: wrap the raw answer and resume the same session.
+        buildMainPrompt(opts.prompt)
+      : orchestrated
+        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd)
+        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text);
+    return executorFor(ticket.location).spawn({
+      goal,
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
-    }),
+      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+    });
+  },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   // Location-aware cwd validation (local fs, or remote `ssh test -d`).
   validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),
@@ -386,6 +408,31 @@ if (!process.env.CLAUDE_ALIVE_TICKET_ROOTS) {
       'Ticket routes are loopback-only; set an allowlist to further restrict.',
   );
 }
+
+// ── Orchestration backends ───────────────────────────────────────────────────
+// litellm is the first sub-agent delegation target; its key lives in server env
+// only (never sent to the browser). The registry powers the onboarding surface.
+function findOnPath(bin: string): string | null {
+  for (const dir of (augmentPath(process.env.PATH) ?? '').split(':')) {
+    if (!dir) continue;
+    try {
+      if (statSync(join(dir, bin)).isFile()) return join(dir, bin);
+    } catch {
+      // not here — keep looking
+    }
+  }
+  return null;
+}
+const litellmClient = process.env.LITELLM_KEY
+  ? createLitellmClient({
+      baseUrl: process.env.LITELLM_BASE_URL ?? 'https://litellm.must.codes',
+      apiKey: process.env.LITELLM_KEY,
+    })
+  : undefined;
+const backendRegistry = createBackendRegistry({
+  litellm: litellmClient,
+  findClaude: () => findOnPath('claude'),
+});
 
 const httpServer = createHttpServer({
   onEvent,
@@ -436,6 +483,11 @@ const httpServer = createHttpServer({
   saveProjectName,
   removeProjectName,
   efficio,
+  backends: {
+    list: () => backendRegistry.list(),
+    check: async (id: string) =>
+      id === 'claude-local' || id === 'litellm' || id === 'ssh' ? backendRegistry.check(id) : null,
+  },
   workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
   sessionConversation: canonicalPipeline.enabled
     ? (sessionId, cursor) => canonicalPipeline.conversation(sessionId, cursor)

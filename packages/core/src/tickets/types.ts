@@ -69,6 +69,8 @@ export interface Ticket {
   cwd: string;
   /** Where the agent runs. Absent = local (backward-compatible). */
   location?: TicketLocation;
+  /** When true, the agent runs as an orchestrator that may delegate to sub-agents. */
+  orchestrated?: boolean;
   state: TicketState;
   createdAt: number;
   startedAt?: number;
@@ -120,6 +122,7 @@ export interface TicketCreateInput {
   goal: string;
   cwd: string;
   location?: TicketLocation;
+  orchestrated?: boolean;
 }
 
 /** States the UI renders as "in progress". */
