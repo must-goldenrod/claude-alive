@@ -125,7 +125,9 @@ describe('TicketRunner decision + reply', () => {
     const d = store.get(t.id)!;
     expect(d.decisionQuestion).toBe('A안 vs B안?');
     expect(d.rounds).toBe(1);
-    expect(runner.activeCount()).toBe(0);
+    // The slot is released one tick after the state flips to 'decision', so wait
+    // on the release rather than asserting immediately (avoids a CI timing race).
+    await until(() => runner.activeCount() === 0);
     expect(broadcasts.map((b) => b.state)).toEqual(['running', 'decision']);
   });
 
