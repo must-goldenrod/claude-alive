@@ -411,7 +411,7 @@
     "remotePathPlaceholder": "원격 경로, 예: /home/dev/project",
     "pickerTitle": "프로젝트 폴더 선택",
     "useThisFolder": "이 폴더로 지정",
-    "create": "티켓 만들기",
+    "create": "Solve",
     "creating": "생성 중…",
     "empty": "없음",
     "retry": "재시도",
