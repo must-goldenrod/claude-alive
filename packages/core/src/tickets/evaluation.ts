@@ -33,6 +33,17 @@ export interface TicketEvaluation {
   /** 1..5 influence weight on guide synthesis. Default 3. */
   weight: number;
   note?: string;
+  /**
+   * Bias-reflection gate (opt-in). Only records with `reflected === true` are
+   * synthesised into the route's RouteGuide and injected into future prompts.
+   * Defaults to false so a finished ticket never shapes future runs until a
+   * human explicitly approves it. Preserved across re-upserts, like humanLabeled.
+   */
+  reflected: boolean;
+  /** Full result body (markdown) snapshot, so dissection survives ticket eviction. */
+  result?: string;
+  /** When the underlying ticket settled (done/failed). */
+  completedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

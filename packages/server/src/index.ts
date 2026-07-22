@@ -481,6 +481,12 @@ const httpServer = createHttpServer({
       if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
       return evaluation;
     },
+    setReflected: async (id, reflected) => {
+      const evaluation = await evalStore.setReflected(id, reflected);
+      if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
+      return evaluation;
+    },
+    guideFor: (route) => evalStore.guideFor(route),
     listEvaluations: () => evalStore.list(),
   },
   renameAgent,

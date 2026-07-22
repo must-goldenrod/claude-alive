@@ -133,6 +133,10 @@ export interface HttpRouterOptions {
       id: string,
       input: { label: 'good' | 'bad' | 'unrated'; weight?: number; note?: string },
     ) => Promise<unknown | undefined>;
+    /** Toggle the bias-reflection gate for a ticket. Undefined = unknown id. */
+    setReflected?: (id: string, reflected: boolean) => Promise<unknown | undefined>;
+    /** Synthesised RouteGuide (bias) preview for a route (cwd). */
+    guideFor?: (route: string) => unknown;
     /** All evaluation records (dataset), newest activity first is up to the caller. */
     listEvaluations?: () => unknown[];
   };
@@ -186,6 +190,10 @@ const EvaluateBodySchema = z.object({
   label: z.enum(['good', 'bad', 'unrated']),
   weight: z.number().int().min(1).max(5).optional(),
   note: z.string().max(2000).optional(),
+});
+
+const ReflectBodySchema = z.object({
+  reflected: z.boolean(),
 });
 
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
@@ -465,6 +473,36 @@ export function createHttpServer(options: HttpRouterOptions) {
       }
       return;
     }
+    // POST /api/tickets/:id/reflect — toggle the bias-reflection gate (opt-in).
+    // Only reflected tickets shape the route's RouteGuide (spec 2026-07-22).
+    const ticketReflectMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/reflect$/);
+    if (tickets?.setReflected && req.method === 'POST' && ticketReflectMatch) {
+      try {
+        const parsed = ReflectBodySchema.safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: reflected must be a boolean' }, req);
+          return;
+        }
+        const evaluation = await tickets.setReflected(ticketReflectMatch[1]!, parsed.data.reflected);
+        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: 'Ticket not found' }, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
+      return;
+    }
+
+    // GET /api/tickets/guide?route=<cwd> — current synthesised RouteGuide (bias)
+    // for a route, so the ticket-management view can preview what is injected.
+    if (tickets?.guideFor && req.method === 'GET' && url.pathname === '/api/tickets/guide') {
+      const route = url.searchParams.get('route');
+      if (!route) {
+        sendJson(res, 400, { error: 'route query parameter required' }, req);
+        return;
+      }
+      sendJson(res, 200, { guide: tickets.guideFor(route) }, req);
+      return;
+    }
+
     const ticketDeleteMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)$/);
     if (tickets && req.method === 'DELETE' && ticketDeleteMatch) {
       const ok = await tickets.remove(ticketDeleteMatch[1]!);
