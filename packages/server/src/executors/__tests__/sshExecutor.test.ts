@@ -36,6 +36,12 @@ describe('sshBaseArgs', () => {
     ]);
     expect(sshBaseArgs({ host: 'h', port: 22 })).not.toContain('-p'); // default port omitted
   });
+
+  it('rejects flag-smuggling targets (argv injection)', () => {
+    expect(() => sshBaseArgs({ host: '-oProxyCommand=touch /tmp/x' })).toThrow(/must not start with/);
+    expect(() => sshBaseArgs({ host: 'h', user: '-oProxyCommand=x' })).toThrow(/must not start with/);
+    expect(() => sshBaseArgs({ host: 'h', identityFile: '-Fmalicious' })).toThrow(/must not start with/);
+  });
 });
 
 describe('buildRemoteCommand', () => {
