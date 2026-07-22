@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation } from '@claude-alive/core';
-import { projectName, formatStarted, displayStatus, oneLineSummary, type DisplayStatus } from './ticketDisplay.ts';
+import { projectName, formatStarted, displayStatus, oneLineSummary, runMetaShort, type DisplayStatus } from './ticketDisplay.ts';
 import type { EvaluateFn } from './useTickets.ts';
 
 interface TicketCardProps {
@@ -110,7 +110,11 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
             {evaluation.label === 'good' ? t('tickets.evalGood') : t('tickets.evalBad')}
           </span>
         )}
-        {ticket.model && <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.4 }}>{ticket.model}</span>}
+        {runMetaShort(ticket) && (
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.5 }} title={runMetaShort(ticket)}>
+            {runMetaShort(ticket)}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => onOpen(ticket)}

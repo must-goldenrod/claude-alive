@@ -18,7 +18,7 @@ export type {
 export { parseTranscriptTokens } from './transcript/parser.js';
 export { TICKET_ACTIVE_STATES, isTicketActive } from './tickets/types.js';
 export type {
-  Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput,
+  Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
 } from './tickets/types.js';
 export {
   seedAutoLabel, clampWeight,

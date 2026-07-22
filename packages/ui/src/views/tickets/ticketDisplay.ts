@@ -33,6 +33,40 @@ export function projectName(cwd: string): string {
   return parts[parts.length - 1] || cwd;
 }
 
+/** "970", "1.2k", "3.4M" — compact token counts. */
+export function formatTokens(n?: number): string | null {
+  if (n === undefined) return null;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+/** "$0.12" / "$0.0034" — small costs keep more precision. */
+export function formatCost(usd?: number): string | null {
+  if (usd === undefined) return null;
+  return `$${usd < 0.01 ? usd.toFixed(4) : usd.toFixed(2)}`;
+}
+
+/** "4.2s" / "1m 30s". */
+export function formatDuration(ms?: number): string | null {
+  if (ms === undefined) return null;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${Math.round(s % 60)}s`;
+}
+
+/** Compact card meta: model + total tokens + cost (whichever are present). */
+export function runMetaShort(ticket: Ticket): string {
+  const parts: string[] = [];
+  if (ticket.model) parts.push(ticket.model);
+  const tok = formatTokens(ticket.usage?.totalTokens);
+  if (tok) parts.push(`${tok} tok`);
+  const cost = formatCost(ticket.usage?.costUsd);
+  if (cost) parts.push(cost);
+  return parts.join(' · ');
+}
+
 /** Compact "MM-DD HH:mm" for the card. Uses startedAt, falling back to createdAt. */
 export function formatStarted(ticket: Ticket): string {
   const ms = ticket.startedAt ?? ticket.createdAt;

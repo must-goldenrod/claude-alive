@@ -8,12 +8,12 @@
  */
 import { resolve, sep } from 'node:path';
 import { realpathSync, existsSync } from 'node:fs';
-import type { Ticket, TicketFailureReason } from '@claude-alive/core';
+import type { Ticket, TicketFailureReason, TicketUsage } from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
 
 export interface MainOutcome {
   exitCode: number | null;
-  result: { result: string | null; isError: boolean; model?: string | null } | null;
+  result: { result: string | null; isError: boolean; model?: string | null; usage?: TicketUsage | null } | null;
   sessionId: string | null;
   stderr: string;
 }
@@ -233,6 +233,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       result: body ?? undefined,
       headline: headline ?? undefined,
       model: r.model ?? undefined,
+      usage: r.usage ?? undefined,
       claudeSessionId: outcome.sessionId ?? undefined,
     });
     if (!verifying) {

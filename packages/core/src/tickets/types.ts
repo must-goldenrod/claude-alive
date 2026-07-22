@@ -28,6 +28,19 @@ export interface TicketVerification {
   reason: string;
 }
 
+/** Token/cost/turn accounting for a ticket's main-agent run, when the model reports it. */
+export interface TicketUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  /** Sum of the four token buckets above. */
+  totalTokens?: number;
+  costUsd?: number;
+  numTurns?: number;
+  durationMs?: number;
+}
+
 export interface Ticket {
   id: string;
   /** Human-friendly sequential number (#1, #2, …). Assigned at creation. */
@@ -50,6 +63,8 @@ export interface Ticket {
   thinking?: boolean;
   /** Reasoning effort level, when available. */
   effort?: string;
+  /** Token/cost/turn accounting, when the model reports it. */
+  usage?: TicketUsage;
   verification?: TicketVerification;
   failureReason?: TicketFailureReason;
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */

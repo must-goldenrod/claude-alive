@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation, EvalLabel } from '@claude-alive/core';
 import { Markdown } from './Markdown.tsx';
-import { projectName, formatStarted, statusGroup } from './ticketDisplay.ts';
+import { projectName, formatStarted, statusGroup, formatTokens, formatCost, formatDuration } from './ticketDisplay.ts';
 import type { EvaluateFn } from './useTickets.ts';
 
 interface TicketDetailModalProps {
@@ -119,6 +119,12 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
                 {ticket.verification.passed ? '✓ ' : '✗ '}
                 {ticket.verification.reason}
               </div>
+            </Section>
+          )}
+
+          {(ticket.model || ticket.usage) && (
+            <Section label={t('tickets.runInfoLabel')}>
+              <RunInfo ticket={ticket} t={t} />
             </Section>
           )}
 
@@ -265,6 +271,39 @@ function EvalSection({
           color: 'var(--text-primary, #e6edf3)',
         }}
       />
+    </div>
+  );
+}
+
+/** Model, reasoning effort, and token/cost/turn accounting for the run. */
+function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) {
+  const u = ticket.usage;
+  const rows: [string, string][] = [];
+  if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
+  if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
+  if (ticket.thinking) rows.push([t('tickets.runThinking'), 'on']);
+  if (u) {
+    const tok = (n?: number) => formatTokens(n) ?? '—';
+    if (u.inputTokens !== undefined) rows.push([t('tickets.runInput'), tok(u.inputTokens)]);
+    if (u.outputTokens !== undefined) rows.push([t('tickets.runOutput'), tok(u.outputTokens)]);
+    if (u.cacheReadTokens !== undefined) rows.push([t('tickets.runCacheRead'), tok(u.cacheReadTokens)]);
+    if (u.cacheCreationTokens !== undefined) rows.push([t('tickets.runCacheCreate'), tok(u.cacheCreationTokens)]);
+    if (u.totalTokens !== undefined) rows.push([t('tickets.runTotal'), tok(u.totalTokens)]);
+    const cost = formatCost(u.costUsd);
+    if (cost) rows.push([t('tickets.runCost'), cost]);
+    if (u.numTurns !== undefined) rows.push([t('tickets.runTurns'), String(u.numTurns)]);
+    const dur = formatDuration(u.durationMs);
+    if (dur) rows.push([t('tickets.runDuration'), dur]);
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 16, rowGap: 5 }}>
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ display: 'contents' }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)' }}>{k}</span>
+          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-primary, #e6edf3)' }}>{v}</span>
+        </div>
+      ))}
     </div>
   );
 }
