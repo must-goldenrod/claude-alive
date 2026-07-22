@@ -7,6 +7,7 @@
  * calls) is never surfaced.
  */
 import type { TicketLocation } from './location.js';
+import type { TicketDelegation } from './orchestration.js';
 
 /**
  * Internal lifecycle state. `queued`+`running`+`verifying` collapse to a single
@@ -71,6 +72,8 @@ export interface Ticket {
   location?: TicketLocation;
   /** When true, the agent runs as an orchestrator that may delegate to sub-agents. */
   orchestrated?: boolean;
+  /** Sub-agent delegations this orchestrator made (which models did what). */
+  delegations?: TicketDelegation[];
   state: TicketState;
   createdAt: number;
   startedAt?: number;

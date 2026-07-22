@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Ticket, TicketEvaluation, TicketTurn, EvalLabel } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation, TicketTurn, TicketDelegation, EvalLabel } from '@claude-alive/core';
 import { Markdown } from './Markdown.tsx';
 import { projectName, formatStarted, STATUS_COLOR, formatTokens, formatCost, formatDuration } from './ticketDisplay.ts';
 import type { EvaluateFn, ReplyFn } from './useTickets.ts';
@@ -155,6 +155,12 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
           {(ticket.model || ticket.usage) && (
             <Section label={t('tickets.runInfoLabel')}>
               <RunInfo ticket={ticket} t={t} />
+            </Section>
+          )}
+
+          {ticket.delegations && ticket.delegations.length > 0 && (
+            <Section label={t('tickets.delegationsLabel')}>
+              <Delegations delegations={ticket.delegations} />
             </Section>
           )}
 
@@ -340,6 +346,53 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
           <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-primary, #e6edf3)' }}>{v}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Sub-agent delegations made by the orchestrator. Makes the "which models did
+ * this actually use" question answerable — each row is one ca-delegate call,
+ * with the target model, its token cost, and the prompt that was handed off.
+ */
+function Delegations({ delegations }: { delegations: TicketDelegation[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {delegations.map((d, i) => {
+        const tok = formatTokens(d.totalTokens);
+        const cost = formatCost(d.costUsd);
+        const meta = [tok ? `${tok} tok` : null, cost].filter(Boolean).join(' · ');
+        return (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              padding: '8px 10px',
+              borderRadius: 8,
+              background: 'var(--bg-tertiary, #161b22)',
+              border: '1px solid var(--border-default, #30363d)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+              <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', color: 'var(--accent-blue, #58a6ff)' }}>
+                {d.model}
+              </span>
+              {meta && (
+                <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-secondary, #8b949e)' }}>
+                  {meta}
+                </span>
+              )}
+            </div>
+            {d.promptPreview && (
+              <span style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.4 }}>
+                {d.promptPreview}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

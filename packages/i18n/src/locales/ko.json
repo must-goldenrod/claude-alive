@@ -445,6 +445,7 @@
     "orchestrateHint": "(서브에이전트에 위임 가능)",
     "evaluatePrompt": "평가:",
     "runInfoLabel": "실행 정보",
+    "delegationsLabel": "위임 내역 (서브 에이전트)",
     "runModel": "모델",
     "runEffort": "Effort",
     "runThinking": "확장 사고",
