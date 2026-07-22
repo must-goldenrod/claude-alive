@@ -38,11 +38,13 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
   const line =
     status === 'active'
       ? t(`tickets.status.${ticket.state}`) + '…'
-      : status === 'failed'
-        ? ticket.failureReason
-          ? t(`tickets.failureReason.${ticket.failureReason}`)
-          : t('tickets.status.failed')
-        : oneLineSummary(ticket) ?? t('tickets.noResult');
+      : status === 'decision'
+        ? ticket.decisionQuestion ?? t('tickets.decisionPending')
+        : status === 'failed'
+          ? ticket.failureReason
+            ? t(`tickets.failureReason.${ticket.failureReason}`)
+            : t('tickets.status.failed')
+          : oneLineSummary(ticket) ?? t('tickets.noResult');
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   const doEval = (e: React.MouseEvent, label: 'good' | 'bad') => {
@@ -184,6 +186,10 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
               {t('tickets.evalBad')}
             </button>
           </div>
+        ) : status === 'decision' ? (
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
+            {t('tickets.answerCta')} →
+          </span>
         ) : (
           <>
             {status === 'closed' && evaluation && (

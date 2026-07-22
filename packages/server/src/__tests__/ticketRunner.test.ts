@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Ticket } from '@claude-alive/core';
 import { createTicketStore, type TicketStore } from '../ticketStore.js';
-import { createTicketRunner, isCwdAllowed, extractHeadline, type MainOutcome, type TicketRunnerOptions } from '../ticketRunner.js';
+import { createTicketRunner, isCwdAllowed, extractHeadline, extractDecision, type MainOutcome, type TicketRunnerOptions, type SpawnMainOpts } from '../ticketRunner.js';
 
 let dir: string;
 let store: TicketStore;
@@ -85,6 +85,100 @@ describe('extractHeadline', () => {
   it('returns null headline when absent', () => {
     expect(extractHeadline('just a body')).toEqual({ headline: null, body: 'just a body' });
     expect(extractHeadline(null)).toEqual({ headline: null, body: null });
+  });
+});
+
+describe('extractDecision', () => {
+  it('lifts the DECISION line out of the body', () => {
+    expect(extractDecision('some context\nDECISION: A안 vs B안 중 선택')).toEqual({
+      question: 'A안 vs B안 중 선택',
+      body: 'some context',
+    });
+  });
+  it('returns null question when absent', () => {
+    expect(extractDecision('no marker here')).toEqual({ question: null, body: 'no marker here' });
+    expect(extractDecision(null)).toEqual({ question: null, body: null });
+  });
+});
+
+describe('TicketRunner decision + reply', () => {
+  const decisionOutcome = (q: string, usage?: Record<string, number>): MainOutcome => ({
+    exitCode: 0,
+    result: { result: `context\nDECISION: ${q}`, isError: false, usage },
+    sessionId: 'sess',
+    stderr: '',
+  });
+  const doneOutcome = (h: string, usage?: Record<string, number>): MainOutcome => ({
+    exitCode: 0,
+    result: { result: `body\nHEADLINE: ${h}`, isError: false, usage },
+    sessionId: 'sess',
+    stderr: '',
+  });
+
+  it('parks at decision (not failed) and holds no slot', async () => {
+    const { runner, broadcasts } = makeRunner({
+      spawnMain: () => ({ kill() {}, done: Promise.resolve(decisionOutcome('A안 vs B안?')) }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'decision');
+    const d = store.get(t.id)!;
+    expect(d.decisionQuestion).toBe('A안 vs B안?');
+    expect(d.rounds).toBe(1);
+    // The slot is released one tick after the state flips to 'decision', so wait
+    // on the release rather than asserting immediately (avoids a CI timing race).
+    await until(() => runner.activeCount() === 0);
+    expect(broadcasts.map((b) => b.state)).toEqual(['running', 'decision']);
+  });
+
+  it('reply resumes the session, completes, and accumulates usage + rounds', async () => {
+    const outcomes = [
+      decisionOutcome('A안 vs B안?', { totalTokens: 100, costUsd: 0.1, numTurns: 2 }),
+      doneOutcome('B안으로 완료', { totalTokens: 50, costUsd: 0.05, numTurns: 1 }),
+    ];
+    const calls: (SpawnMainOpts | undefined)[] = [];
+    const { runner } = makeRunner({
+      spawnMain: (_ticket, opts) => {
+        calls.push(opts);
+        return { kill() {}, done: Promise.resolve(outcomes.shift()!) };
+      },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'decision');
+    await runner.reply(t.id, 'B안으로 가자');
+    await until(() => store.get(t.id)?.state === 'done');
+    const f = store.get(t.id)!;
+    expect(f.usage?.totalTokens).toBe(150);
+    expect(f.usage?.costUsd).toBeCloseTo(0.15);
+    expect(f.usage?.numTurns).toBe(3);
+    expect(f.rounds).toBe(2);
+    expect(calls[1]?.resumeSessionId).toBe('sess');
+    expect(calls[1]?.prompt).toBe('B안으로 가자');
+    expect(f.turns?.map((x) => x.kind)).toEqual(['decision', 'prompt', 'result']);
+  });
+
+  it('a reply can lead to another decision', async () => {
+    const outcomes = [decisionOutcome('q1?'), decisionOutcome('q2?')];
+    const { runner } = makeRunner({
+      spawnMain: () => ({ kill() {}, done: Promise.resolve(outcomes.shift()!) }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.decisionQuestion === 'q1?');
+    await runner.reply(t.id, 'answer 1');
+    await until(() => store.get(t.id)?.decisionQuestion === 'q2?');
+    expect(store.get(t.id)?.state).toBe('decision');
+    expect(store.get(t.id)?.rounds).toBe(2);
+  });
+
+  it('reply on a non-decision ticket is a no-op', async () => {
+    const { runner } = makeRunner({});
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'done');
+    await runner.reply(t.id, 'ignored');
+    expect(store.get(t.id)?.state).toBe('done');
   });
 });
 
@@ -243,6 +337,24 @@ describe('TicketRunner lifecycle', () => {
 
     expect(store.get(r.id)).toMatchObject({ state: 'failed', failureReason: 'interrupted' });
     await until(() => store.get(q.id)?.state === 'done'); // queued one gets scheduled and completes
+  });
+
+  it('recover() resumes an in-flight ticket that captured a session, instead of failing it', async () => {
+    const r = await store.create({ goal: 'running', cwd: '/repo' });
+    await store.update(r.id, { state: 'running', startedAt: 1, claudeSessionId: 'sess-x' });
+
+    const calls: (SpawnMainOpts | undefined)[] = [];
+    const { runner } = makeRunner({
+      spawnMain: (_t, opts) => {
+        calls.push(opts);
+        return { kill() {}, done: Promise.resolve(okOutcome('이어서 완료\nHEADLINE: 재개 완료')) };
+      },
+      verify: async () => ({ passed: true, reason: 'ok' }),
+    });
+    await runner.recover();
+    await until(() => store.get(r.id)?.state === 'done');
+    expect(calls[0]?.resumeSessionId).toBe('sess-x'); // continued the persisted session
+    expect(store.get(r.id)?.failureReason).toBeUndefined();
   });
 });
 

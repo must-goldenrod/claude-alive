@@ -9,10 +9,27 @@
 import type { TicketLocation } from './location.js';
 
 /**
- * Internal lifecycle state (5). The UI collapses `queued`+`running`+`verifying`
- * into a single "in progress" column, so the user sees only 3 states.
+ * Internal lifecycle state. `queued`+`running`+`verifying` collapse to a single
+ * "in progress" column. `decision` means the agent asked the human to choose and
+ * is paused awaiting a follow-up reply (it holds no concurrency slot but is
+ * resumable — neither active nor terminal).
  */
-export type TicketState = 'queued' | 'running' | 'verifying' | 'done' | 'failed';
+export type TicketState = 'queued' | 'running' | 'verifying' | 'decision' | 'done' | 'failed';
+
+/** One exchange in a ticket's conversation thread (goal → agent → user reply → …). */
+export type TicketTurnRole = 'agent' | 'user';
+export type TicketTurnKind = 'result' | 'decision' | 'prompt';
+export interface TicketTurn {
+  role: TicketTurnRole;
+  kind: TicketTurnKind;
+  /** Full text: agent result body, the DECISION question, or the user's reply. */
+  text: string;
+  /** Agent one-line headline for a `result` turn, when present. */
+  headline?: string;
+  /** Per-run usage for an agent turn (the ticket's top-level `usage` is the sum). */
+  usage?: TicketUsage;
+  at: number;
+}
 
 /** Why a ticket ended in `failed`. Distinguishes real failure from operational aborts. */
 export type TicketFailureReason =
@@ -73,6 +90,30 @@ export interface Ticket {
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */
   claudeSessionId?: string;
   error?: string;
+  /** The pending question when `state === 'decision'`, parsed from `DECISION:`. */
+  decisionQuestion?: string;
+  /** Full conversation thread (goal, agent results/decisions, user replies). */
+  turns?: TicketTurn[];
+  /** Number of agent runs so far (initial run = 1, each reply adds one). */
+  rounds?: number;
+}
+
+/** Sum two usage records field-by-field so a ticket's `usage` stays cumulative across runs. */
+export function addUsage(a: TicketUsage | undefined, b: TicketUsage | undefined): TicketUsage | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const add = (x?: number, y?: number): number | undefined =>
+    x === undefined && y === undefined ? undefined : (x ?? 0) + (y ?? 0);
+  return {
+    inputTokens: add(a.inputTokens, b.inputTokens),
+    outputTokens: add(a.outputTokens, b.outputTokens),
+    cacheReadTokens: add(a.cacheReadTokens, b.cacheReadTokens),
+    cacheCreationTokens: add(a.cacheCreationTokens, b.cacheCreationTokens),
+    totalTokens: add(a.totalTokens, b.totalTokens),
+    costUsd: add(a.costUsd, b.costUsd),
+    numTurns: add(a.numTurns, b.numTurns),
+    durationMs: add(a.durationMs, b.durationMs),
+  };
 }
 
 export interface TicketCreateInput {

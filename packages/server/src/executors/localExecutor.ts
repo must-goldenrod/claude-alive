@@ -37,7 +37,12 @@ export function createLocalExecutor(options: LocalExecutorOptions = {}): Executo
       return null;
     },
     spawn(req: AgentSpawnRequest) {
-      return runHeadlessClaude({ goal: req.goal, cwd: req.cwd, permissionMode: req.permissionMode });
+      return runHeadlessClaude({
+        goal: req.goal,
+        cwd: req.cwd,
+        permissionMode: req.permissionMode,
+        resumeSessionId: req.resumeSessionId,
+      });
     },
   };
 }

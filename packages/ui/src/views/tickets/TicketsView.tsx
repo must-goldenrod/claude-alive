@@ -13,15 +13,15 @@ interface TicketsViewProps {
   subscribeRaw: RawMessageSubscribe;
 }
 
-const COLUMNS: DisplayStatus[] = ['active', 'complete', 'closed', 'failed'];
+const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
 export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
   const { t } = useTranslation();
-  const { tickets, evaluations, createTicket, retryTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
+  const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
-    const g: Record<DisplayStatus, Ticket[]> = { active: [], complete: [], closed: [], failed: [] };
+    const g: Record<DisplayStatus, Ticket[]> = { active: [], decision: [], complete: [], closed: [], failed: [] };
     for (const ticket of tickets) g[displayStatus(ticket.state, evaluations[ticket.id])].push(ticket);
     return g;
   }, [tickets, evaluations]);
@@ -76,7 +76,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(240px, 1fr))',
+              gridTemplateColumns: 'repeat(5, minmax(232px, 1fr))',
               overflowX: 'auto',
             }}
           >
@@ -118,6 +118,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           evaluation={evaluations[selected.id] ?? null}
           onClose={() => setSelectedId(null)}
           onRetry={retryTicket}
+          onReply={replyTicket}
           onCancel={cancelTicket}
           onDelete={deleteTicket}
           onEvaluate={evaluateTicket}

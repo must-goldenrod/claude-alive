@@ -121,6 +121,8 @@ export interface HttpRouterOptions {
       };
     }) => Promise<unknown>;
     retry: (id: string) => Promise<unknown | undefined>;
+    /** Continue a `decision` ticket with a follow-up prompt. Undefined = unknown id. */
+    reply?: (id: string, prompt: string) => Promise<unknown | undefined>;
     cancel: (id: string) => Promise<unknown | undefined>;
     remove: (id: string) => Promise<boolean>;
     /** Validate cwd before creating; returns an error message, or null when valid. */
@@ -408,6 +410,23 @@ export function createHttpServer(options: HttpRouterOptions) {
     if (tickets && req.method === 'POST' && ticketCancelMatch) {
       const ticket = await tickets.cancel(ticketCancelMatch[1]!);
       sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      return;
+    }
+    // POST /api/tickets/:id/reply — follow-up prompt for a decision ticket.
+    const ticketReplyMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/reply$/);
+    if (tickets?.reply && req.method === 'POST' && ticketReplyMatch) {
+      try {
+        const parsed = JSON.parse(await readBody(req)) as { prompt?: unknown };
+        const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
+        if (!prompt) {
+          sendJson(res, 400, { error: 'Invalid body: prompt is required' }, req);
+          return;
+        }
+        const ticket = await tickets.reply(ticketReplyMatch[1]!, prompt);
+        sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
       return;
     }
     // POST /api/tickets/:id/evaluate — human good/bad label. Under the /api/tickets

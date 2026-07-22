@@ -65,8 +65,9 @@ const REMOTE_PATH_PREFIX =
  * arg makes claude read the prompt from stdin (which the ssh process supplies),
  * so a multi-line goal never touches the remote shell's quoting.
  */
-export function buildRemoteCommand(cwd: string, permissionMode: string): string {
+export function buildRemoteCommand(cwd: string, permissionMode: string, resumeSessionId?: string): string {
   const flags = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
+  if (resumeSessionId) flags.push('--resume', shellQuote(resumeSessionId));
   return `${REMOTE_PATH_PREFIX}cd ${shellQuote(cwd)} && claude ${flags.join(' ')}`;
 }
 
@@ -121,7 +122,7 @@ export function createSshExecutor(target: SshTarget, options: { spawnProcess?: S
       return `remote cwd unavailable on ${target.host}: ${cwd} (${detail})`;
     },
     spawn(req: AgentSpawnRequest): HeadlessRunHandle {
-      const remote = buildRemoteCommand(req.cwd, req.permissionMode);
+      const remote = buildRemoteCommand(req.cwd, req.permissionMode, req.resumeSessionId);
       const proc = doSpawn([...sshBaseArgs(target), remote], req.goal);
       return consumeHeadless(proc);
     },

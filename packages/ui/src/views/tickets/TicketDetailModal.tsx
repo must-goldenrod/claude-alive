@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Ticket, TicketEvaluation, EvalLabel } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation, TicketTurn, EvalLabel } from '@claude-alive/core';
 import { Markdown } from './Markdown.tsx';
-import { projectName, formatStarted, statusGroup, formatTokens, formatCost, formatDuration } from './ticketDisplay.ts';
-import type { EvaluateFn } from './useTickets.ts';
+import { projectName, formatStarted, STATUS_COLOR, formatTokens, formatCost, formatDuration } from './ticketDisplay.ts';
+import type { EvaluateFn, ReplyFn } from './useTickets.ts';
 
 interface TicketDetailModalProps {
   ticket: Ticket;
@@ -13,12 +13,17 @@ interface TicketDetailModalProps {
   onCancel: (id: string) => void;
   onDelete: (id: string) => void;
   onEvaluate?: EvaluateFn;
+  /** Submit a follow-up prompt for a decision ticket; resolves true on success. */
+  onReply?: ReplyFn;
 }
 
-export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCancel, onDelete, onEvaluate }: TicketDetailModalProps) {
+export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCancel, onDelete, onEvaluate, onReply }: TicketDetailModalProps) {
   const { t } = useTranslation();
-  const group = statusGroup(ticket.state);
-  const isActive = group === 'active';
+  const isActive = ticket.state === 'queued' || ticket.state === 'running' || ticket.state === 'verifying';
+  const isDecision = ticket.state === 'decision';
+  const decisionColor = STATUS_COLOR.decision;
+  const turns = ticket.turns ?? [];
+  const showThread = turns.length > 0 && (isDecision || (ticket.rounds ?? 1) > 1);
 
   // ESC closes the modal.
   useEffect(() => {
@@ -92,6 +97,31 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text-primary, #e6edf3)' }}>{ticket.goal}</div>
           </Section>
 
+          {isDecision && ticket.decisionQuestion && (
+            <Section label={t('tickets.decisionLabel')}>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  lineHeight: 1.5,
+                  color: decisionColor,
+                  background: `color-mix(in srgb, ${decisionColor} 12%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${decisionColor} 40%, transparent)`,
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                }}
+              >
+                {ticket.decisionQuestion}
+              </div>
+            </Section>
+          )}
+
+          {showThread && (
+            <Section label={t('tickets.threadLabel')}>
+              <Thread turns={turns} t={t} />
+            </Section>
+          )}
+
           {ticket.headline && (
             <Section label={t('tickets.headlineLabel')}>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--accent-blue, #58a6ff)' }}>{ticket.headline}</div>
@@ -107,7 +137,7 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
 
-          {ticket.result && (
+          {!showThread && ticket.result && (
             <Section label={t('tickets.resultLabel')}>
               <Markdown text={ticket.result} />
             </Section>
@@ -134,6 +164,11 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
         </div>
+
+        {/* Reply composer — only while a decision is pending */}
+        {isDecision && onReply && (
+          <ReplyComposer ticketId={ticket.id} color={decisionColor} onReply={onReply} t={t} />
+        )}
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border-default, #30363d)' }}>
@@ -279,6 +314,7 @@ function EvalSection({
 function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) {
   const u = ticket.usage;
   const rows: [string, string][] = [];
+  if (ticket.rounds && ticket.rounds > 1) rows.push([t('tickets.runRounds'), String(ticket.rounds)]);
   if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
   if (ticket.thinking) rows.push([t('tickets.runThinking'), 'on']);
@@ -304,6 +340,117 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
           <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-primary, #e6edf3)' }}>{v}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Conversation thread: agent results/decisions and the user's replies, in order. */
+function Thread({ turns, t }: { turns: TicketTurn[]; t: (key: string) => string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {turns.map((turn, i) => {
+        const isUser = turn.role === 'user';
+        const accent =
+          turn.kind === 'decision'
+            ? STATUS_COLOR.decision
+            : isUser
+              ? 'var(--accent-blue, #58a6ff)'
+              : 'var(--accent-green, #3fb950)';
+        const roleKey = isUser ? 'tickets.threadUser' : turn.kind === 'decision' ? 'tickets.threadDecision' : 'tickets.threadAgent';
+        return (
+          <div key={i} style={{ alignSelf: isUser ? 'flex-end' : 'flex-start', maxWidth: '88%', minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: accent, marginBottom: 3, textAlign: isUser ? 'right' : 'left' }}>
+              {t(roleKey)}
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: 1.5,
+                padding: '8px 12px',
+                borderRadius: 10,
+                background: isUser ? 'rgba(88,166,255,0.10)' : 'var(--bg-tertiary, #21262d)',
+                border: `1px solid color-mix(in srgb, ${accent} 30%, transparent)`,
+                color: 'var(--text-primary, #e6edf3)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {turn.headline && (
+                <div style={{ fontWeight: 600, color: accent, marginBottom: turn.text ? 4 : 0 }}>{turn.headline}</div>
+              )}
+              {turn.text}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Follow-up input for a pending decision: submits a reply that resumes the run. */
+function ReplyComposer({
+  ticketId,
+  color,
+  onReply,
+  t,
+}: {
+  ticketId: string;
+  color: string;
+  onReply: ReplyFn;
+  t: (key: string) => string;
+}) {
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const canSend = text.trim().length > 0 && !sending;
+
+  const send = async () => {
+    if (!canSend) return;
+    setSending(true);
+    const ok = await onReply(ticketId, text.trim());
+    setSending(false);
+    if (ok) setText('');
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--border-default, #30363d)', alignItems: 'flex-end' }}>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={t('tickets.decisionAnswer')}
+        rows={2}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send();
+        }}
+        style={{
+          flex: 1,
+          resize: 'vertical',
+          fontSize: 13,
+          fontFamily: 'var(--font-ui, system-ui)',
+          padding: '8px 10px',
+          borderRadius: 8,
+          border: '1px solid var(--border-default, #30363d)',
+          background: 'var(--bg-primary, #0d1117)',
+          color: 'var(--text-primary, #e6edf3)',
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => void send()}
+        disabled={!canSend}
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          padding: '8px 16px',
+          borderRadius: 8,
+          border: 'none',
+          background: canSend ? color : 'var(--bg-tertiary, #21262d)',
+          color: canSend ? '#0d1117' : 'var(--text-secondary, #8b949e)',
+          cursor: canSend ? 'pointer' : 'not-allowed',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {sending ? t('tickets.sending') : t('tickets.send')}
+      </button>
     </div>
   );
 }

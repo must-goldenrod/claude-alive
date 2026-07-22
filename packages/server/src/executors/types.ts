@@ -17,6 +17,8 @@ export interface AgentSpawnRequest {
   cwd: string;
   /** Privileged mode, passed explicitly from trusted server config. */
   permissionMode: string;
+  /** Resume a prior Claude session (`--resume <id>`) so a follow-up continues the thread. */
+  resumeSessionId?: string;
 }
 
 export interface Executor {
