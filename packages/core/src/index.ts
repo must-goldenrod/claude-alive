@@ -16,9 +16,10 @@ export type {
   ResumableSession,
 } from './protocol/wsProtocol.js';
 export { parseTranscriptTokens } from './transcript/parser.js';
-export { TICKET_ACTIVE_STATES, isTicketActive } from './tickets/types.js';
+export { TICKET_ACTIVE_STATES, isTicketActive, addUsage } from './tickets/types.js';
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
+  TicketTurn, TicketTurnRole, TicketTurnKind,
 } from './tickets/types.js';
 export {
   seedAutoLabel, clampWeight,

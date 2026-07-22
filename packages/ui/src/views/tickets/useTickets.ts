@@ -16,6 +16,11 @@ export type EvaluateFn = (
   input: { label: EvalLabel; weight?: number; note?: string },
 ) => Promise<TicketEvaluation | null>;
 
+/** Submits a follow-up prompt for a decision ticket; resolves true on success.
+ * Named here (a .ts file) so the .tsx modal avoids an inline `=> Promise<…>`,
+ * which trips the i18n raw-text guard's JSX heuristic. */
+export type ReplyFn = (id: string, prompt: string) => Promise<boolean>;
+
 export interface UseTicketsResult {
   tickets: Ticket[];
   evaluations: Record<string, TicketEvaluation>;
@@ -23,6 +28,7 @@ export interface UseTicketsResult {
   refresh: () => Promise<void>;
   createTicket: TicketCreateFn;
   retryTicket: (id: string) => Promise<boolean>;
+  replyTicket: (id: string, prompt: string) => Promise<boolean>;
   cancelTicket: (id: string) => Promise<boolean>;
   deleteTicket: (id: string) => Promise<boolean>;
   evaluateTicket: EvaluateFn;
@@ -130,6 +136,22 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     }
   }, []);
 
+  const replyTicket = useCallback(async (id: string, prompt: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/tickets/${id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) return false;
+      const { ticket } = (await res.json()) as { ticket: Ticket };
+      setById((prev) => ({ ...prev, [ticket.id]: ticket }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const tickets = Object.values(byId).sort((a, b) => b.createdAt - a.createdAt);
 
   return {
@@ -139,6 +161,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     refresh,
     createTicket,
     retryTicket: (id) => mutate(id, '/retry', 'POST'),
+    replyTicket,
     cancelTicket: (id) => mutate(id, '/cancel', 'POST'),
     deleteTicket: (id) => mutate(id, '', 'DELETE'),
     evaluateTicket,

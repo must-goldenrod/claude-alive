@@ -19,10 +19,11 @@ export function statusGroup(state: TicketState): StatusGroup {
  * `complete` → `closed` is the human-evaluation step: it flips once the ticket's
  * evaluation is human-labelled.
  */
-export type DisplayStatus = 'active' | 'complete' | 'closed' | 'failed';
+export type DisplayStatus = 'active' | 'decision' | 'complete' | 'closed' | 'failed';
 
 export function displayStatus(state: TicketState, evaluation?: TicketEvaluation | null): DisplayStatus {
   if (state === 'failed') return 'failed';
+  if (state === 'decision') return 'decision';
   if (state === 'done') return evaluation?.humanLabeled ? 'closed' : 'complete';
   return 'active';
 }
@@ -34,6 +35,7 @@ export function displayStatus(state: TicketState, evaluation?: TicketEvaluation 
  */
 export const STATUS_COLOR: Record<DisplayStatus, string> = {
   active: 'var(--accent-blue, #58a6ff)',
+  decision: 'var(--accent-purple, #d2a8ff)',
   complete: 'var(--accent-green, #3fb950)',
   closed: 'var(--text-secondary, #8b949e)',
   failed: 'var(--accent-red, #f85149)',
@@ -68,9 +70,13 @@ export function formatDuration(ms?: number): string | null {
   return `${m}m ${Math.round(s % 60)}s`;
 }
 
-/** Compact card meta: model + total tokens + cost (whichever are present). */
+/**
+ * Compact card meta: cumulative rounds (↻n, only after a follow-up) + model +
+ * cumulative tokens + cost. Usage is summed across the initial run and replies.
+ */
 export function runMetaShort(ticket: Ticket): string {
   const parts: string[] = [];
+  if (ticket.rounds && ticket.rounds > 1) parts.push(`↻${ticket.rounds}`);
   if (ticket.model) parts.push(ticket.model);
   const tok = formatTokens(ticket.usage?.totalTokens);
   if (tok) parts.push(`${tok} tok`);

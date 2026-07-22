@@ -27,6 +27,8 @@ export interface HeadlessSpawnArgs {
   cwd: string;
   permissionMode: string;
   env: NodeJS.ProcessEnv;
+  /** Resume a prior Claude session (`--resume <id>`) for follow-up turns. */
+  resumeSessionId?: string;
 }
 
 export interface HeadlessRunOptions {
@@ -39,6 +41,8 @@ export interface HeadlessRunOptions {
    * from an HTTP body.
    */
   permissionMode: string;
+  /** Resume a prior Claude session (`--resume <id>`) so a reply continues the thread. */
+  resumeSessionId?: string;
   /** Injectable spawn for tests. Production builds a real `claude` child process. */
   spawnProcess?: (args: HeadlessSpawnArgs) => HeadlessProcessHandle;
   /** Observe each classified stream event (activity is intentionally opaque). */
@@ -58,8 +62,10 @@ export interface HeadlessRunHandle {
 }
 
 /** Build the argv for `claude`. `--verbose` is required for stream-json to emit per-turn events. */
-export function buildHeadlessArgs(goal: string, permissionMode: string): string[] {
-  return ['-p', goal, '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
+export function buildHeadlessArgs(goal: string, permissionMode: string, resumeSessionId?: string): string[] {
+  const args = ['-p', goal, '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
+  if (resumeSessionId) args.push('--resume', resumeSessionId);
+  return args;
 }
 
 function cleanEnv(): NodeJS.ProcessEnv {
@@ -72,7 +78,7 @@ function cleanEnv(): NodeJS.ProcessEnv {
 }
 
 function realSpawn(args: HeadlessSpawnArgs): HeadlessProcessHandle {
-  const child = spawn('claude', buildHeadlessArgs(args.goal, args.permissionMode), {
+  const child = spawn('claude', buildHeadlessArgs(args.goal, args.permissionMode, args.resumeSessionId), {
     cwd: args.cwd,
     env: args.env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -91,7 +97,13 @@ function realSpawn(args: HeadlessSpawnArgs): HeadlessProcessHandle {
 export function runHeadlessClaude(options: HeadlessRunOptions): HeadlessRunHandle {
   const permissionMode = options.permissionMode ?? 'bypassPermissions';
   const spawnProcess = options.spawnProcess ?? realSpawn;
-  const proc = spawnProcess({ goal: options.goal, cwd: options.cwd, permissionMode, env: cleanEnv() });
+  const proc = spawnProcess({
+    goal: options.goal,
+    cwd: options.cwd,
+    permissionMode,
+    env: cleanEnv(),
+    resumeSessionId: options.resumeSessionId,
+  });
 
   let lastResult: StreamResult | null = null;
   let sessionId: string | null = null;

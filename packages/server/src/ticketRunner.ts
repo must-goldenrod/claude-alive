@@ -8,7 +8,8 @@
  */
 import { resolve, sep } from 'node:path';
 import { realpathSync, existsSync } from 'node:fs';
-import type { Ticket, TicketFailureReason, TicketUsage } from '@claude-alive/core';
+import { addUsage } from '@claude-alive/core';
+import type { Ticket, TicketFailureReason, TicketUsage, TicketTurn } from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
 
 export interface MainOutcome {
@@ -30,15 +31,35 @@ export function extractHeadline(raw: string | null): { headline: string | null; 
   return { headline: m[1].slice(0, 80), body: raw.replace(m[0], '').trim() };
 }
 
+/**
+ * Detect the `DECISION: <question>` marker the agent emits when it needs a human
+ * choice to continue. When present the runner parks the ticket in `decision`
+ * (awaiting a reply) instead of verifying — an asked question is not a failure.
+ */
+export function extractDecision(raw: string | null): { question: string | null; body: string | null } {
+  if (!raw) return { question: null, body: raw };
+  const m = raw.match(/^[ \t]*DECISION:[ \t]*(.+?)[ \t]*$/im);
+  if (!m) return { question: null, body: raw };
+  return { question: m[1].slice(0, 300), body: raw.replace(m[0], '').trim() };
+}
+
 export interface RunnerHeadlessHandle {
   kill(): void;
   done: Promise<MainOutcome>;
 }
 
+/** Options for a follow-up run that resumes a ticket's Claude session. */
+export interface SpawnMainOpts {
+  /** Raw follow-up text (the user's reply); when set, this replaces the goal prompt. */
+  prompt?: string;
+  /** Claude session id to resume so the reply continues the same conversation. */
+  resumeSessionId?: string;
+}
+
 export interface TicketRunnerOptions {
   store: TicketStore;
-  /** Spawn the autonomous main agent for a ticket. */
-  spawnMain: (ticket: Ticket) => RunnerHeadlessHandle;
+  /** Spawn the autonomous main agent for a ticket. `opts` drives follow-up replies. */
+  spawnMain: (ticket: Ticket, opts?: SpawnMainOpts) => RunnerHeadlessHandle;
   /** Self-verification. Rejects → fail-closed (verification-inconclusive). */
   verify: (ticket: Ticket, mainResult: string | null) => Promise<{ passed: boolean; reason: string }>;
   /** Push a changed ticket to clients. */
@@ -73,6 +94,8 @@ export interface TicketRunner {
   recover(): Promise<void>;
   enqueue(ticket: Ticket): void;
   retry(id: string): Promise<Ticket | undefined>;
+  /** Continue a `decision` ticket with a follow-up prompt (resumes its session). */
+  reply(id: string, prompt: string): Promise<Ticket | undefined>;
   cancel(id: string): Promise<Ticket | undefined>;
   activeCount(): number;
 }
@@ -213,7 +236,8 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
 
   async function onMainDone(id: string, outcome: MainOutcome): Promise<void> {
     clearTimer(id);
-    if (isTerminal(store.get(id))) {
+    const cur = store.get(id);
+    if (isTerminal(cur)) {
       releaseSlot(id);
       return;
     }
@@ -227,14 +251,50 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       return;
     }
 
+    // Usage is cumulative across the initial run and every follow-up reply; each
+    // completed agent run bumps the round counter.
+    const runUsage = r.usage ?? undefined;
+    const cumulativeUsage = addUsage(cur?.usage, runUsage);
+    const rounds = (cur?.rounds ?? 0) + 1;
+    const sessionId = outcome.sessionId ?? cur?.claudeSessionId;
+
+    // An asked-for decision is not a failure: park the ticket awaiting a reply.
+    const { question, body: decisionBody } = extractDecision(r.result);
+    if (question) {
+      const turn: TicketTurn = { role: 'agent', kind: 'decision', text: question, usage: runUsage, at: now() };
+      await apply(id, {
+        state: 'decision',
+        decisionQuestion: question,
+        result: decisionBody ?? undefined,
+        headline: undefined,
+        model: r.model ?? cur?.model,
+        usage: cumulativeUsage,
+        rounds,
+        claudeSessionId: sessionId ?? undefined,
+        turns: [...(cur?.turns ?? []), turn],
+      });
+      releaseSlot(id); // waiting on the human; hold no concurrency slot
+      return;
+    }
+
     const { headline, body } = extractHeadline(r.result);
+    const resultTurn: TicketTurn = {
+      role: 'agent',
+      kind: 'result',
+      text: body ?? '',
+      headline: headline ?? undefined,
+      usage: runUsage,
+      at: now(),
+    };
     const verifying = await apply(id, {
       state: 'verifying',
       result: body ?? undefined,
       headline: headline ?? undefined,
-      model: r.model ?? undefined,
-      usage: r.usage ?? undefined,
-      claudeSessionId: outcome.sessionId ?? undefined,
+      model: r.model ?? cur?.model,
+      usage: cumulativeUsage,
+      rounds,
+      claudeSessionId: sessionId ?? undefined,
+      turns: [...(cur?.turns ?? []), resultTurn],
     });
     if (!verifying) {
       releaseSlot(id);
@@ -307,9 +367,53 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         failureReason: undefined,
         verification: undefined,
         result: undefined,
+        // A retry re-runs the goal from scratch, so accumulation resets.
+        decisionQuestion: undefined,
+        turns: undefined,
+        rounds: undefined,
+        usage: undefined,
       });
       if (t) enqueue(t);
       return t;
+    },
+
+    async reply(id, prompt) {
+      const t = store.get(id);
+      if (!t || t.state !== 'decision') return t ?? undefined;
+      const answer = prompt.trim();
+      if (!answer) return t;
+      if (!t.claudeSessionId) {
+        // No session to resume — the reply cannot continue the conversation.
+        await fail(id, 'error', 'no Claude session to resume for this reply');
+        return store.get(id);
+      }
+      const userTurn: TicketTurn = { role: 'user', kind: 'prompt', text: answer, at: now() };
+      running.add(id); // interactive reply re-acquires a slot immediately
+      const started = await apply(id, {
+        state: 'running',
+        decisionQuestion: undefined,
+        startedAt: now(),
+        endedAt: undefined,
+        turns: [...(t.turns ?? []), userTurn],
+      });
+      if (!started) {
+        releaseSlot(id);
+        return undefined;
+      }
+      let handle: RunnerHeadlessHandle;
+      try {
+        handle = spawnMain(started, { prompt: answer, resumeSessionId: t.claudeSessionId });
+      } catch (e) {
+        await fail(id, 'error', `failed to resume agent: ${String(e)}`);
+        return store.get(id);
+      }
+      handles.set(id, handle);
+      timers.set(id, setTimer(() => void onTimeout(id), timeoutMs));
+      handle.done.then(
+        (outcome) => void onMainDone(id, outcome),
+        (e) => void fail(id, 'error', String(e)),
+      );
+      return started;
     },
 
     async cancel(id) {

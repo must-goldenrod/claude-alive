@@ -343,11 +343,16 @@ const ticketRunner = createTicketRunner({
   // Prepend the route's learned guide (from past good/bad evaluations) and append
   // the one-line headline instruction (parsed by extractHeadline). The guide is
   // read at spawn time, so newer labels take effect on the next ticket.
-  spawnMain: (ticket) =>
+  spawnMain: (ticket, opts) =>
     runHeadlessClaude({
-      goal: buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text),
+      // Follow-up reply: wrap the user's raw answer with the marker instruction
+      // and resume the session. Initial run: goal + the route's learned guide.
+      goal: opts?.prompt
+        ? buildMainPrompt(opts.prompt)
+        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text),
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
+      resumeSessionId: opts?.resumeSessionId,
     }),
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
@@ -393,6 +398,7 @@ const httpServer = createHttpServer({
       return ticket;
     },
     retry: (id) => ticketRunner.retry(id),
+    reply: (id, prompt) => ticketRunner.reply(id, prompt),
     cancel: (id) => ticketRunner.cancel(id),
     remove: (id) => ticketStore.remove(id),
     evaluate: async (id, input) => {
