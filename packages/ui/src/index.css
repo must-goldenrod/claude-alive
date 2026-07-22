@@ -102,6 +102,30 @@ html, body, #root {
   0%   { background-position: 0% 50%; }
   100% { background-position: 300% 50%; }
 }
+/* Active ticket status line ("실행중…" 등): a bright highlight sweeps the text
+   left→right, lighting each character in turn, so the work reads as running. */
+@keyframes ticket-status-sweep {
+  0%   { background-position: 200% center; }
+  100% { background-position: -100% center; }
+}
+.ticket-status-run {
+  display: inline-block !important;
+  background: linear-gradient(
+    90deg,
+    var(--accent-blue, #58a6ff) 0%,
+    var(--accent-blue, #58a6ff) 30%,
+    #e6f2ff 50%,
+    var(--accent-blue, #58a6ff) 70%,
+    var(--accent-blue, #58a6ff) 100%
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: ticket-status-sweep 1.8s linear infinite;
+}
+
 .ticket-card--active {
   border: 1.5px solid transparent !important;
   background:
@@ -117,6 +141,12 @@ html, body, #root {
     animation: none !important;
     background: var(--bg-secondary, #161b22) !important;
     border: 1.5px solid var(--accent-blue, #58a6ff) !important;
+  }
+  .ticket-status-run {
+    animation: none !important;
+    background: none !important;
+    -webkit-text-fill-color: var(--accent-blue, #58a6ff) !important;
+    color: var(--accent-blue, #58a6ff) !important;
   }
   /* Fall back to a static green tint for motion-sensitive users */
   [style*="claude-tab-sweep"] {

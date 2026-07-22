@@ -171,7 +171,9 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
           WebkitBoxOrient: 'vertical',
         }}
       >
-        {line}
+        {/* Active tickets: sweep a highlight across the status text so it reads
+            as live, running work. Other statuses render as plain colored text. */}
+        {isActive ? <span className="ticket-status-run">{line}</span> : line}
       </div>
 
       {/* footer — always a single row so cards line up */}
