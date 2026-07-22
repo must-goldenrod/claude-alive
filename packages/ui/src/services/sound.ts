@@ -27,11 +27,10 @@ type SoundKind = 'completion' | 'error' | 'waiting';
 const URLS: Record<SoundKind, string> = {
   completion: '/assets/complete_sound.mp3',
   error: '/assets/error_sound.mp3',
-  // No dedicated asset yet — reuse the (pleasant, attention-getting) completion
-  // chime as the "Claude needs your decision" tone. Kept as its own kind so it
-  // has an independent settings toggle and dedupe namespace, and so a bespoke
-  // asset can be dropped in here later without touching callers.
-  waiting: '/assets/complete_sound.mp3',
+  // Dedicated two-note "needs your decision" chime — deliberately distinct from
+  // the completion sound so a blocking decision request (actionable) is
+  // distinguishable by ear from a benign task completion.
+  waiting: '/assets/waiting_sound.wav',
 };
 
 // Debounce window per dedupe key, to avoid double-firing when both

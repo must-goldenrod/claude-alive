@@ -46,10 +46,12 @@ export class SessionStore {
     if (event === 'SessionEnd') {
       const agent = this.agents.get(sessionId);
       if (agent) {
-        // Record completion if agent was in done state
-        if (agent.state === 'done') {
-          this.addCompletedSession(agent);
-        }
+        // Archive EVERY terminated session, not only `done` ones. A ticket that
+        // ends while idle or errored is still a completed ticket the user will
+        // want to review later; the final state is recorded so the archive can
+        // distinguish a clean finish from an error/interrupt. Capture the state
+        // now, before we overwrite it with `despawning`.
+        this.addCompletedSession(agent, agent.state);
         agent.state = 'despawning';
         agent.lastEvent = event;
         agent.lastEventTime = payload.timestamp;
@@ -66,6 +68,8 @@ export class SessionStore {
     if (event === 'SubagentStop' && data.agent_id) {
       const agent = this.agents.get(data.agent_id);
       if (agent) {
+        // Subagents are tickets too — archive them when they stop.
+        this.addCompletedSession(agent, agent.state);
         agent.state = 'despawning';
         agent.lastEvent = event;
         agent.lastEventTime = payload.timestamp;
@@ -211,6 +215,21 @@ export class SessionStore {
     return [...this.completedSessions];
   }
 
+  /**
+   * Backfill token usage onto the most recent completed record for a session.
+   * Token totals are only known after async transcript parsing, which resolves
+   * after the completion snapshot was taken.
+   */
+  setCompletedTokenUsage(sessionId: string, usage: CompletedSession['tokenUsage']): boolean {
+    for (let i = this.completedSessions.length - 1; i >= 0; i--) {
+      if (this.completedSessions[i]!.sessionId === sessionId) {
+        this.completedSessions[i] = { ...this.completedSessions[i]!, tokenUsage: usage };
+        return true;
+      }
+    }
+    return false;
+  }
+
   getStats(): AgentStats {
     const agents = this.getAllAgents();
     const subagentsByType: Record<string, number> = {};
@@ -232,15 +251,23 @@ export class SessionStore {
     return { totalAgents: agents.length, activeAgents, subagentsByType, toolCallsByName };
   }
 
-  private addCompletedSession(agent: AgentInfo): void {
+  private addCompletedSession(agent: AgentInfo, finalState: AgentState): void {
+    const completedAt = Date.now();
     this.completedSessions.push({
       sessionId: agent.sessionId,
       cwd: agent.cwd,
       projectName: agent.projectName,
-      completedAt: Date.now(),
+      completedAt,
       lastPrompt: agent.lastPrompt,
       displayName: agent.displayName,
       tokenUsage: agent.tokenUsage,
+      createdAt: agent.createdAt,
+      durationMs: Math.max(0, completedAt - agent.createdAt),
+      finalState,
+      totalEvents: agent.totalEvents,
+      toolsUsed: [...agent.toolsUsed],
+      toolCallCount: agent.toolCallCount,
+      parentId: agent.parentId,
     });
     if (this.completedSessions.length > this.maxCompletedSize) {
       this.completedSessions = this.completedSessions.slice(-this.maxCompletedSize);

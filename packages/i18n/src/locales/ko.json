@@ -100,10 +100,10 @@
   },
   "states": {
     "spawning": "생성 중",
-    "idle": "대기",
-    "listening": "수신 중",
-    "active": "활성",
-    "waiting": "대기 중",
+    "idle": "유휴",
+    "listening": "생각 중",
+    "active": "작업 중",
+    "waiting": "응답 필요",
     "error": "오류",
     "done": "완료",
     "despawning": "종료 중",
@@ -158,7 +158,9 @@
   "completionLog": {
     "title": "완료된 세션",
     "empty": "아직 완료된 세션이 없습니다",
-    "sessionCompleted": "세션 완료"
+    "sessionCompleted": "세션 완료",
+    "viewAll": "전체 보기 →",
+    "tokensShort": "tok"
   },
   "efficio": {
     "title": "Efficio — 크기보정 낭비",
@@ -354,6 +356,12 @@
       "host-key": "SSH: 호스트 키 검증 실패",
       "host-key-changed": "SSH: 원격 호스트 ID 변경 감지 — 중간자 공격 가능성",
       "unknown": "SSH: 연결 실패"
+    },
+    "resumeConfirm": {
+      "title": "이 세션을 재개할까요?",
+      "message": "이 세션이 다른 터미널에서 아직 실행 중일 수 있습니다. 재개하면 같은 트랜스크립트에 동시에 기록하는 사본이 하나 더 열려 기록이 손상될 수 있습니다. 원본이 더 이상 실행 중이 아님이 확실할 때만 계속하세요.",
+      "cancel": "취소",
+      "confirm": "그래도 재개"
     }
   },
   "chat": {
@@ -369,8 +377,49 @@
     "list": "리스트",
     "prompt": "프롬프트",
     "efficio": "Efficio",
+    "tickets": "티켓",
     "spread": "스프레드",
-    "jarvis": "자비스"
+    "jarvis": "자비스",
+    "workspace": "워크스페이스",
+    "archive": "아카이브"
+  },
+  "tickets": {
+    "newGoalPlaceholder": "목표를 적으세요 — 에이전트가 자율로 처리합니다",
+    "cwdPlaceholder": "절대경로 프로젝트 경로, 예: /Users/you/project",
+    "create": "티켓 만들기",
+    "creating": "생성 중…",
+    "empty": "없음",
+    "retry": "재시도",
+    "cancel": "취소",
+    "delete": "삭제",
+    "detail": "자세히",
+    "close": "닫기",
+    "goalLabel": "요청 내용",
+    "headlineLabel": "한줄 답변",
+    "resultLabel": "전체 결과",
+    "verificationLabel": "검증",
+    "failureLabel": "실패 사유",
+    "columns": {
+      "active": "진행중",
+      "done": "종료",
+      "failed": "실패"
+    },
+    "status": {
+      "queued": "대기중",
+      "running": "실행중",
+      "verifying": "검증중",
+      "done": "종료",
+      "failed": "실패"
+    },
+    "failureReason": {
+      "error": "에이전트 오류",
+      "verification-failed": "검증 불통과",
+      "verification-inconclusive": "검증 불확실",
+      "timeout": "시간 초과",
+      "cancelled": "취소됨",
+      "interrupted": "중단됨 (서버 재시작)",
+      "cwd-not-allowed": "허용되지 않은 작업 디렉터리"
+    }
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",
@@ -486,6 +535,93 @@
       "minutesAgo": "{{n}}분 전",
       "hoursAgo": "{{n}}시간 전",
       "daysAgo": "{{n}}일 전"
+    }
+  },
+  "workspaceTree": {
+    "loading": "워크스페이스를 불러오는 중…",
+    "empty": "아직 기록된 세션이 없습니다.",
+    "unavailable": "canonical 이벤트 로그를 읽을 수 없습니다.",
+    "unavailableHint": "세션은 계속 실행 중이며 이 화면만 읽지 못합니다. 서버 로그를 확인하세요.",
+    "error": "워크스페이스 트리를 불러오지 못했습니다.",
+    "sessionCount": "세션 {{count}}개",
+    "pendingApprovals": "승인 대기 {{count}}건",
+    "gitRepo": "git",
+    "folder": "폴더",
+    "heuristic": "추정",
+    "heuristicHint": "공급자가 직접 보고한 상태가 아니라 추론된 값입니다."
+  },
+  "conversation": {
+    "selectPrompt": "대화를 보려면 세션을 선택하세요.",
+    "loading": "대화를 불러오는 중…",
+    "empty": "이 세션에 기록된 대화가 없습니다.",
+    "notFound": "이 세션은 카탈로그에 없습니다.",
+    "unavailable": "canonical 이벤트 로그를 읽을 수 없어 대화를 표시할 수 없습니다.",
+    "error": "대화를 불러오지 못했습니다.",
+    "partialNotice": "훅에서 파생된 이력입니다. 턴당 assistant 메시지 1건만 포함되며 전체 응답은 아닙니다.",
+    "tool": "도구",
+    "approval": "승인 요청",
+    "systemEvent": "시스템",
+    "role": {
+      "user": "나",
+      "assistant": "어시스턴트",
+      "reasoning": "추론"
+    },
+    "status": {
+      "running": "실행 중",
+      "completed": "완료",
+      "failed": "실패"
+    },
+    "decision": {
+      "allow": "허용됨",
+      "deny": "거부됨"
+    }
+  },
+  "sessionDetail": {
+    "tab": {
+      "conversation": "대화",
+      "terminal": "터미널"
+    },
+    "terminalLoading": "터미널을 확인하는 중…",
+    "terminalError": "이 세션의 터미널을 확인하지 못했습니다.",
+    "noTerminal": "이 세션에 Alive가 소유한 터미널이 없습니다.",
+    "terminalLive": "이 세션의 터미널이 실행 중입니다.",
+    "terminalExited": "이 세션의 터미널은 종료되었습니다.",
+    "terminalTab": "터미널 탭: {{tabId}}",
+    "terminalHint": "원문 출력을 조작하려면 Chat 화면에서 여세요.",
+    "reason": {
+      "unknown-session": "이 세션은 카탈로그에 없습니다.",
+      "not-spawned-by-alive": "Alive 외부에서 시작된 세션이라 붙을 프로세스가 없습니다. 대화 이력은 훅에서 계속 읽을 수 있습니다.",
+      "lookup-failed": "터미널 레지스트리를 읽지 못했습니다. 서버 로그를 확인하세요."
+    }
+  },
+  "archive": {
+    "listTitle": "완료된 티켓",
+    "searchPlaceholder": "프로젝트·이름·프롬프트로 검색",
+    "loading": "불러오는 중…",
+    "empty": "아직 완료된 세션이 없습니다",
+    "tokensShort": "tok",
+    "bucket": {
+      "today": "오늘",
+      "yesterday": "어제",
+      "week": "이번 주",
+      "earlier": "이전"
+    },
+    "unreachable": {
+      "title": "아카이브를 불러올 수 없습니다",
+      "body": "완료 세션 아카이브를 불러오기 위해 서버에 연결하지 못했습니다."
+    },
+    "detail": {
+      "empty": "완료된 세션을 선택하면 상세 내용을 볼 수 있습니다.",
+      "completedAt": "완료 시각",
+      "startedAt": "시작 시각",
+      "duration": "소요 시간",
+      "events": "이벤트",
+      "toolCalls": "도구 호출",
+      "project": "프로젝트",
+      "session": "세션 ID",
+      "tools": "사용 도구",
+      "tokens": "토큰 사용량",
+      "lastPrompt": "마지막 프롬프트"
     }
   }
 }

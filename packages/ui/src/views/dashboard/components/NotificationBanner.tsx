@@ -1,10 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import type { AgentInfo } from '@claude-alive/core';
 
+// Banners are reserved for states that need the user to ACT: a decision request
+// or an error. Completion (`done`) is informational and surfaces via the
+// auto-dismissing completion toast instead \u2014 keeping it out of the banner stops
+// finished sessions from piling up as un-dismissable green banners that bury the
+// actionable ones.
 const ATTENTION_STATES: Record<string, { color: string; icon: string; messageKey: string }> = {
   waiting: { color: 'var(--accent-amber)', icon: '\u26A0\uFE0F', messageKey: 'notifications.needsPermission' },
   error: { color: 'var(--accent-red)', icon: '\u274C', messageKey: 'notifications.errorOccurred' },
-  done: { color: 'var(--accent-green)', icon: '\u2705', messageKey: 'notifications.taskCompleted' },
 };
 
 interface NotificationBannerProps {

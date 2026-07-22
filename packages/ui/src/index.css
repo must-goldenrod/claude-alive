@@ -12,6 +12,11 @@
   --accent-amber: #d29922;
   --accent-red: #f85149;
   --accent-purple: #bc8cff;
+  --accent-teal: #39c5cf;
+  /* Distinct greys for the winding-down lifecycle states so `despawning` and
+     `removed` don't collapse into `idle`. */
+  --state-despawning: #6e7681;
+  --state-removed: #484f58;
 
   --font-ui: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
@@ -77,6 +82,13 @@ html, body, #root {
   50%      { box-shadow: 0 0 0 4px rgba(255, 159, 67, 0.00), 0 0 14px rgba(255, 159, 67, 0.75); }
 }
 
+/* Sidebar agent dot — red "error" pulse. Faster (1s) and more insistent than the
+   waiting pulse so an error out-ranks a routine active/waiting dot for attention. */
+@keyframes claude-error-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.65), 0 0 8px rgba(248, 81, 73, 0.55); }
+  50%      { box-shadow: 0 0 0 5px rgba(248, 81, 73, 0.00), 0 0 16px rgba(248, 81, 73, 0.90); }
+}
+
 /* Terminal tab status: left-to-right sweeping green when a tab is active */
 @keyframes claude-tab-sweep {
   0%   { background-position: 200% 0; }
@@ -92,5 +104,9 @@ html, body, #root {
   [style*="claude-waiting-pulse"] {
     animation: none !important;
     box-shadow: 0 0 8px rgba(255, 159, 67, 0.55) !important;
+  }
+  [style*="claude-error-pulse"] {
+    animation: none !important;
+    box-shadow: 0 0 10px rgba(248, 81, 73, 0.75) !important;
   }
 }

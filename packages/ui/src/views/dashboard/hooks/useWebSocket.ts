@@ -73,9 +73,10 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
       }
       onRawMessage?.(msg);
 
-      if (msg.type === 'agent:completed') {
-        playCompletionSound(msg.session.sessionId);
-      }
+      // Note: the completion CHIME is fired from the `agent:state` transition
+      // below (a task finishing), not here. `agent:completed` is the archive
+      // event that fires when a session terminates — keeping the sound off it
+      // avoids a second, out-of-sync completion cue.
 
       setState(prev => {
         const agents = new Map(prev.agents);
@@ -107,15 +108,16 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
                 ? [...agent.toolsUsed, msg.tool]
                 : agent.toolsUsed;
               const nextState = msg.state as AgentState;
-              // "Agent finished work and went back to waiting": fire completion
-              // sound on transitions from an actively-working state into idle.
-              // `spawning → idle` is excluded because that's first-appearance,
-              // not a task completion. The debounce in playSound() collapses
-              // overlap with any concurrent `agent:completed` message.
+              // Completion cue: a task finished when the agent enters a "finished"
+              // state (`idle` or `done`) from an actively-working one. This is the
+              // single source of truth for the completion signal — the toast +
+              // native notification in App.tsx key off the same transition, so
+              // sound and visuals always agree. `spawning → idle` (first
+              // appearance) and `idle → done` (already finished) are excluded.
+              const WORKING_STATES: AgentState[] = ['listening', 'active', 'waiting', 'error'];
               if (
-                nextState === 'idle' &&
-                agent.state !== 'idle' &&
-                agent.state !== 'spawning'
+                (nextState === 'idle' || nextState === 'done') &&
+                WORKING_STATES.includes(agent.state)
               ) {
                 playCompletionSound(msg.sessionId);
               }
@@ -146,7 +148,10 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
             break;
           }
           case 'agent:completed': {
-            completedSessions = [...completedSessions, msg.session];
+            // Every terminated session now emits this, so cap the live list — the
+            // RightPanel only shows recent completions and the full history lives
+            // in the durable archive (Archive view, fetched over HTTP).
+            completedSessions = [...completedSessions.slice(-99), msg.session];
             break;
           }
           case 'event:new': {
