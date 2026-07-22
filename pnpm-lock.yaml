@@ -205,6 +205,9 @@ importers:
       '@claude-alive/core':
         specifier: workspace:*
         version: link:../core
+      '@claude-alive/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@think-prompt/agent':
         specifier: workspace:*
         version: link:../prompt-agent
