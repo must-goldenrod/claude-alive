@@ -423,6 +423,7 @@
     "create": "Solve",
     "creating": "생성 중…",
     "empty": "없음",
+    "clearClosed": "정리",
     "retry": "재시도",
     "cancel": "취소",
     "delete": "삭제",

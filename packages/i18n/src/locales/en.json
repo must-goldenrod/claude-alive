@@ -423,6 +423,7 @@
     "create": "Solve",
     "creating": "Creating…",
     "empty": "None",
+    "clearClosed": "Clear",
     "retry": "Retry",
     "cancel": "Cancel",
     "delete": "Delete",
