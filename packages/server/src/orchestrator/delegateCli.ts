@@ -98,8 +98,15 @@ function readAllStdin(): Promise<string> {
   });
 }
 
-// Direct invocation (the wrapper runs `node delegateCli.js …`).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// Direct invocation (the wrapper runs `node delegateCli.js …`). The extra
+// filename check keeps this from firing when this module is esbuild-bundled
+// INTO the server (dist/server.js), where `import.meta.url` would otherwise
+// equal `process.argv[1]` and run the CLI at server startup (exit 2).
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === process.argv[1] &&
+  import.meta.url.endsWith('delegateCli.js')
+) {
   runDelegateCli(process.argv.slice(2), process.env, readAllStdin).then((r) => {
     if (r.stdout) process.stdout.write(r.stdout.endsWith('\n') ? r.stdout : r.stdout + '\n');
     if (r.stderr) process.stderr.write(r.stderr + '\n');
