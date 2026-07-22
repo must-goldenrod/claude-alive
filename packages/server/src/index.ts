@@ -41,6 +41,8 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
+import { createLitellmClient } from './orchestrator/litellmClient.js';
+import { createBackendRegistry } from './orchestrator/backends.js';
 import { createEvalStore } from './evalStore.js';
 import { buildMainPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
@@ -387,6 +389,31 @@ if (!process.env.CLAUDE_ALIVE_TICKET_ROOTS) {
   );
 }
 
+// ── Orchestration backends ───────────────────────────────────────────────────
+// litellm is the first sub-agent delegation target; its key lives in server env
+// only (never sent to the browser). The registry powers the onboarding surface.
+function findOnPath(bin: string): string | null {
+  for (const dir of (augmentPath(process.env.PATH) ?? '').split(':')) {
+    if (!dir) continue;
+    try {
+      if (statSync(join(dir, bin)).isFile()) return join(dir, bin);
+    } catch {
+      // not here — keep looking
+    }
+  }
+  return null;
+}
+const litellmClient = process.env.LITELLM_KEY
+  ? createLitellmClient({
+      baseUrl: process.env.LITELLM_BASE_URL ?? 'https://litellm.must.codes',
+      apiKey: process.env.LITELLM_KEY,
+    })
+  : undefined;
+const backendRegistry = createBackendRegistry({
+  litellm: litellmClient,
+  findClaude: () => findOnPath('claude'),
+});
+
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
@@ -436,6 +463,11 @@ const httpServer = createHttpServer({
   saveProjectName,
   removeProjectName,
   efficio,
+  backends: {
+    list: () => backendRegistry.list(),
+    check: async (id: string) =>
+      id === 'claude-local' || id === 'litellm' || id === 'ssh' ? backendRegistry.check(id) : null,
+  },
   workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
   sessionConversation: canonicalPipeline.enabled
     ? (sessionId, cursor) => canonicalPipeline.conversation(sessionId, cursor)

@@ -135,6 +135,15 @@ export interface HttpRouterOptions {
     /** All evaluation records (dataset), newest activity first is up to the caller. */
     listEvaluations?: () => unknown[];
   };
+
+  /**
+   * Orchestration backend registry (spec 2026-07-22). Absent when disabled.
+   * Powers the onboarding surface: list connectable backends + live check.
+   */
+  backends?: {
+    list: () => unknown[];
+    check: (id: string) => Promise<unknown | null>;
+  };
 }
 
 const ProjectNameBodySchema = z.object({
@@ -251,6 +260,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     sessionTerminal,
     efficio,
     tickets,
+    backends,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -461,6 +471,26 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, { evaluations: tickets.listEvaluations() }, req);
+      return;
+    }
+
+    // Orchestration backends (loopback-only): list + live connectivity check.
+    if (backends && req.method === 'GET' && url.pathname === '/api/backends') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Backends API is restricted to loopback' }, req);
+        return;
+      }
+      sendJson(res, 200, { backends: backends.list() }, req);
+      return;
+    }
+    const backendCheckMatch = url.pathname.match(/^\/api\/backends\/([^/]+)\/check$/);
+    if (backends && req.method === 'POST' && backendCheckMatch) {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Backends API is restricted to loopback' }, req);
+        return;
+      }
+      const status = await backends.check(backendCheckMatch[1]!);
+      sendJson(res, status ? 200 : 404, status ? { status } : { error: 'Unknown backend' }, req);
       return;
     }
 
