@@ -104,7 +104,11 @@ describe('TicketRunner lifecycle', () => {
     });
     const t = await store.create({ goal: 'g', cwd: '/repo' });
     runner.enqueue(t);
-    await until(() => store.get(t.id)?.state === 'done');
+    // Wait on the terminal broadcast, not the store state: `apply` persists the
+    // 'done' state (making store.get observable) one microtask before it emits
+    // the broadcast, so waiting on state can assert the broadcast list before
+    // the final 'done' event lands (flaky under CI timing).
+    await until(() => broadcasts.some((b) => b.state === 'done'));
 
     const final = store.get(t.id)!;
     expect(final.result).toBe('Full body here.');
