@@ -69,7 +69,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<ViewMode>('animation');
+  const [viewMode, setViewMode] = useState<ViewMode>('tickets');
   const [leftPanelOpen, setLeftPanelOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(false);
@@ -373,7 +373,7 @@ export default function App() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   // Remember the view we entered Spread from, so promoting a tile returns there.
-  const prevViewRef = useRef<ViewMode>('animation');
+  const prevViewRef = useRef<ViewMode>('tickets');
   const handleViewModeChange = useCallback((mode: ViewMode) => {
     setViewMode((prev) => {
       if (mode === 'spread' && prev !== 'spread') prevViewRef.current = prev;

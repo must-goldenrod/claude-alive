@@ -373,6 +373,8 @@
   },
   "viewMode": {
     "label": "View mode",
+    "groupIntervene": "Intervene",
+    "groupTools": "Tools",
     "animation": "Animation",
     "list": "List",
     "prompt": "Prompt",
@@ -393,6 +395,7 @@
     "cancel": "Cancel",
     "delete": "Delete",
     "detail": "Details",
+    "intervene": "Inspect / intervene",
     "close": "Close",
     "goalLabel": "Request",
     "headlineLabel": "Answer",

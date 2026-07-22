@@ -31,6 +31,19 @@ export function TicketDetailModal({ ticket, onClose, onRetry, onCancel, onDelete
   if (ticket.thinking) meta.push('thinking');
   if (ticket.effort) meta.push(`effort:${ticket.effort}`);
 
+  // Jump from the ticket into the live intervention surface (animation/terminal)
+  // focused on this ticket's Claude session. Reuses the app-level event handlers
+  // (`claude-alive:navigate` + `terminal:focusTab`) — no new wiring needed. Only
+  // possible when the runner captured the underlying session id.
+  const handleIntervene = () => {
+    if (!ticket.claudeSessionId) return;
+    window.dispatchEvent(new CustomEvent('claude-alive:navigate', { detail: { mode: 'animation' } }));
+    window.dispatchEvent(
+      new CustomEvent('terminal:focusTab', { detail: { sessionId: ticket.claudeSessionId } }),
+    );
+    onClose();
+  };
+
   return (
     <div
       onClick={onClose}
@@ -109,6 +122,20 @@ export function TicketDetailModal({ ticket, onClose, onRetry, onCancel, onDelete
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border-default, #30363d)' }}>
+          {ticket.claudeSessionId && (
+            <button
+              type="button"
+              onClick={handleIntervene}
+              style={{
+                ...btnStyle,
+                color: 'var(--accent-blue, #58a6ff)',
+                borderColor: 'var(--accent-blue, #58a6ff)',
+                background: 'rgba(88, 166, 255, 0.10)',
+              }}
+            >
+              {t('tickets.intervene')}
+            </button>
+          )}
           {isActive && (
             <button type="button" onClick={() => onCancel(ticket.id)} style={btnStyle}>
               {t('tickets.cancel')}
