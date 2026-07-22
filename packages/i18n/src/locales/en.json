@@ -99,15 +99,15 @@
     "sshSessions": "SSH Sessions"
   },
   "states": {
-    "spawning": "spawning",
-    "idle": "idle",
-    "listening": "listening",
-    "active": "active",
-    "waiting": "waiting",
-    "error": "error",
-    "done": "done",
-    "despawning": "despawning",
-    "removed": "removed"
+    "spawning": "Starting",
+    "idle": "Idle",
+    "listening": "Thinking",
+    "active": "Working",
+    "waiting": "Action needed",
+    "error": "Error",
+    "done": "Done",
+    "despawning": "Ending",
+    "removed": "Removed"
   },
   "notifications": {
     "needsPermission": "Needs permission",
@@ -158,7 +158,9 @@
   "completionLog": {
     "title": "Completed Sessions",
     "empty": "No completed sessions yet",
-    "sessionCompleted": "Session completed"
+    "sessionCompleted": "Session completed",
+    "viewAll": "View all →",
+    "tokensShort": "tok"
   },
   "efficio": {
     "title": "Efficio — Size-adjusted Waste",
@@ -354,6 +356,12 @@
       "host-key": "SSH: host key verification failed",
       "host-key-changed": "SSH: remote host identification has changed — possible MITM",
       "unknown": "SSH: connection failed"
+    },
+    "resumeConfirm": {
+      "title": "Resume this session?",
+      "message": "This session may still be running in another terminal. Resuming opens a second copy that writes to the same transcript, which can corrupt it. Only continue if you are sure the original is no longer active.",
+      "cancel": "Cancel",
+      "confirm": "Resume anyway"
     }
   },
   "chat": {
@@ -372,7 +380,8 @@
     "tickets": "Tickets",
     "spread": "Spread",
     "jarvis": "Jarvis",
-    "workspace": "Workspaces"
+    "workspace": "Workspaces",
+    "archive": "Archive"
   },
   "tickets": {
     "newGoalPlaceholder": "Describe a goal — the agent runs it autonomously",
@@ -584,6 +593,36 @@
       "unknown-session": "This session is not in the catalog.",
       "not-spawned-by-alive": "It was started outside Alive, so there is no process of ours to attach to. Its conversation is still readable from hooks.",
       "lookup-failed": "The terminal registry could not be read; see the server logs."
+    }
+  },
+  "archive": {
+    "listTitle": "Completed tickets",
+    "searchPlaceholder": "Search by project, name, or prompt",
+    "loading": "Loading…",
+    "empty": "No completed sessions yet",
+    "tokensShort": "tok",
+    "bucket": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "Earlier this week",
+      "earlier": "Earlier"
+    },
+    "unreachable": {
+      "title": "Archive unavailable",
+      "body": "Could not reach the server to load the completed-session archive."
+    },
+    "detail": {
+      "empty": "Select a completed session to see its details.",
+      "completedAt": "Completed",
+      "startedAt": "Started",
+      "duration": "Duration",
+      "events": "Events",
+      "toolCalls": "Tool calls",
+      "project": "Project",
+      "session": "Session ID",
+      "tools": "Tools used",
+      "tokens": "Token usage",
+      "lastPrompt": "Last prompt"
     }
   }
 }

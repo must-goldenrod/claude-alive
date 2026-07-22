@@ -23,6 +23,12 @@ import {
   saveProjectName,
   removeProjectName,
 } from './projectNameStore.js';
+import {
+  loadCompletedSessions,
+  appendCompletedSession,
+  updateArchivedTokenUsage,
+  getCompletedArchive,
+} from './completedStore.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
@@ -65,6 +71,9 @@ await loadProjectNames();
 // for a resumed session are still tagged 'spawned-by-ui'.
 await loadManagedSessions();
 for (const id of getManagedSessionIds()) managedSessionIds.add(id);
+// Load the durable archive of completed sessions so the Archive view has history
+// from the moment the server comes up (the in-memory store starts empty).
+await loadCompletedSessions();
 
 // Absorbed think-prompt subsystem. Owns its own SQLite handle and a
 // Fastify instance mounted onto our shared http.Server below; no second
@@ -220,12 +229,25 @@ function onEvent(payload: HookEventPayload): void {
     }
     broadcaster.broadcast({ type: 'agent:spawn', agent });
   } else if (event === 'SessionEnd' || event === 'SubagentStop') {
-    // Check if a completion was recorded (agent was in done state)
+    // Every terminated session is now archived by the store, so a completed
+    // record always exists. Take the most recent match (findLast) in case a
+    // sessionId was ever reused across the process lifetime.
     const completedSessions = store.getCompletedSessions();
-    const completed = completedSessions.find(c => c.sessionId === agent.sessionId);
+    let completed: (typeof completedSessions)[number] | undefined;
+    for (let i = completedSessions.length - 1; i >= 0; i--) {
+      if (completedSessions[i]!.sessionId === agent.sessionId) {
+        completed = completedSessions[i];
+        break;
+      }
+    }
     if (completed) {
+      // Persist to the durable archive (best-effort; never blocks the broadcast).
+      appendCompletedSession(completed).catch((err) =>
+        console.error(`[archive] failed to persist ${agent.sessionId}:`, err),
+      );
       broadcaster.broadcast({ type: 'agent:completed', session: completed });
-      // Delay despawn by 30s so the done state is visible in UI
+      // Delay despawn by 30s so the finished state is visible in the UI before
+      // the agent card disappears.
       despawnTimers.set(agent.sessionId, setTimeout(() => {
         despawnTimers.delete(agent.sessionId);
         store.removeAgent(agent.sessionId);
@@ -239,7 +261,9 @@ function onEvent(payload: HookEventPayload): void {
     // so the dashboard's efficiency scores stay current without manual CLI runs.
     efficioCollector.schedule();
 
-    // Async transcript parsing (non-blocking)
+    // Async transcript parsing (non-blocking). Token usage isn't known until the
+    // transcript is parsed, which happens AFTER the archive snapshot was taken —
+    // so backfill it into both the live store and the durable archive when ready.
     if (agent.transcriptPath) {
       parseTranscriptTokens(agent.transcriptPath).then((usage) => {
         if (usage) {
@@ -247,6 +271,8 @@ function onEvent(payload: HookEventPayload): void {
           if (current) {
             current.tokenUsage = usage;
           }
+          store.setCompletedTokenUsage(agent.sessionId, usage);
+          updateArchivedTokenUsage(agent.sessionId, usage).catch(() => {});
         }
       }).catch(() => {});
     }
@@ -365,6 +391,7 @@ const httpServer = createHttpServer({
   renameAgent,
   removeAgent,
   getStats: () => store.getStats(),
+  getCompletedArchive,
   getProjectNames,
   saveProjectName,
   removeProjectName,

@@ -11,6 +11,10 @@ const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 500;
 const SIDEBAR_DEFAULT_WIDTH = 300;
 
+// Every state gets a distinct colour so the dot alone is legible. Previously
+// active/done shared green, error/despawning shared red, and idle/removed shared
+// grey — three collisions that made "working vs finished", "errored vs tearing
+// down", and "idle vs gone" indistinguishable at a glance.
 const STATE_COLORS: Record<string, string> = {
   spawning: 'var(--accent-purple)',
   idle: 'var(--text-secondary)',
@@ -18,9 +22,9 @@ const STATE_COLORS: Record<string, string> = {
   active: 'var(--accent-green)',
   waiting: 'var(--accent-amber)',
   error: 'var(--accent-red)',
-  done: 'var(--accent-green)',
-  despawning: 'var(--accent-red)',
-  removed: 'var(--text-secondary)',
+  done: 'var(--accent-teal)',
+  despawning: 'var(--state-despawning)',
+  removed: 'var(--state-removed)',
 };
 
 function formatTimeSince(now: number, timestamp: number, t: TFunction): string {
@@ -199,15 +203,18 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
               background: stateColor,
               border: '2px solid var(--bg-secondary)',
               boxShadow:
-                agent.state === 'waiting'
+                agent.state === 'error' || agent.state === 'waiting' || agent.state === 'active'
                   ? `0 0 8px ${stateColor}`
-                  : agent.state === 'active'
-                    ? `0 0 8px ${stateColor}`
-                    : 'none',
+                  : 'none',
+              // Attention hierarchy: error pulses fastest/most insistently, then
+              // waiting. A routine `active` dot glows but does not pulse, so it
+              // never out-ranks an error the way it used to (error had no glow).
               animation:
-                agent.state === 'waiting'
-                  ? 'claude-waiting-pulse 1.4s ease-in-out infinite'
-                  : undefined,
+                agent.state === 'error'
+                  ? 'claude-error-pulse 1s ease-in-out infinite'
+                  : agent.state === 'waiting'
+                    ? 'claude-waiting-pulse 1.4s ease-in-out infinite'
+                    : undefined,
             }}
           />
         </div>

@@ -20,10 +20,13 @@ interface CompletionLogProps {
 export function CompletionLog({ completedSessions }: CompletionLogProps) {
   const { t } = useTranslation();
   const now = useNow();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
+  // New completions are prepended (most-recent-first), so keep the scroll pinned
+  // to the TOP when one arrives — the previous code scrolled to the bottom, i.e.
+  // away from where the new item actually appeared.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (listRef.current) listRef.current.scrollTop = 0;
   }, [completedSessions.length]);
 
   // Show most recent first
@@ -39,16 +42,25 @@ export function CompletionLog({ completedSessions }: CompletionLogProps) {
         style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-color)', background: 'var(--bg-secondary)' }}
       >
         <span>{t('completionLog.title')}</span>
-        {completedSessions.length > 0 && (
-          <span
-            className="px-2.5 py-0.5 rounded-md text-[11px] font-medium"
-            style={{ background: 'var(--accent-green)20', color: 'var(--accent-green)' }}
+        <span className="flex items-center gap-2">
+          {completedSessions.length > 0 && (
+            <span
+              className="px-2.5 py-0.5 rounded-md text-[11px] font-medium"
+              style={{ background: 'var(--accent-green)20', color: 'var(--accent-green)' }}
+            >
+              {completedSessions.length}
+            </span>
+          )}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('claude-alive:navigate', { detail: { mode: 'archive' } }))}
+            className="text-[11px] font-medium"
+            style={{ color: 'var(--accent-blue)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
-            {completedSessions.length}
-          </span>
-        )}
+            {t('completionLog.viewAll')}
+          </button>
+        </span>
       </div>
-      <div className="overflow-y-auto p-3 space-y-0.5">
+      <div ref={listRef} className="overflow-y-auto p-3 space-y-0.5">
         {sorted.length === 0 ? (
           <div className="text-center py-6 text-sm" style={{ color: 'var(--text-secondary)' }}>
             {t('completionLog.empty')}
@@ -78,13 +90,12 @@ export function CompletionLog({ completedSessions }: CompletionLogProps) {
                   className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-medium"
                   style={{ background: 'var(--accent-blue)15', color: 'var(--accent-blue)' }}
                 >
-                  {session.tokenUsage.totalTokens.toLocaleString()} tok
+                  {session.tokenUsage.totalTokens.toLocaleString()} {t('completionLog.tokensShort')}
                 </span>
               )}
             </div>
           ))
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

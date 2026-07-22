@@ -100,6 +100,7 @@ const VIEW_MODES: { mode: ViewMode; labelKey: string }[] = [
   { mode: 'list', labelKey: 'viewMode.list' },
   { mode: 'prompt', labelKey: 'viewMode.prompt' },
   { mode: 'efficio', labelKey: 'viewMode.efficio' },
+  { mode: 'archive', labelKey: 'viewMode.archive' },
   { mode: 'tickets', labelKey: 'viewMode.tickets' },
   { mode: 'spread', labelKey: 'viewMode.spread' },
   { mode: 'workspace', labelKey: 'viewMode.workspace' },

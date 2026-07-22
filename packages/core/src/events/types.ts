@@ -56,6 +56,20 @@ export interface CompletedSession {
   lastPrompt: string | null;
   displayName: string | null;
   tokenUsage?: TokenUsage | null;
+  /** When the session first appeared (SessionStart). Enables duration + time-bucketing in the archive. */
+  createdAt?: number;
+  /** completedAt − createdAt, in ms. Precomputed so the archive view stays dumb. */
+  durationMs?: number;
+  /** Agent state at the moment it terminated (e.g. 'done', 'idle', 'error') — before the despawning transition. */
+  finalState?: AgentState;
+  /** Total hook events processed for this session. */
+  totalEvents?: number;
+  /** Unique tools the session used, in first-seen order. */
+  toolsUsed?: string[];
+  /** Total tool invocations (including repeats). */
+  toolCallCount?: number;
+  /** Parent session id when this was a subagent; null for root sessions. */
+  parentId?: string | null;
 }
 
 export interface AgentInfo {

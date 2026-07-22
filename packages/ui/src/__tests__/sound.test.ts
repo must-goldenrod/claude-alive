@@ -51,13 +51,42 @@ function totalPlays(): number {
   return FakeAudio.created.reduce((sum, a) => sum + a.playCalls, 0);
 }
 
+/**
+ * A complete in-memory Web Storage stand-in. We inject our own instead of
+ * relying on the ambient `localStorage` because the backing implementation
+ * varies by runtime: jsdom provides a full Storage, but Node 22+'s built-in
+ * Web Storage (enabled via `--localstorage-file`) can shadow it with a partial
+ * object that lacks `clear()`, breaking test isolation. Injecting guarantees a
+ * fresh, fully-featured store per test regardless of environment.
+ */
+function createLocalStorageMock(): Storage {
+  const store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+  } as Storage;
+}
+
 beforeEach(() => {
   FakeAudio.created = [];
+  // Settings persist to localStorage, and the module singleton re-reads it on
+  // (re-)import. Without a fresh store between tests, an earlier test's
+  // setSettings (e.g. disabling completion or setting volume to 0) leaks into
+  // later tests via localStorage — even across vi.resetModules() — silently
+  // gating sounds off. Inject a clean store so every test starts from
+  // DEFAULT_SETTINGS.
+  vi.stubGlobal('localStorage', createLocalStorageMock());
   vi.stubGlobal('Audio', FakeAudio as unknown as typeof Audio);
-  // Settings persist to localStorage, so a test that disables a sound or drops
-  // its volume to 0 would otherwise leak into every later test — re-importing
-  // the module reloads the same persisted value.
-  localStorage.clear();
 });
 
 afterEach(() => {
