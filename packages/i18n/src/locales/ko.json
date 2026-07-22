@@ -399,7 +399,14 @@
       "orchestrator": "오케스트레이터",
       "subagent": "서브에이전트",
       "location": "위치"
-    }
+    },
+    "sshHosts": "SSH 호스트",
+    "sshHostsHint": "여기서 호스트를 등록하면 티켓 생성 시 '위치'로 선택할 수 있습니다 (원격에서 실행). 원격 호스트에 claude 설치·인증 필요.",
+    "sshLabel": "이름(선택)",
+    "sshHost": "호스트 (예: 192.168.100.99)",
+    "sshUser": "사용자 (예: dev)",
+    "sshAdd": "호스트 추가",
+    "remove": "삭제"
   },
   "tickets": {
     "heroPrompt": "What do you want to solve?",

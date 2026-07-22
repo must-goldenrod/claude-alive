@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TicketLocation } from '@claude-alive/core';
 import type { TicketCreateFn } from './useTickets.ts';
 import { FolderPicker } from './FolderPicker.tsx';
-import { loadPresets } from '../chat/sshPresets.ts';
+import { loadPresets, SSH_PRESETS_CHANGED } from '../chat/sshPresets.ts';
 
 interface NewTicketFormProps {
   onCreate: TicketCreateFn;
@@ -22,7 +22,14 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
   const [error, setError] = useState<string | null>(null);
   // Only presets with structured host info can be a ticket location (headless SSH
   // needs the host server-side; command-only presets stay terminal-only).
-  const [sshHosts] = useState(() => loadPresets().filter((p) => p.host));
+  const [sshHosts, setSshHosts] = useState(() => loadPresets().filter((p) => p.host));
+  // Refresh the location picker when SSH hosts are added/removed elsewhere (e.g. the
+  // Backends onboarding screen) — the form stays mounted, so re-read on the event.
+  useEffect(() => {
+    const onChange = () => setSshHosts(loadPresets().filter((p) => p.host));
+    window.addEventListener(SSH_PRESETS_CHANGED, onChange);
+    return () => window.removeEventListener(SSH_PRESETS_CHANGED, onChange);
+  }, []);
   const [locId, setLocId] = useState('local');
   const [orchestrated, setOrchestrated] = useState(false);
   const preset = sshHosts.find((p) => p.id === locId);
