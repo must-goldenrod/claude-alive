@@ -6,6 +6,7 @@
  * only status + a final summary — the intermediate process (grep, SQL, tool
  * calls) is never surfaced.
  */
+import type { TicketLocation } from './location.js';
 
 /**
  * Internal lifecycle state (5). The UI collapses `queued`+`running`+`verifying`
@@ -47,8 +48,10 @@ export interface Ticket {
   seq: number;
   /** The one-card input: a simple goal statement. */
   goal: string;
-  /** Working directory (project root) the agent runs in. */
+  /** Working directory the agent runs in. Local path, or a REMOTE path when `location` is ssh. */
   cwd: string;
+  /** Where the agent runs. Absent = local (backward-compatible). */
+  location?: TicketLocation;
   state: TicketState;
   createdAt: number;
   startedAt?: number;
@@ -75,6 +78,7 @@ export interface Ticket {
 export interface TicketCreateInput {
   goal: string;
   cwd: string;
+  location?: TicketLocation;
 }
 
 /** States the UI renders as "in progress". */
