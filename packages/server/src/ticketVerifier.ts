@@ -1,0 +1,73 @@
+/**
+ * Self-verification gate (spec §완료 판정). After the main agent finishes, a
+ * second headless Claude judges whether the goal was actually met and emits a
+ * strict JSON verdict. Because the process is invisible to the user, completion
+ * is fail-closed: if the verifier can't produce a parseable verdict, the runner
+ * treats the ticket as failed('verification-inconclusive'), never done.
+ */
+import type { Ticket, TicketVerification } from '@claude-alive/core';
+import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
+
+export interface Verifier {
+  /** Resolves with a verdict, or throws if no parseable verdict could be obtained. */
+  verify(ticket: Ticket, mainResult: string | null): Promise<TicketVerification>;
+}
+
+export interface VerifierOptions {
+  /** Injectable runner for tests; production runs a real headless claude. */
+  run?: (opts: { goal: string; cwd: string }) => Promise<HeadlessOutcome>;
+}
+
+export function buildVerificationPrompt(goal: string, mainResult: string | null): string {
+  return [
+    'You are a strict verification agent. An autonomous agent was given a goal and reported a result.',
+    'Independently inspect the working directory (build, tests, files, git diff as needed) and decide',
+    'whether the goal was ACTUALLY achieved. Do not trust the report — verify.',
+    '',
+    `GOAL: ${goal}`,
+    `REPORTED RESULT: ${mainResult ?? '(none)'}`,
+    '',
+    'Output ONLY a single JSON object on its own line, no prose, of the exact form:',
+    '{"passed": true|false, "reason": "<one concise sentence>"}',
+  ].join('\n');
+}
+
+/** Tolerant verdict extractor: accepts a bare object or one embedded in surrounding text. */
+export function extractVerdict(text: string | null): TicketVerification | null {
+  if (!text) return null;
+  const candidates: string[] = [];
+  const trimmed = text.trim();
+  candidates.push(trimmed);
+  // Also try the last {...} block in case the model wrapped it in prose.
+  const matches = trimmed.match(/\{[^{}]*"passed"[^{}]*\}/g);
+  if (matches) candidates.push(...matches.reverse());
+
+  for (const c of candidates) {
+    try {
+      const obj = JSON.parse(c) as Record<string, unknown>;
+      if (typeof obj.passed === 'boolean') {
+        return { passed: obj.passed, reason: typeof obj.reason === 'string' ? obj.reason : '' };
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
+export function createVerifier(options: VerifierOptions = {}): Verifier {
+  const run =
+    options.run ??
+    (({ goal, cwd }) => runHeadlessClaude({ goal, cwd, permissionMode: 'bypassPermissions' }).done);
+
+  return {
+    async verify(ticket, mainResult) {
+      const outcome = await run({ goal: buildVerificationPrompt(ticket.goal, mainResult), cwd: ticket.cwd });
+      const verdict = extractVerdict(outcome.result?.result ?? null);
+      if (!verdict) {
+        throw new Error('verifier produced no parseable verdict');
+      }
+      return verdict;
+    },
+  };
+}

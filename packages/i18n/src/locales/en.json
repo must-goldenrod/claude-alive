@@ -377,9 +377,49 @@
     "list": "List",
     "prompt": "Prompt",
     "efficio": "Efficio",
+    "tickets": "Tickets",
     "spread": "Spread",
     "jarvis": "Jarvis",
+    "workspace": "Workspaces",
     "archive": "Archive"
+  },
+  "tickets": {
+    "newGoalPlaceholder": "Describe a goal — the agent runs it autonomously",
+    "cwdPlaceholder": "Absolute project path, e.g. /Users/you/project",
+    "create": "Create ticket",
+    "creating": "Creating…",
+    "empty": "None",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "detail": "Details",
+    "close": "Close",
+    "goalLabel": "Request",
+    "headlineLabel": "Answer",
+    "resultLabel": "Full result",
+    "verificationLabel": "Verification",
+    "failureLabel": "Failure",
+    "columns": {
+      "active": "In progress",
+      "done": "Closed",
+      "failed": "Failed"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "verifying": "Verifying",
+      "done": "Closed",
+      "failed": "Failed"
+    },
+    "failureReason": {
+      "error": "Agent error",
+      "verification-failed": "Verification failed",
+      "verification-inconclusive": "Verification inconclusive",
+      "timeout": "Timed out",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted (server restart)",
+      "cwd-not-allowed": "Working directory not allowed"
+    }
   },
   "spread": {
     "empty": "No open terminals",
@@ -495,6 +535,64 @@
       "minutesAgo": "{{n}}m ago",
       "hoursAgo": "{{n}}h ago",
       "daysAgo": "{{n}}d ago"
+    }
+  },
+  "workspaceTree": {
+    "loading": "Loading workspaces…",
+    "empty": "No sessions recorded yet.",
+    "unavailable": "The canonical event log is unavailable.",
+    "unavailableHint": "Sessions are still running; only this view cannot be read. See the server logs.",
+    "error": "Could not load the workspace tree.",
+    "sessionCount": "{{count}} sessions",
+    "sessionCount_one": "{{count}} session",
+    "pendingApprovals": "{{count}} awaiting approval",
+    "gitRepo": "git",
+    "folder": "folder",
+    "heuristic": "estimated",
+    "heuristicHint": "This state was inferred, not reported directly by the provider."
+  },
+  "conversation": {
+    "selectPrompt": "Select a session to read its conversation.",
+    "loading": "Loading conversation…",
+    "empty": "No conversation recorded for this session.",
+    "notFound": "This session is not in the catalog.",
+    "unavailable": "The canonical event log is unavailable, so this conversation cannot be read.",
+    "error": "Could not load the conversation.",
+    "partialNotice": "Derived from hooks: one assistant message per turn, not the full streamed reply.",
+    "tool": "tool",
+    "approval": "Approval requested",
+    "systemEvent": "System",
+    "role": {
+      "user": "You",
+      "assistant": "Assistant",
+      "reasoning": "Reasoning"
+    },
+    "status": {
+      "running": "running",
+      "completed": "completed",
+      "failed": "failed"
+    },
+    "decision": {
+      "allow": "allowed",
+      "deny": "denied"
+    }
+  },
+  "sessionDetail": {
+    "tab": {
+      "conversation": "Conversation",
+      "terminal": "Terminal"
+    },
+    "terminalLoading": "Checking for a terminal…",
+    "terminalError": "Could not check the terminal for this session.",
+    "noTerminal": "No Alive-owned terminal for this session.",
+    "terminalLive": "A terminal is running for this session.",
+    "terminalExited": "This session's terminal has exited.",
+    "terminalTab": "Terminal tab: {{tabId}}",
+    "terminalHint": "Open it from the Chat view to interact with the raw output.",
+    "reason": {
+      "unknown-session": "This session is not in the catalog.",
+      "not-spawned-by-alive": "It was started outside Alive, so there is no process of ours to attach to. Its conversation is still readable from hooks.",
+      "lookup-failed": "The terminal registry could not be read; see the server logs."
     }
   },
   "archive": {

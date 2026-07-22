@@ -31,6 +31,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@claude-alive/core':
+        specifier: workspace:*
+        version: link:../core
       '@claude-alive/hooks':
         specifier: workspace:*
         version: link:../hooks
@@ -210,12 +213,18 @@ importers:
       '@claude-alive/core':
         specifier: workspace:*
         version: link:../core
+      '@claude-alive/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@think-prompt/agent':
         specifier: workspace:*
         version: link:../prompt-agent
       '@think-prompt/worker':
         specifier: workspace:*
         version: link:../prompt-worker
+      better-sqlite3:
+        specifier: ^11.7.0
+        version: 11.10.0
       node-pty:
         specifier: 1.2.0-beta.11
         version: 1.2.0-beta.11
@@ -229,9 +238,28 @@ importers:
       '@claude-alive/ui':
         specifier: workspace:*
         version: link:../ui
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
       '@types/ws':
         specifier: ^8
         version: 8.18.1
+
+  packages/storage:
+    dependencies:
+      '@claude-alive/core':
+        specifier: workspace:*
+        version: link:../core
+      better-sqlite3:
+        specifier: ^11.7.0
+        version: 11.10.0
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
+      '@types/node':
+        specifier: ^22.19.11
+        version: 22.19.11
 
   packages/ui:
     dependencies:

@@ -1,6 +1,7 @@
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation } from '../events/types.js';
 import type { AgentStats, EventLogEntry } from '../state/sessionStore.js';
 import type { EfficioStatus } from '../efficio/types.js';
+import type { Ticket } from '../tickets/types.js';
 
 export type TerminalMode = 'claude' | 'shell';
 export type TerminalSource = 'local' | 'ssh';
@@ -30,6 +31,12 @@ export interface ResumableSession {
 }
 
 export type WSServerMessage =
+  /**
+   * Canonical (v2) catalog invalidation. Carries no payload on purpose: the tree
+   * is fetched over HTTP, so the socket protocol never has to version the read
+   * model. Clients that do not know this type ignore it.
+   */
+  | { type: 'v2:catalog-changed' }
   | { type: 'agent:spawn'; agent: AgentInfo }
   | { type: 'agent:despawn'; sessionId: string }
   | { type: 'agent:state'; sessionId: string; state: AgentState; tool: string | null; animation: ToolAnimation | null; timestamp: number }
@@ -58,7 +65,13 @@ export type WSServerMessage =
   // Broadcast when the set of resumable (dormant) sessions changes.
   | { type: 'sessions:resumable'; sessions: ResumableSession[] }
   | { type: 'project:names'; names: Record<string, string> }
-  | { type: 'efficio:update'; status: EfficioStatus };
+  | { type: 'efficio:update'; status: EfficioStatus }
+  // Full ticket list, sent on demand (e.g. a newly connected client that opened
+  // the Tickets view). Live changes ride on `ticket:update`.
+  | { type: 'ticket:snapshot'; tickets: Ticket[] }
+  // A single ticket changed state (queued → running → verifying → done/failed).
+  // Carries the whole ticket so the client merges without a refetch.
+  | { type: 'ticket:update'; ticket: Ticket };
 
 export type WSClientMessage =
   | { type: 'ping' }

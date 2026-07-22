@@ -1,6 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
-import { createPromptSubsystem } from '@think-prompt/agent';
+import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
 import { TerminalManager } from './terminalManager.js';
@@ -11,6 +11,7 @@ import {
   removeManagedSession,
   getManagedSession,
   getManagedSessionIds,
+  getManagedSessions,
   toResumableSessions,
 } from './managedSessionStore.js';
 import { buildSpawnPlaceholderEvent } from './spawnPlaceholder.js';
@@ -30,10 +31,21 @@ import {
 } from './completedStore.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
+import { createCanonicalPipeline } from './canonicalPipeline.js';
+import { resolveSessionTerminal } from './sessionTerminalLink.js';
+import { readTranscriptConversation } from './transcriptLocator.js';
+import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
-import { watch, existsSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { createTicketStore } from './ticketStore.js';
+import { createTicketRunner } from './ticketRunner.js';
+import { runHeadlessClaude } from './headlessClaude.js';
+import { createVerifier } from './ticketVerifier.js';
+import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
+import { dirname, join, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
@@ -67,8 +79,23 @@ await loadCompletedSessions();
 // Fastify instance mounted onto our shared http.Server below; no second
 // port, no separate daemon. `ingest` is called from onEvent() to fan the
 // same hook payload into the prompt-quality pipeline.
-const promptSubsystem = createPromptSubsystem();
-await promptSubsystem.fastify.ready();
+// Optional by design: this subsystem owns a native SQLite binding, and a Node
+// upgrade leaves that binding unloadable (NODE_MODULE_VERSION mismatch). A
+// failure here must not take the dashboard down with it — prompt analytics
+// degrade to unavailable and agents/terminals/WebSocket keep working (§C.7).
+// The failure is logged loudly rather than swallowed.
+let promptSubsystem: PromptSubsystem | null = null;
+try {
+  promptSubsystem = createPromptSubsystem();
+  await promptSubsystem.fastify.ready();
+} catch (error) {
+  promptSubsystem = null;
+  console.error(
+    '[prompt] subsystem failed to start — prompt analytics are disabled for this run. ' +
+      'If this is a native module error, run `pnpm rebuild better-sqlite3`.',
+    error,
+  );
+}
 
 const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -76,6 +103,70 @@ const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 // server never computes statistics — efficio (Python) writes pre-scored rows;
 // we only read them. Absent/empty DB degrades gracefully to available:false.
 const efficio = createEfficioReader();
+
+// Canonical (v2) dual-write. Runs beside the legacy SessionStore path, never in
+// front of it: if this cannot start, hooks keep flowing exactly as before
+// (ADR-0003 storage location; §C.7 graceful degradation).
+const ALIVE_DIR = join(homedir(), '.claude-alive');
+try {
+  mkdirSync(ALIVE_DIR, { recursive: true });
+} catch {
+  // Directory creation failure surfaces below when the database fails to open.
+}
+const execFileAsync = promisify(execFile);
+/**
+ * Coalesce catalog change signals: a busy session emits several events per
+ * second, and the client only needs to know "refetch", not how many times.
+ */
+let catalogChangeTimer: ReturnType<typeof setTimeout> | null = null;
+function signalCatalogChanged(): void {
+  if (catalogChangeTimer) return;
+  catalogChangeTimer = setTimeout(() => {
+    catalogChangeTimer = null;
+    broadcaster.broadcast({ type: 'v2:catalog-changed' });
+  }, 300);
+}
+
+const canonicalPipeline = createCanonicalPipeline({
+  dbPath: process.env.CLAUDE_ALIVE_EVENT_DB ?? join(ALIVE_DIR, 'alive.db'),
+  locationId: 'local',
+  onChange: signalCatalogChanged,
+  // Full conversation from the Claude JSONL transcript when one exists (§F.7).
+  readTranscript: (providerSessionId) => readTranscriptConversation(providerSessionId),
+  // Read-only git probe for workspace identity; augmentPath so a reduced
+  // launchd PATH does not make every workspace look like a plain folder.
+  runner: async (command, args) => {
+    try {
+      const { stdout } = await execFileAsync(command, args, {
+        timeout: 5_000,
+        env: { ...process.env, PATH: augmentPath(process.env.PATH) },
+      });
+      return { ok: true, stdout };
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      return { ok: false, stdout: '', error: err?.message ?? String(error), code: err?.code };
+    }
+  },
+});
+
+// One-time import of pre-canonical sessions so an existing install sees its
+// history in the new tree rather than an empty catalog. Idempotent: each record
+// carries a stable synthetic sourceEventId, so re-running is a dedupe no-op.
+// Fire-and-forget — a slow git probe must not delay the server listening.
+if (canonicalPipeline.enabled) {
+  void canonicalPipeline
+    .importLegacySessions(getManagedSessions())
+    .then((result) => {
+      if (result.imported > 0) {
+        console.log(`[canonical] imported ${result.imported} legacy session(s) into the catalog`);
+      }
+      if (result.skipped.length > 0) {
+        // Never drop rows silently; an operator can see exactly what was left out.
+        console.warn(`[canonical] skipped ${result.skipped.length} legacy session(s):`, result.skipped);
+      }
+    })
+    .catch((error) => console.error('[canonical] legacy import failed:', error));
+}
 
 // Auto-collect: when a session ends, trigger `efficio collect` (debounced). The
 // existing ~/.efficio watcher then broadcasts efficio:update so the UI refreshes.
@@ -111,7 +202,9 @@ function onEvent(payload: HookEventPayload): void {
   // Fan the same hook payload into the prompt-quality pipeline. Errors
   // there are isolated inside `ingest` (fail-open) so the UI broadcast
   // path below is never blocked.
-  promptSubsystem.ingest(payload);
+  promptSubsystem?.ingest(payload);
+  // v2 dual-write: queued and error-isolated, never blocks the legacy path below.
+  void canonicalPipeline.ingest(payload);
 
   const agent = store.processEvent(payload);
   if (!agent) return;
@@ -233,9 +326,68 @@ function removeAgent(sessionId: string): boolean {
   return ok;
 }
 
+// ── Ticket dashboard (spec 2026-07-21) ───────────────────────────────────────
+// Autonomous headless agents driven by cards. `broadcast` forward-references
+// `broadcaster` (assigned below); it's only invoked at runtime, long after both
+// are initialised — same pattern as TerminalManager's `send`.
+const ticketStore = createTicketStore();
+await ticketStore.load();
+const ticketVerifier = createVerifier();
+const ticketRunner = createTicketRunner({
+  store: ticketStore,
+  // Explicit privileged mode from server config (never from the HTTP body).
+  // Append the one-line headline instruction so the card front has a ~30-char
+  // answer without a second summarization call (parsed by extractHeadline).
+  spawnMain: (ticket) =>
+    runHeadlessClaude({
+      goal:
+        ticket.goal +
+        '\n\n---\n작업을 마친 뒤, 마지막 줄에 반드시 다음 형식으로 결과를 30자 이내 한 줄로 요약하세요 (다른 말 없이):\nHEADLINE: <핵심 결과 한 줄>',
+      cwd: ticket.cwd,
+      permissionMode: 'bypassPermissions',
+    }),
+  verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
+  broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
+  concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,
+  // Optional cwd allowlist (colon-separated). Unset = unrestricted (local tool).
+  allowedRoots: process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean),
+});
+if (!process.env.CLAUDE_ALIVE_TICKET_ROOTS) {
+  // bypassPermissions is RCE-equivalent; the ticket routes are loopback-only
+  // (see httpRouter) and this warns that no cwd allowlist is narrowing them.
+  console.warn(
+    '[tickets] CLAUDE_ALIVE_TICKET_ROOTS is unset — autonomous agents may run in any cwd. ' +
+      'Ticket routes are loopback-only; set an allowlist to further restrict.',
+  );
+}
+
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
+  tickets: {
+    // Reject a bad cwd up front with a clear message. Without this, a
+    // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
+    // ("failed to spawn claude").
+    validateCwd: (cwd) => {
+      if (!isAbsolute(cwd)) return 'Working directory must be an absolute path (e.g. /Users/you/project)';
+      try {
+        if (!statSync(cwd).isDirectory()) return 'Working directory is not a directory';
+      } catch {
+        return `Working directory does not exist: ${cwd}`;
+      }
+      return null;
+    },
+    list: () => ticketStore.list(),
+    create: async (input) => {
+      const ticket = await ticketStore.create(input);
+      ticketRunner.enqueue(ticket);
+      broadcaster.broadcast({ type: 'ticket:update', ticket });
+      return ticket;
+    },
+    retry: (id) => ticketRunner.retry(id),
+    cancel: (id) => ticketRunner.cancel(id),
+    remove: (id) => ticketStore.remove(id),
+  },
   renameAgent,
   removeAgent,
   getStats: () => store.getStats(),
@@ -244,7 +396,27 @@ const httpServer = createHttpServer({
   saveProjectName,
   removeProjectName,
   efficio,
+  workspaceTree: canonicalPipeline.enabled ? () => canonicalPipeline.tree() : undefined,
+  sessionConversation: canonicalPipeline.enabled
+    ? (sessionId, cursor) => canonicalPipeline.conversation(sessionId, cursor)
+    : undefined,
+  sessionTerminal: canonicalPipeline.enabled
+    ? (sessionId) =>
+        resolveSessionTerminal(sessionId, {
+          findProviderRef: (id) => canonicalPipeline.findProviderRef(id),
+          // The managed registry is what remembers which tab owned a session.
+          findTabId: (claudeSessionId) =>
+            getManagedSessions().find((r) => r.claudeSessionId === claudeSessionId)?.tabId,
+          isLive: (tabId) => terminalManager.isLive(tabId),
+        })
+    : undefined,
   promptRouter: (req, res) => {
+    if (!promptSubsystem) {
+      // Explicit over a confusing 404: the route exists, the subsystem does not.
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'prompt subsystem unavailable', detail: 'see server logs' }));
+      return;
+    }
     promptSubsystem.fastify.routing(req, res);
   },
   onProjectNamesChanged: () => {
@@ -426,6 +598,11 @@ if (existsSync(efficioDir)) {
 // are logged but never bubble up to take the server down.
 const stopWorkerLoop = startWorkerLoop();
 
+// Reconcile tickets left in flight by a previous run: in-flight → failed
+// (interrupted, not reattachable), queued → re-scheduled. Runs now that the
+// broadcaster exists so state changes reach connected clients.
+void ticketRunner.recover();
+
 httpServer.listen(PORT, () => {
   console.log(`
   ╔══════════════════════════════════════╗
@@ -449,8 +626,9 @@ process.on('SIGINT', () => {
   efficioCollector.stop();
   efficioWatcher?.close();
   stopWorkerLoop();
-  promptSubsystem.fastify.close().catch(() => {});
-  promptSubsystem.close();
+  canonicalPipeline.close();
+  promptSubsystem?.fastify.close().catch(() => {});
+  promptSubsystem?.close();
   broadcaster.close();
   httpServer.close();
   process.exit(0);

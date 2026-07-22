@@ -28,12 +28,16 @@ const PromptView = lazy(() =>
 const EfficioView = lazy(() =>
   import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
 );
+const TicketsView = lazy(() =>
+  import('./views/tickets/TicketsView.tsx').then(m => ({ default: m.TicketsView })),
+);
+import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
 
 const ArchiveView = lazy(() =>
   import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'spread' | 'jarvis';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'spread' | 'jarvis' | 'workspace' | 'tickets';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -486,6 +490,14 @@ export default function App() {
           </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
               When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'workspace' ? 'block' : 'none' }}>
+            <WorkspaceTreeView active={viewMode === 'workspace'} subscribeRaw={subscribeRaw} />
+          </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'tickets' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <TicketsView active={viewMode === 'tickets'} subscribeRaw={subscribeRaw} />
+            </Suspense>
+          </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
             <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{i18n.t('spread.empty')}</div>

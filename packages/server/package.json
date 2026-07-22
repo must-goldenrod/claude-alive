@@ -15,12 +15,15 @@
     "@claude-alive/core": "workspace:*",
     "@think-prompt/agent": "workspace:*",
     "@think-prompt/worker": "workspace:*",
+    "better-sqlite3": "^11.7.0",
     "node-pty": "1.2.0-beta.11",
     "ws": "^8",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@claude-alive/storage": "workspace:*"
   },
   "devDependencies": {
     "@claude-alive/ui": "workspace:*",
+    "@types/better-sqlite3": "^7.6.12",
     "@types/ws": "^8"
   }
 }

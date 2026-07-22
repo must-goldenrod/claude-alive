@@ -91,6 +91,33 @@ export interface HttpRouterOptions {
    * http.Server with no second port.
    */
   promptRouter?: (req: IncomingMessage, res: ServerResponse) => void;
+
+  /**
+   * Server-owned canonical catalog (§I.5). Absent when the v2 event log could
+   * not start, in which case the route reports that explicitly rather than
+   * pretending the tree is empty.
+   */
+  workspaceTree?: () => unknown;
+
+  /** One session's conversation; null when the session is unknown (§F.7). */
+  sessionConversation?: (sessionId: string, cursor: number) => unknown | null;
+
+  /** Whether a server-owned terminal exists for the session, and why not (§F.7). */
+  sessionTerminal?: (sessionId: string) => unknown;
+
+  /**
+   * Ticket dashboard wiring (spec 2026-07-21). Absent when the ticket subsystem
+   * is disabled, in which case `/api/tickets*` routes 404.
+   */
+  tickets?: {
+    list: () => unknown[];
+    create: (input: { goal: string; cwd: string }) => Promise<unknown>;
+    retry: (id: string) => Promise<unknown | undefined>;
+    cancel: (id: string) => Promise<unknown | undefined>;
+    remove: (id: string) => Promise<boolean>;
+    /** Validate cwd before creating; returns an error message, or null when valid. */
+    validateCwd?: (cwd: string) => string | null;
+  };
 }
 
 const ProjectNameBodySchema = z.object({
@@ -98,7 +125,22 @@ const ProjectNameBodySchema = z.object({
   name: z.string().max(100).nullable(),
 });
 
+const TicketCreateBodySchema = z.object({
+  goal: z.string().min(1).max(8000),
+  cwd: z.string().min(1),
+});
+
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
+
+/**
+ * Ticket routes spawn fully-autonomous agents (RCE-equivalent), so they are
+ * restricted to loopback callers regardless of what interface the server bound.
+ * Covers IPv4, IPv6, and IPv4-mapped-IPv6 loopback.
+ */
+function isLoopbackRequest(req: IncomingMessage): boolean {
+  const addr = req.socket.remoteAddress ?? '';
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1' || addr.startsWith('127.');
+}
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -163,7 +205,11 @@ export function createHttpServer(options: HttpRouterOptions) {
     onProjectNamesChanged,
     uiDistPath,
     promptRouter,
+    workspaceTree,
+    sessionConversation,
+    sessionTerminal,
     efficio,
+    tickets,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -199,6 +245,46 @@ export function createHttpServer(options: HttpRouterOptions) {
       } catch {
         sendJson(res, 400, { error: 'Invalid payload' }, req);
       }
+      return;
+    }
+
+    // v2 read model. Separate from /api/status (v1) so the two can be compared
+    // during the dual-write period instead of one silently replacing the other.
+    if (req.method === 'GET' && url.pathname === '/api/v2/workspace-tree') {
+      if (!workspaceTree) {
+        sendJson(res, 503, { error: 'canonical event log unavailable', detail: 'see server logs' }, req);
+        return;
+      }
+      sendJson(res, 200, workspaceTree(), req);
+      return;
+    }
+
+    const terminalMatch = url.pathname.match(/^\/api\/v2\/sessions\/([^/]+)\/terminal$/);
+    if (req.method === 'GET' && terminalMatch) {
+      if (!sessionTerminal) {
+        sendJson(res, 503, { error: 'canonical event log unavailable', detail: 'see server logs' }, req);
+        return;
+      }
+      sendJson(res, 200, sessionTerminal(decodeURIComponent(terminalMatch[1])), req);
+      return;
+    }
+
+    const conversationMatch = url.pathname.match(/^\/api\/v2\/sessions\/([^/]+)\/conversation$/);
+    if (req.method === 'GET' && conversationMatch) {
+      if (!sessionConversation) {
+        sendJson(res, 503, { error: 'canonical event log unavailable', detail: 'see server logs' }, req);
+        return;
+      }
+      const cursor = Number(url.searchParams.get('cursor') ?? '0');
+      const page = sessionConversation(
+        decodeURIComponent(conversationMatch[1]),
+        Number.isFinite(cursor) ? cursor : 0,
+      );
+      if (!page) {
+        sendJson(res, 404, { error: 'unknown session' }, req);
+        return;
+      }
+      sendJson(res, 200, page, req);
       return;
     }
 
@@ -241,6 +327,54 @@ export function createHttpServer(options: HttpRouterOptions) {
     if (req.method === 'DELETE' && deleteMatch) {
       const ok = removeAgent(deleteMatch[1]!);
       sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
+      return;
+    }
+
+    // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────
+    // These routes drive RCE-equivalent autonomous agents → loopback callers only.
+    if (tickets && url.pathname.startsWith('/api/tickets') && !isLoopbackRequest(req)) {
+      sendJson(res, 403, { error: 'Ticket API is restricted to loopback' }, req);
+      return;
+    }
+    if (tickets && req.method === 'GET' && url.pathname === '/api/tickets') {
+      sendJson(res, 200, { tickets: tickets.list() }, req);
+      return;
+    }
+    if (tickets && req.method === 'POST' && url.pathname === '/api/tickets') {
+      try {
+        const parsed = TicketCreateBodySchema.safeParse(JSON.parse(await readBody(req)));
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
+          return;
+        }
+        const cwdError = tickets.validateCwd?.(parsed.data.cwd);
+        if (cwdError) {
+          sendJson(res, 400, { error: cwdError }, req);
+          return;
+        }
+        const ticket = await tickets.create(parsed.data);
+        sendJson(res, 201, { ticket }, req);
+      } catch {
+        sendJson(res, 400, { error: 'Invalid JSON' }, req);
+      }
+      return;
+    }
+    const ticketRetryMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/retry$/);
+    if (tickets && req.method === 'POST' && ticketRetryMatch) {
+      const ticket = await tickets.retry(ticketRetryMatch[1]!);
+      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      return;
+    }
+    const ticketCancelMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/cancel$/);
+    if (tickets && req.method === 'POST' && ticketCancelMatch) {
+      const ticket = await tickets.cancel(ticketCancelMatch[1]!);
+      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      return;
+    }
+    const ticketDeleteMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)$/);
+    if (tickets && req.method === 'DELETE' && ticketDeleteMatch) {
+      const ok = await tickets.remove(ticketDeleteMatch[1]!);
+      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Ticket not found' }, req);
       return;
     }
 
