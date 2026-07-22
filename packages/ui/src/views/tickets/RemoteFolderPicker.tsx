@@ -24,6 +24,10 @@ export function RemoteFolderPicker({ ssh, onSelect, onClose }: RemoteFolderPicke
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Depend on the primitive fields, not the `ssh` object — the parent passes a
+  // fresh object literal each render, which would otherwise recreate `browse`
+  // and loop the effect (perpetual loading).
+  const { host, user, port, identityFile } = ssh;
   const browse = useCallback(
     (target?: string) => {
       setLoading(true);
@@ -31,7 +35,7 @@ export function RemoteFolderPicker({ ssh, onSelect, onClose }: RemoteFolderPicke
       fetch(`${API_BASE}/api/ssh/browse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ssh, path: target }),
+        body: JSON.stringify({ ssh: { host, user, port, identityFile }, path: target }),
       })
         .then((r) => r.json())
         .then((data: { path?: string; dirs?: string[]; error?: string }) => {
@@ -45,7 +49,7 @@ export function RemoteFolderPicker({ ssh, onSelect, onClose }: RemoteFolderPicke
         .catch(() => setError('connection failed'))
         .finally(() => setLoading(false));
     },
-    [ssh],
+    [host, user, port, identityFile],
   );
 
   useEffect(() => {
