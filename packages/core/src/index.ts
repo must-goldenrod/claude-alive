@@ -20,6 +20,11 @@ export { TICKET_ACTIVE_STATES, isTicketActive } from './tickets/types.js';
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput,
 } from './tickets/types.js';
+export {
+  seedAutoLabel, clampWeight,
+  DEFAULT_EVAL_WEIGHT, MIN_EVAL_WEIGHT, MAX_EVAL_WEIGHT,
+} from './tickets/evaluation.js';
+export type { EvalLabel, TicketEvaluation, RouteGuide } from './tickets/evaluation.js';
 export * from './canonical/index.js';
 export { augmentPath } from './env/path.js';
 export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';
