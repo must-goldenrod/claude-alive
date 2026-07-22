@@ -386,6 +386,7 @@
     "archive": "Archive"
   },
   "tickets": {
+    "heroPrompt": "What do you want to solve?",
     "newGoalPlaceholder": "Describe a goal — the agent runs it autonomously",
     "selectFolder": "Select project folder",
     "changeFolder": "Change",

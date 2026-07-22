@@ -32,7 +32,35 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <NewTicketForm onCreate={createTicket} />
+        {/* Center-focused composer: a ChatGPT-style hero prompt over a
+            half-width input, so the "what to solve" question leads the view
+            while the board below stays full-width. */}
+        <div
+          style={{
+            maxWidth: 640,
+            width: '100%',
+            margin: '16px auto 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 18,
+          }}
+        >
+          <h1
+            style={{
+              margin: 0,
+              textAlign: 'center',
+              fontSize: 27,
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
+              lineHeight: 1.25,
+              color: 'var(--text-primary, #e6edf3)',
+              fontFamily: 'var(--font-ui, system-ui)',
+            }}
+          >
+            {t('tickets.heroPrompt')}
+          </h1>
+          <NewTicketForm onCreate={createTicket} />
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           {COLUMNS.map((col) => (
