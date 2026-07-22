@@ -32,6 +32,7 @@ export const VIEW_MODE_META: readonly ViewModeMeta[] = [
   { mode: 'prompt', labelKey: 'viewMode.prompt', group: 'tools' },
   { mode: 'efficio', labelKey: 'viewMode.efficio', group: 'tools' },
   { mode: 'archive', labelKey: 'viewMode.archive', group: 'tools' },
+  { mode: 'backends', labelKey: 'viewMode.backends', group: 'tools' },
 ];
 
 /** Views in a given group, preserving declaration order. */

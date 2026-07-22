@@ -383,7 +383,23 @@
     "spread": "스프레드",
     "jarvis": "자비스",
     "workspace": "워크스페이스",
-    "archive": "아카이브"
+    "archive": "아카이브",
+    "backends": "백엔드 연결"
+  },
+  "backends": {
+    "title": "백엔드 연결",
+    "subtitle": "오케스트레이터(Claude)와 위임 대상 서브에이전트를 연결하고 상태를 확인합니다.",
+    "loading": "불러오는 중…",
+    "check": "연결 확인",
+    "checking": "확인 중…",
+    "connected": "연결됨",
+    "failed": "실패",
+    "unknown": "미확인",
+    "kind": {
+      "orchestrator": "오케스트레이터",
+      "subagent": "서브에이전트",
+      "location": "위치"
+    }
   },
   "tickets": {
     "heroPrompt": "What do you want to solve?",
@@ -420,6 +436,8 @@
     "verificationLabel": "검증",
     "failureLabel": "실패 사유",
     "noResult": "결과 없음",
+    "orchestrate": "오케스트레이터로 실행",
+    "orchestrateHint": "(서브에이전트에 위임 가능)",
     "evaluatePrompt": "평가:",
     "runInfoLabel": "실행 정보",
     "runModel": "모델",

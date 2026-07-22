@@ -119,6 +119,7 @@ export interface HttpRouterOptions {
         ssh?: { host: string; user?: string; port?: number; identityFile?: string };
         label?: string;
       };
+      orchestrated?: boolean;
     }) => Promise<unknown>;
     retry: (id: string) => Promise<unknown | undefined>;
     /** Continue a `decision` ticket with a follow-up prompt. Undefined = unknown id. */
@@ -135,6 +136,15 @@ export interface HttpRouterOptions {
     /** All evaluation records (dataset), newest activity first is up to the caller. */
     listEvaluations?: () => unknown[];
   };
+
+  /**
+   * Orchestration backend registry (spec 2026-07-22). Absent when disabled.
+   * Powers the onboarding surface: list connectable backends + live check.
+   */
+  backends?: {
+    list: () => unknown[];
+    check: (id: string) => Promise<unknown | null>;
+  };
 }
 
 const ProjectNameBodySchema = z.object({
@@ -142,11 +152,15 @@ const ProjectNameBodySchema = z.object({
   name: z.string().max(100).nullable(),
 });
 
+// Reject values starting with `-` at the boundary: they would be smuggled to
+// `ssh` as options (argv flag injection, e.g. `-oProxyCommand=…`). sshExecutor
+// re-checks defensively, but the schema is the first line of defence.
+const noLeadingDash = /^[^-]/;
 const SshTargetSchema = z.object({
-  host: z.string().min(1).max(255),
-  user: z.string().max(64).optional(),
+  host: z.string().min(1).max(255).regex(noLeadingDash),
+  user: z.string().max(64).regex(noLeadingDash).optional(),
   port: z.number().int().min(1).max(65535).optional(),
-  identityFile: z.string().max(1024).optional(),
+  identityFile: z.string().max(1024).regex(noLeadingDash).optional(),
 });
 
 const TicketLocationSchema = z.object({
@@ -159,6 +173,7 @@ const TicketCreateBodySchema = z.object({
   goal: z.string().min(1).max(8000),
   cwd: z.string().min(1),
   location: TicketLocationSchema.optional(),
+  orchestrated: z.boolean().optional(),
 });
 
 const EvaluateBodySchema = z.object({
@@ -247,6 +262,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     sessionTerminal,
     efficio,
     tickets,
+    backends,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
 
@@ -457,6 +473,26 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, { evaluations: tickets.listEvaluations() }, req);
+      return;
+    }
+
+    // Orchestration backends (loopback-only): list + live connectivity check.
+    if (backends && req.method === 'GET' && url.pathname === '/api/backends') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Backends API is restricted to loopback' }, req);
+        return;
+      }
+      sendJson(res, 200, { backends: backends.list() }, req);
+      return;
+    }
+    const backendCheckMatch = url.pathname.match(/^\/api\/backends\/([^/]+)\/check$/);
+    if (backends && req.method === 'POST' && backendCheckMatch) {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Backends API is restricted to loopback' }, req);
+        return;
+      }
+      const status = await backends.check(backendCheckMatch[1]!);
+      sendJson(res, status ? 200 : 404, status ? { status } : { error: 'Unknown backend' }, req);
       return;
     }
 

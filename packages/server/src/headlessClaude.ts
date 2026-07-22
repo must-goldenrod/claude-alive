@@ -43,6 +43,8 @@ export interface HeadlessRunOptions {
   permissionMode: string;
   /** Resume a prior Claude session (`--resume <id>`) so a reply continues the thread. */
   resumeSessionId?: string;
+  /** Dir prepended to the agent's PATH (e.g. so an orchestrator can call `ca-delegate`). */
+  pathPrepend?: string;
   /** Injectable spawn for tests. Production builds a real `claude` child process. */
   spawnProcess?: (args: HeadlessSpawnArgs) => HeadlessProcessHandle;
   /** Observe each classified stream event (activity is intentionally opaque). */
@@ -140,11 +142,13 @@ function realSpawn(args: HeadlessSpawnArgs): HeadlessProcessHandle {
 export function runHeadlessClaude(options: HeadlessRunOptions): HeadlessRunHandle {
   const permissionMode = options.permissionMode ?? 'bypassPermissions';
   const spawnProcess = options.spawnProcess ?? realSpawn;
+  const env = cleanEnv();
+  if (options.pathPrepend) env.PATH = `${options.pathPrepend}:${env.PATH ?? ''}`;
   const proc = spawnProcess({
     goal: options.goal,
     cwd: options.cwd,
     permissionMode,
-    env: cleanEnv(),
+    env,
     resumeSessionId: options.resumeSessionId,
   });
   return consumeHeadless(proc, options.onEvent);

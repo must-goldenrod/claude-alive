@@ -19,6 +19,8 @@ export interface AgentSpawnRequest {
   permissionMode: string;
   /** Resume a prior Claude session (`--resume <id>`) so a follow-up continues the thread. */
   resumeSessionId?: string;
+  /** Dir prepended to the agent PATH (local only) so an orchestrator can call `ca-delegate`. */
+  pathPrepend?: string;
 }
 
 export interface Executor {

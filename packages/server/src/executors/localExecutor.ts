@@ -42,6 +42,7 @@ export function createLocalExecutor(options: LocalExecutorOptions = {}): Executo
         cwd: req.cwd,
         permissionMode: req.permissionMode,
         resumeSessionId: req.resumeSessionId,
+        pathPrepend: req.pathPrepend,
       });
     },
   };
