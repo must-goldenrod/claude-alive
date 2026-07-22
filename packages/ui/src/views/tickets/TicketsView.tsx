@@ -6,14 +6,14 @@ import { useTickets } from './useTickets.ts';
 import { TicketCard } from './TicketCard.tsx';
 import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
-import { statusGroup, type StatusGroup } from './ticketDisplay.ts';
+import { displayStatus, type DisplayStatus } from './ticketDisplay.ts';
 
 interface TicketsViewProps {
   active: boolean;
   subscribeRaw: RawMessageSubscribe;
 }
 
-const COLUMNS: StatusGroup[] = ['active', 'done', 'failed'];
+const COLUMNS: DisplayStatus[] = ['active', 'complete', 'closed', 'failed'];
 
 export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
   const { t } = useTranslation();
@@ -21,10 +21,10 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
-    const g: Record<StatusGroup, Ticket[]> = { active: [], done: [], failed: [] };
-    for (const ticket of tickets) g[statusGroup(ticket.state)].push(ticket);
+    const g: Record<DisplayStatus, Ticket[]> = { active: [], complete: [], closed: [], failed: [] };
+    for (const ticket of tickets) g[displayStatus(ticket.state, evaluations[ticket.id])].push(ticket);
     return g;
-  }, [tickets]);
+  }, [tickets, evaluations]);
 
   // Derive the open ticket from the live list so it reflects state changes.
   const selected = selectedId ? tickets.find((x) => x.id === selectedId) ?? null : null;
@@ -34,7 +34,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
         <NewTicketForm onCreate={createTicket} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           {COLUMNS.map((col) => (
             <div key={col} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary, #8b949e)', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -44,7 +44,15 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
               {grouped[col].length === 0 ? (
                 <div style={{ fontSize: 12, opacity: 0.4, padding: '8px 2px' }}>{t('tickets.empty')}</div>
               ) : (
-                grouped[col].map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={(x) => setSelectedId(x.id)} />)
+                grouped[col].map((ticket) => (
+                  <TicketCard
+                    key={ticket.id}
+                    ticket={ticket}
+                    evaluation={evaluations[ticket.id] ?? null}
+                    onOpen={(x) => setSelectedId(x.id)}
+                    onEvaluate={evaluateTicket}
+                  />
+                ))
               )}
             </div>
           ))}

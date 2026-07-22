@@ -396,6 +396,13 @@ const httpServer = createHttpServer({
     cancel: (id) => ticketRunner.cancel(id),
     remove: (id) => ticketStore.remove(id),
     evaluate: async (id, input) => {
+      // Ensure a record exists first: tickets that settled before the eval loop
+      // (or on an older server) have no record yet, so seed one from the ticket
+      // before applying the human label.
+      if (!evalStore.get(id)) {
+        const ticket = ticketStore.get(id);
+        if (ticket) await evalStore.upsertFromTicket(ticket);
+      }
       const evaluation = await evalStore.setLabel(id, input);
       if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
       return evaluation;

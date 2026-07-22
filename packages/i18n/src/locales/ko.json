@@ -409,8 +409,12 @@
     "resultLabel": "전체 결과",
     "verificationLabel": "검증",
     "failureLabel": "실패 사유",
+    "noResult": "결과 없음",
+    "evaluatePrompt": "평가:",
     "columns": {
       "active": "진행중",
+      "complete": "완료",
+      "closed": "종료",
       "done": "종료",
       "failed": "실패"
     },

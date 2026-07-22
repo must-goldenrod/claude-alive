@@ -409,8 +409,12 @@
     "resultLabel": "Full result",
     "verificationLabel": "Verification",
     "failureLabel": "Failure",
+    "noResult": "No result",
+    "evaluatePrompt": "Rate:",
     "columns": {
       "active": "In progress",
+      "complete": "Complete",
+      "closed": "Closed",
       "done": "Closed",
       "failed": "Failed"
     },
