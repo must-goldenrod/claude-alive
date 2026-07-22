@@ -41,6 +41,8 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { runHeadlessClaude } from './headlessClaude.js';
 import { createVerifier } from './ticketVerifier.js';
+import { createEvalStore } from './evalStore.js';
+import { buildMainPrompt } from './ticketPrompt.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
@@ -332,22 +334,28 @@ function removeAgent(sessionId: string): boolean {
 // are initialised — same pattern as TerminalManager's `send`.
 const ticketStore = createTicketStore();
 await ticketStore.load();
+const evalStore = createEvalStore();
+await evalStore.load();
 const ticketVerifier = createVerifier();
 const ticketRunner = createTicketRunner({
   store: ticketStore,
   // Explicit privileged mode from server config (never from the HTTP body).
-  // Append the one-line headline instruction so the card front has a ~30-char
-  // answer without a second summarization call (parsed by extractHeadline).
+  // Prepend the route's learned guide (from past good/bad evaluations) and append
+  // the one-line headline instruction (parsed by extractHeadline). The guide is
+  // read at spawn time, so newer labels take effect on the next ticket.
   spawnMain: (ticket) =>
     runHeadlessClaude({
-      goal:
-        ticket.goal +
-        '\n\n---\n작업을 마친 뒤, 마지막 줄에 반드시 다음 형식으로 결과를 30자 이내 한 줄로 요약하세요 (다른 말 없이):\nHEADLINE: <핵심 결과 한 줄>',
+      goal: buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text),
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
     }),
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
+  // Record an evaluation whenever a ticket settles; broadcast it so clients update.
+  onSettled: async (ticket) => {
+    const evaluation = await evalStore.upsertFromTicket(ticket);
+    broadcaster.broadcast({ type: 'evaluation:update', evaluation });
+  },
   concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,
   // Optional cwd allowlist (colon-separated). Unset = unrestricted (local tool).
   allowedRoots: process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean),
@@ -387,6 +395,12 @@ const httpServer = createHttpServer({
     retry: (id) => ticketRunner.retry(id),
     cancel: (id) => ticketRunner.cancel(id),
     remove: (id) => ticketStore.remove(id),
+    evaluate: async (id, input) => {
+      const evaluation = await evalStore.setLabel(id, input);
+      if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
+      return evaluation;
+    },
+    listEvaluations: () => evalStore.list(),
   },
   renameAgent,
   removeAgent,

@@ -43,6 +43,13 @@ export interface TicketRunnerOptions {
   verify: (ticket: Ticket, mainResult: string | null) => Promise<{ passed: boolean; reason: string }>;
   /** Push a changed ticket to clients. */
   broadcast: (ticket: Ticket) => void;
+  /**
+   * Fired once whenever a ticket reaches a terminal state (done/failed), from the
+   * single `apply` chokepoint so every path (verify-fail, timeout, cancel, recover)
+   * is covered. Used to record an evaluation. Errors are swallowed so a broken
+   * consumer never wedges the runner.
+   */
+  onSettled?: (ticket: Ticket) => void | Promise<void>;
   /** Max tickets executing at once (§동시성). */
   concurrency?: number;
   /** Per-ticket wallclock cap. */
@@ -96,7 +103,7 @@ function isTerminal(t: Ticket | undefined): boolean {
 }
 
 export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
-  const { store, spawnMain, verify, broadcast } = options;
+  const { store, spawnMain, verify, broadcast, onSettled } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const allowedRoots = options.allowedRoots;
@@ -117,7 +124,13 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
 
   async function apply(id: string, patch: Partial<Ticket>): Promise<Ticket | undefined> {
     const t = await store.update(id, patch);
-    if (t) broadcast(t);
+    if (t) {
+      broadcast(t);
+      if (onSettled && isTerminal(t)) {
+        // Fire-and-forget: recording an evaluation must never block or break the runner.
+        Promise.resolve(onSettled(t)).catch(() => {});
+      }
+    }
     return t;
   }
 

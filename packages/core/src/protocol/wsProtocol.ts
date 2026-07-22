@@ -2,6 +2,7 @@ import type { AgentInfo, AgentState, CompletedSession, ToolAnimation } from '../
 import type { AgentStats, EventLogEntry } from '../state/sessionStore.js';
 import type { EfficioStatus } from '../efficio/types.js';
 import type { Ticket } from '../tickets/types.js';
+import type { TicketEvaluation } from '../tickets/evaluation.js';
 
 export type TerminalMode = 'claude' | 'shell';
 export type TerminalSource = 'local' | 'ssh';
@@ -71,7 +72,9 @@ export type WSServerMessage =
   | { type: 'ticket:snapshot'; tickets: Ticket[] }
   // A single ticket changed state (queued → running → verifying → done/failed).
   // Carries the whole ticket so the client merges without a refetch.
-  | { type: 'ticket:update'; ticket: Ticket };
+  | { type: 'ticket:update'; ticket: Ticket }
+  // An evaluation record was created (ticket settled) or a human label was applied.
+  | { type: 'evaluation:update'; evaluation: TicketEvaluation };
 
 export type WSClientMessage =
   | { type: 'ping' }
