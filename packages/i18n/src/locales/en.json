@@ -383,7 +383,23 @@
     "spread": "Spread",
     "jarvis": "Jarvis",
     "workspace": "Workspaces",
-    "archive": "Archive"
+    "archive": "Archive",
+    "backends": "Backends"
+  },
+  "backends": {
+    "title": "Backend connections",
+    "subtitle": "Connect the orchestrator (Claude) and the sub-agents it delegates to, and check their status.",
+    "loading": "Loading…",
+    "check": "Check",
+    "checking": "Checking…",
+    "connected": "Connected",
+    "failed": "Failed",
+    "unknown": "Unchecked",
+    "kind": {
+      "orchestrator": "orchestrator",
+      "subagent": "sub-agent",
+      "location": "location"
+    }
   },
   "tickets": {
     "heroPrompt": "What do you want to solve?",
@@ -417,6 +433,8 @@
     "verificationLabel": "Verification",
     "failureLabel": "Failure",
     "noResult": "No result",
+    "orchestrate": "Run as orchestrator",
+    "orchestrateHint": "(may delegate to sub-agents)",
     "evaluatePrompt": "Rate:",
     "runInfoLabel": "Run info",
     "runModel": "Model",

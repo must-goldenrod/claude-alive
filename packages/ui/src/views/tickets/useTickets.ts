@@ -12,6 +12,7 @@ export type TicketCreateFn = (
   goal: string,
   cwd: string,
   location?: TicketLocation,
+  orchestrated?: boolean,
 ) => Promise<string | null>;
 
 /** Applies a human evaluation label; resolves the updated record or null on failure. */
@@ -85,12 +86,17 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     });
   }, [subscribeRaw]);
 
-  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation): Promise<string | null> => {
+  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation, orchestrated?: boolean): Promise<string | null> => {
     try {
       const res = await fetch(`${API_BASE}/api/tickets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(location && location.kind !== 'local' ? { goal, cwd, location } : { goal, cwd }),
+        body: JSON.stringify({
+          goal,
+          cwd,
+          ...(location && location.kind !== 'local' ? { location } : {}),
+          ...(orchestrated ? { orchestrated: true } : {}),
+        }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };

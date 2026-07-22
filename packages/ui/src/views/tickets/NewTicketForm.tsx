@@ -24,6 +24,7 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
   // needs the host server-side; command-only presets stay terminal-only).
   const [sshHosts] = useState(() => loadPresets().filter((p) => p.host));
   const [locId, setLocId] = useState('local');
+  const [orchestrated, setOrchestrated] = useState(false);
   const preset = sshHosts.find((p) => p.id === locId);
   const isRemote = Boolean(preset);
 
@@ -40,7 +41,8 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
   const submit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
-    const err = await onCreate(goal.trim(), cwd, location);
+    // Orchestrator mode delegates to sub-agents; only meaningful for local runs.
+    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote);
     setSubmitting(false);
     if (err) {
       setError(err); // surface the server's specific reason (e.g. bad cwd)
@@ -205,6 +207,13 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
           {submitting ? t('tickets.creating') : t('tickets.create')}
         </button>
       </div>
+      {!isRemote && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary, #8b949e)', cursor: 'pointer', userSelect: 'none' }}>
+          <input type="checkbox" checked={orchestrated} onChange={(e) => setOrchestrated(e.target.checked)} style={{ cursor: 'pointer' }} />
+          <span>{t('tickets.orchestrate')}</span>
+          <span style={{ opacity: 0.6 }}>{t('tickets.orchestrateHint')}</span>
+        </label>
+      )}
       {error && (
         <div style={{ fontSize: 12, color: 'var(--accent-red, #f85149)', lineHeight: 1.5 }}>{error}</div>
       )}

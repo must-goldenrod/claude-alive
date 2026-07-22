@@ -33,11 +33,15 @@ const TicketsView = lazy(() =>
 );
 import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
 
+const BackendsView = lazy(() =>
+  import('./views/backends/BackendsView.tsx').then(m => ({ default: m.BackendsView })),
+);
+
 const ArchiveView = lazy(() =>
   import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'spread' | 'jarvis' | 'workspace' | 'tickets';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -488,6 +492,11 @@ export default function App() {
               <ArchiveView active={viewMode === 'archive'} />
             </Suspense>
           </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'backends' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <BackendsView active={viewMode === 'backends'} />
+            </Suspense>
+          </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
               When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'workspace' ? 'block' : 'none' }}>
@@ -520,7 +529,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive'}
+          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'backends'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}
