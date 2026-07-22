@@ -67,6 +67,8 @@ export interface HttpRouterOptions {
   renameAgent: (sessionId: string, name: string | null) => boolean;
   removeAgent: (sessionId: string) => boolean;
   getStats: () => object;
+  /** Durable archive of completed (terminated) sessions, newest first. */
+  getCompletedArchive: () => unknown[];
   /** Project-name persistence wiring. */
   getProjectNames: () => Record<string, string>;
   saveProjectName: (cwd: string, name: string) => Promise<void>;
@@ -154,6 +156,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     renameAgent,
     removeAgent,
     getStats,
+    getCompletedArchive,
     getProjectNames,
     saveProjectName,
     removeProjectName,
@@ -249,6 +252,15 @@ export function createHttpServer(options: HttpRouterOptions) {
 
     if (req.method === 'GET' && url.pathname === '/api/stats') {
       sendJson(res, 200, getStats(), req);
+      return;
+    }
+
+    // GET /api/completed?limit=500 — durable archive of terminated sessions, newest first.
+    if (req.method === 'GET' && url.pathname === '/api/completed') {
+      const all = getCompletedArchive();
+      const limitParam = parseInt(url.searchParams.get('limit') ?? '', 10);
+      const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 2000) : 500;
+      sendJson(res, 200, { sessions: all.slice(0, limit) }, req);
       return;
     }
 

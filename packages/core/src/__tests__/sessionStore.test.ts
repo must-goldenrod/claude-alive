@@ -254,10 +254,28 @@ describe('SessionStore', () => {
       expect(completed[0]!.sessionId).toBe('sess-1');
     });
 
-    it('does not record completed session if not in done state', () => {
-      store.processEvent(makePayload('SessionStart', 'sess-1'));
+    it('archives a session that ends without reaching done, tagging its final state', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-1')); // spawning
+      store.processEvent(makePayload('UserPromptSubmit', 'sess-1', { prompt: 'go' })); // listening
+      store.processEvent(makePayload('Stop', 'sess-1')); // idle
       store.processEvent(makePayload('SessionEnd', 'sess-1'));
-      expect(store.getCompletedSessions().length).toBe(0);
+      const completed = store.getCompletedSessions();
+      expect(completed.length).toBe(1);
+      expect(completed[0]!.sessionId).toBe('sess-1');
+      // Ended from idle, never reached `done`.
+      expect(completed[0]!.finalState).toBe('idle');
+    });
+
+    it('records duration and final state for a completed session', () => {
+      store.processEvent(makePayload('SessionStart', 'sess-dur'));
+      store.processEvent(makePayload('Stop', 'sess-dur'));
+      store.processEvent(makePayload('TaskCompleted', 'sess-dur')); // → done
+      store.processEvent(makePayload('SessionEnd', 'sess-dur'));
+      const session = store.getCompletedSessions().find(c => c.sessionId === 'sess-dur');
+      expect(session).toBeDefined();
+      expect(session!.finalState).toBe('done');
+      expect(typeof session!.durationMs).toBe('number');
+      expect(session!.durationMs).toBeGreaterThanOrEqual(0);
     });
 
     it('includes tokenUsage in completed session when set on agent', () => {
