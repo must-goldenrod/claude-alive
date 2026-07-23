@@ -65,7 +65,11 @@ export function TodoList() {
           maxLength={MAX_TEXT_LENGTH}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            // Ignore the Enter that confirms an in-progress IME composition
+            // (Korean/Japanese/Chinese). Without this guard that Enter is
+            // consumed twice — once to commit the last composed char, once to
+            // submit — so the final character gets duplicated.
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
               e.preventDefault();
               handleAdd();
             }
