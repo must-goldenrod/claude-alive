@@ -32,6 +32,13 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
+      {/* Detached To-do dock: fixed to the viewport's right edge so it floats
+          independently of the centered composer/board frame — it must not push
+          or reflow the existing layout. Lives inside TicketsView so it inherits
+          the view's display toggle (hidden on other tabs automatically). */}
+      <div style={{ position: 'fixed', top: 72, right: 24, width: 300, zIndex: 20 }}>
+        <TodoList />
+      </div>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Center-focused composer: a ChatGPT-style hero prompt over a
             half-width input, so the "what to solve" question leads the view
@@ -61,9 +68,6 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
             {t('tickets.heroPrompt')}
           </h1>
           <NewTicketForm onCreate={createTicket} />
-          {/* Personal To-do — same localStorage store as the animation view's
-              RightPanel, surfaced here since Tickets is the default landing view. */}
-          <TodoList />
         </div>
 
         {/* Board region: a single bordered surface holds the four status lanes.
