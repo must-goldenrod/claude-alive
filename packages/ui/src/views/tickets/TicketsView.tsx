@@ -6,6 +6,7 @@ import { useTickets } from './useTickets.ts';
 import { TicketCard } from './TicketCard.tsx';
 import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
+import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
 
 interface TicketsViewProps {
@@ -60,6 +61,9 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
             {t('tickets.heroPrompt')}
           </h1>
           <NewTicketForm onCreate={createTicket} />
+          {/* Personal To-do — same localStorage store as the animation view's
+              RightPanel, surfaced here since Tickets is the default landing view. */}
+          <TodoList />
         </div>
 
         {/* Board region: a single bordered surface holds the four status lanes.
