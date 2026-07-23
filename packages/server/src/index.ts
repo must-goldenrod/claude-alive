@@ -29,6 +29,7 @@ import {
   updateArchivedTokenUsage,
   getCompletedArchive,
 } from './completedStore.js';
+import { createUsageRecordsCache } from './usage/jsonlUsage.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
@@ -120,6 +121,10 @@ try {
 } catch {
   // Directory creation failure surfaces below when the database fails to open.
 }
+// ccusage-style usage parser over ~/.claude/projects transcripts, cached with a
+// short TTL (the scan touches hundreds of files). Backs GET /api/usage.
+const usageRecordsCache = createUsageRecordsCache();
+
 const execFileAsync = promisify(execFile);
 /**
  * Coalesce catalog change signals: a busy session emits several events per
@@ -504,6 +509,7 @@ const httpServer = createHttpServer({
   removeAgent,
   getStats: () => store.getStats(),
   getCompletedArchive,
+  getUsageRecords: () => usageRecordsCache.get(),
   getProjectNames,
   saveProjectName,
   removeProjectName,

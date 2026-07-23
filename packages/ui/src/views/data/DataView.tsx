@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Ticket, CompletedSession } from '@claude-alive/core';
+import type { UsageRecordDTO } from '@claude-alive/core';
 import { formatTokens, formatCost } from '../tickets/ticketDisplay.ts';
 import {
-  aggregateUsage,
+  summarizeRecords,
   type PeriodGranularity,
   type PeriodBucket,
   type UsageTotals,
+  type UsageSummary,
 } from './usageAggregation.ts';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
@@ -25,8 +26,7 @@ function grouped(n: number): string {
 
 export function DataView({ active }: DataViewProps) {
   const { t } = useTranslation();
-  const [tickets, setTickets] = useState<Ticket[] | null>(null);
-  const [sessions, setSessions] = useState<CompletedSession[] | null>(null);
+  const [records, setRecords] = useState<UsageRecordDTO[] | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
   const [granularity, setGranularity] = useState<PeriodGranularity>('day');
   const [loading, setLoading] = useState(false);
@@ -34,18 +34,13 @@ export function DataView({ active }: DataViewProps) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [tRes, sRes] = await Promise.all([
-        fetch(`${API_BASE}/api/tickets`),
-        fetch(`${API_BASE}/api/completed?limit=2000`),
-      ]);
-      if (!tRes.ok || !sRes.ok) {
+      const res = await fetch(`${API_BASE}/api/usage`);
+      if (!res.ok) {
         setReachable(false);
         return;
       }
-      const tData = (await tRes.json()) as { tickets?: Ticket[] };
-      const sData = (await sRes.json()) as { sessions?: CompletedSession[] };
-      setTickets(tData.tickets ?? []);
-      setSessions(sData.sessions ?? []);
+      const data = (await res.json()) as { records?: UsageRecordDTO[] };
+      setRecords(data.records ?? []);
       setReachable(true);
     } catch {
       setReachable(false);
@@ -59,10 +54,7 @@ export function DataView({ active }: DataViewProps) {
     refresh();
   }, [active, refresh]);
 
-  const summary = useMemo(
-    () => aggregateUsage(tickets ?? [], sessions ?? []),
-    [tickets, sessions],
-  );
+  const summary = useMemo(() => summarizeRecords(records ?? []), [records]);
 
   const buckets = useMemo(() => {
     const all =
@@ -107,7 +99,7 @@ export function DataView({ active }: DataViewProps) {
             {/* Grand-total stat tiles */}
             <div style={tileRow}>
               <StatTile label={t('data.stat.totalTokens')} value={formatTokens(summary.total.totalTokens) ?? '0'} sub={`${grouped(summary.total.totalTokens)} tok`} accent="var(--accent-blue)" />
-              <StatTile label={t('data.stat.totalCost')} value={formatCost(summary.total.costUsd) ?? '$0'} sub={t('data.stat.ticketsOnly')} accent="var(--accent-teal)" />
+              <StatTile label={t('data.stat.totalCost')} value={formatCost(summary.total.costUsd) ?? '$0'} sub={t('data.stat.ccusageBased')} accent="var(--accent-teal)" />
               <StatTile label={t('data.stat.totalCalls')} value={grouped(summary.total.calls)} sub={t('data.stat.records', { count: summary.recordCount })} accent="var(--accent-amber)" />
               <StatTile label={t('data.stat.models')} value={grouped(summary.modelCount)} sub={t('data.stat.distinct')} accent="var(--accent-purple)" />
             </div>
@@ -230,7 +222,7 @@ function BarChart({
   );
 }
 
-function ModelTable({ summary, t }: { summary: ReturnType<typeof aggregateUsage>; t: (k: string) => string }) {
+function ModelTable({ summary, t }: { summary: UsageSummary; t: (k: string) => string }) {
   const grand = summary.total.totalTokens || 1;
   return (
     <div style={{ overflowX: 'auto' }}>

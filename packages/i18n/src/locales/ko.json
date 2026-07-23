@@ -390,7 +390,7 @@
   },
   "data": {
     "title": "LLM 사용량 데이터",
-    "subtitle": "모든 티켓·세션에서 발생한 토큰 사용량, 모델별 사용량, 콜 횟수, 비용을 한눈에.",
+    "subtitle": "Claude Code 트랜스크립트 기반 토큰 사용량·모델별 사용량·콜 횟수·비용을 한눈에 (ccusage 방식).",
     "refresh": "새로고침",
     "refreshing": "불러오는 중…",
     "unreachable": {
@@ -399,7 +399,7 @@
     },
     "empty": {
       "title": "아직 사용량 데이터가 없습니다",
-      "body": "티켓이나 세션을 실행하면 토큰·모델 사용량이 여기에 표시됩니다."
+      "body": "Claude Code를 사용하면 토큰·모델 사용량이 여기에 표시됩니다."
     },
     "stat": {
       "totalTokens": "총 토큰",
@@ -407,6 +407,7 @@
       "totalCalls": "총 콜 수",
       "models": "모델 수",
       "ticketsOnly": "티켓·위임 기준",
+      "ccusageBased": "트랜스크립트 기준 (ccusage)",
       "distinct": "고유 모델",
       "records": "레코드 {{count}}개",
       "today": "오늘",
@@ -433,7 +434,7 @@
       "calls": "콜",
       "share": "점유율"
     },
-    "footnote": "비용은 티켓과 서브에이전트 위임에만 집계됩니다(종료 세션은 비용 없음). 콜 = API 콜(세션) 또는 에이전트 턴(티켓)."
+    "footnote": "Claude Code 트랜스크립트(~/.claude/projects)를 메시지 단위로 dedup 후 모델별 단가로 산출 — ccusage와 동일 방식. 콜 = 어시스턴트 메시지 수."
   },
   "backends": {
     "title": "백엔드 연결",

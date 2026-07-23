@@ -8,7 +8,7 @@
  * `@claude-alive/core` pulls Node-only deps (readline) into the browser bundle
  * and breaks the Vite build. We import core *types* only.
  */
-import type { Ticket, CompletedSession } from '@claude-alive/core';
+import type { Ticket, CompletedSession, UsageRecordDTO } from '@claude-alive/core';
 
 /** Bucketing granularity for the time-series charts. */
 export type PeriodGranularity = 'day' | 'week' | 'month';
@@ -219,16 +219,15 @@ function bucketize(records: readonly UsageRecord[], granularity: PeriodGranulari
 }
 
 /**
- * Fold raw ticket + session arrays into a full usage summary.
+ * Fold already-normalized usage records into a full summary. This is the shared
+ * core used by both the legacy ticket/session path ({@link aggregateUsage}) and
+ * the ccusage-style transcript path (`/api/usage` → {@link UsageRecordDTO}[]).
  * `now` is injectable so tests are deterministic (default `Date.now()`).
  */
-export function aggregateUsage(
-  tickets: readonly Ticket[],
-  sessions: readonly CompletedSession[],
+export function summarizeRecords(
+  records: readonly UsageRecordDTO[],
   now: number = Date.now(),
 ): UsageSummary {
-  const records = toRecords(tickets, sessions);
-
   const total = emptyTotals();
   const today = emptyTotals();
   const thisWeek = emptyTotals();
@@ -279,4 +278,17 @@ export function aggregateUsage(
     firstAt,
     lastAt,
   };
+}
+
+/**
+ * Legacy path: fold raw ticket + session arrays into a summary. Retained for
+ * tests and offline use; the live dashboard now sources deduped, priced records
+ * from the server's `/api/usage` (see {@link summarizeRecords}).
+ */
+export function aggregateUsage(
+  tickets: readonly Ticket[],
+  sessions: readonly CompletedSession[],
+  now: number = Date.now(),
+): UsageSummary {
+  return summarizeRecords(toRecords(tickets, sessions), now);
 }

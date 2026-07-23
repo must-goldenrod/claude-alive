@@ -390,7 +390,7 @@
   },
   "data": {
     "title": "LLM Usage Data",
-    "subtitle": "Token usage, per-model usage, call counts and cost across all tickets and sessions.",
+    "subtitle": "Token usage, per-model usage, call counts and cost from Claude Code transcripts (ccusage-style).",
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
     "unreachable": {
@@ -399,7 +399,7 @@
     },
     "empty": {
       "title": "No usage data yet",
-      "body": "Run tickets or sessions and their token/model usage will show up here."
+      "body": "Use Claude Code and your token/model usage will show up here."
     },
     "stat": {
       "totalTokens": "Total tokens",
@@ -407,6 +407,7 @@
       "totalCalls": "Total calls",
       "models": "Models",
       "ticketsOnly": "tickets + delegations only",
+      "ccusageBased": "from transcripts (ccusage)",
       "distinct": "distinct models",
       "records": "{{count}} records",
       "today": "Today",
@@ -433,7 +434,7 @@
       "calls": "Calls",
       "share": "Share"
     },
-    "footnote": "Cost is reported for tickets and their sub-agent delegations only; completed sessions carry no cost. Calls = API calls (sessions) or agent turns (tickets)."
+    "footnote": "Parsed from Claude Code transcripts (~/.claude/projects), deduped per message and priced per model — the same method as ccusage. Calls = assistant messages."
   },
   "backends": {
     "title": "Backend connections",

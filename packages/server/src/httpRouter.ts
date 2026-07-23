@@ -69,6 +69,11 @@ export interface HttpRouterOptions {
   getStats: () => object;
   /** Durable archive of completed (terminated) sessions, newest first. */
   getCompletedArchive: () => unknown[];
+  /**
+   * ccusage-style LLM usage records parsed from raw Claude Code transcripts,
+   * for the Tools > Data dashboard. Absent when the feature is disabled.
+   */
+  getUsageRecords?: () => Promise<unknown[]>;
   /** Project-name persistence wiring. */
   getProjectNames: () => Record<string, string>;
   saveProjectName: (cwd: string, name: string) => Promise<void>;
@@ -265,6 +270,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     removeAgent,
     getStats,
     getCompletedArchive,
+    getUsageRecords,
     getProjectNames,
     saveProjectName,
     removeProjectName,
@@ -580,6 +586,23 @@ export function createHttpServer(options: HttpRouterOptions) {
       const limitParam = parseInt(url.searchParams.get('limit') ?? '', 10);
       const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 2000) : 500;
       sendJson(res, 200, { sessions: all.slice(0, limit) }, req);
+      return;
+    }
+
+    // GET /api/usage — ccusage-style LLM usage records from raw transcripts,
+    // for the Tools > Data dashboard. Loopback-only: it reads the local user's
+    // Claude Code transcripts (prompt/response metadata lives alongside).
+    if (getUsageRecords && req.method === 'GET' && url.pathname === '/api/usage') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Usage API is restricted to loopback' }, req);
+        return;
+      }
+      try {
+        const records = await getUsageRecords();
+        sendJson(res, 200, { records }, req);
+      } catch {
+        sendJson(res, 500, { error: 'Failed to read usage transcripts' }, req);
+      }
       return;
     }
 
