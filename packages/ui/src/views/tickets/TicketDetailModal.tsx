@@ -36,17 +36,23 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   // Lifted so a click on a decision option can pre-fill the reply composer.
   const [replyText, setReplyText] = useState('');
 
-  // The trailing pending-decision turn is rendered by the DecisionPanel at the
-  // bottom, so drop it from the history thread to avoid showing the question twice.
-  const threadTurns =
-    isDecision && turns.length > 0 && turns[turns.length - 1].kind === 'decision' ? turns.slice(0, -1) : turns;
+  // The trailing turn is always surfaced by a dedicated panel below the thread:
+  // a pending decision by the DecisionPanel, and a settled result by the Markdown
+  // result section. Either way, drop it from the history thread so the same
+  // content is never shown twice (and the final result renders as full markdown,
+  // not a truncated pre-wrap chat bubble).
+  const lastTurn = turns.length > 0 ? turns[turns.length - 1] : undefined;
+  const dropsTrailing =
+    !!lastTurn && (isDecision ? lastTurn.kind === 'decision' : lastTurn.kind === 'result');
+  const threadTurns = dropsTrailing ? turns.slice(0, -1) : turns;
   const hasConversation = threadTurns.some((tn) => tn.role === 'user');
   // Show the history thread only when there is genuine back-and-forth or multiple
   // rounds; a first pending decision has no history worth a thread.
   const showThread = threadTurns.length > 0 && (hasConversation || (ticket.rounds ?? 1) > 1);
-  // Show the agent's full context/result even while parked for a decision — the
-  // decision itself is rendered separately at the bottom.
-  const showResult = !!ticket.result && (!showThread || isDecision);
+  // Always render the agent's latest result/context as markdown — including after
+  // a decision-driven completion, where the thread above carries only the prior
+  // back-and-forth. The decision panel (when pending) lives separately at the bottom.
+  const showResult = !!ticket.result;
   const decision = isDecision && ticket.decisionQuestion ? parseDecisionOptions(ticket.decisionQuestion) : null;
 
   // ESC closes the modal.
