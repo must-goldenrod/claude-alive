@@ -162,6 +162,13 @@
     "viewAll": "View all →",
     "tokensShort": "tok"
   },
+  "todo": {
+    "title": "To-do",
+    "placeholder": "Add a note, press Enter to save",
+    "empty": "No items yet",
+    "remove": "Remove",
+    "confirmRemove": "Remove this item?"
+  },
   "efficio": {
     "title": "Efficio — Size-adjusted Waste",
     "refresh": "Refresh",

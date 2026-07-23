@@ -162,6 +162,13 @@
     "viewAll": "전체 보기 →",
     "tokensShort": "tok"
   },
+  "todo": {
+    "title": "할 일",
+    "placeholder": "메모 입력 후 Enter로 저장",
+    "empty": "아직 항목이 없습니다",
+    "remove": "제거",
+    "confirmRemove": "이 항목을 제거하시겠습니까?"
+  },
   "efficio": {
     "title": "Efficio — 크기보정 낭비",
     "refresh": "새로고침",
