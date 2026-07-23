@@ -45,7 +45,11 @@ const TicketMgmtView = lazy(() =>
   import('./views/ticketmgmt/TicketMgmtView.tsx').then(m => ({ default: m.TicketMgmtView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends';
+const DataView = lazy(() =>
+  import('./views/data/DataView.tsx').then(m => ({ default: m.DataView })),
+);
+
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends' | 'data';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -512,6 +516,11 @@ export default function App() {
               <BackendsView active={viewMode === 'backends'} />
             </Suspense>
           </div>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'data' ? 'block' : 'none' }}>
+            <Suspense fallback={null}>
+              <DataView active={viewMode === 'data'} />
+            </Suspense>
+          </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
               When tabs exist, the app-level ChatOverlay spread grid (z-index 30) covers this. */}
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'workspace' ? 'block' : 'none' }}>
@@ -544,7 +553,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'backends'}
+          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'backends' || viewMode === 'data'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}

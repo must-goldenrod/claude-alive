@@ -383,9 +383,57 @@
     "spread": "Spread",
     "jarvis": "Jarvis",
     "workspace": "Workspaces",
+    "data": "Data",
     "archive": "Session Management",
     "ticketMgmt": "Ticket Management",
     "backends": "Backends"
+  },
+  "data": {
+    "title": "LLM Usage Data",
+    "subtitle": "Token usage, per-model usage, call counts and cost across all tickets and sessions.",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "unreachable": {
+      "title": "Server unreachable",
+      "body": "Could not reach the server to load usage data."
+    },
+    "empty": {
+      "title": "No usage data yet",
+      "body": "Run tickets or sessions and their token/model usage will show up here."
+    },
+    "stat": {
+      "totalTokens": "Total tokens",
+      "totalCost": "Total cost",
+      "totalCalls": "Total calls",
+      "models": "Models",
+      "ticketsOnly": "tickets + delegations only",
+      "distinct": "distinct models",
+      "records": "{{count}} records",
+      "today": "Today",
+      "thisWeek": "This week",
+      "thisMonth": "This month"
+    },
+    "period": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "chart": {
+      "tokensByPeriod": "Tokens over time",
+      "empty": "No data for this period."
+    },
+    "table": {
+      "title": "By model",
+      "model": "Model",
+      "input": "Input",
+      "output": "Output",
+      "cache": "Cache",
+      "total": "Total",
+      "cost": "Cost",
+      "calls": "Calls",
+      "share": "Share"
+    },
+    "footnote": "Cost is reported for tickets and their sub-agent delegations only; completed sessions carry no cost. Calls = API calls (sessions) or agent turns (tickets)."
   },
   "backends": {
     "title": "Backend connections",

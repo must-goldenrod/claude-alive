@@ -18,6 +18,7 @@ describe('viewGroups', () => {
   it('groups productivity views under tools, in order', () => {
     expect(viewsInGroup('tools').map((m) => m.mode)).toEqual([
       'workspace',
+      'data',
       'prompt',
       'efficio',
       'archive',

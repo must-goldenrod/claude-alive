@@ -29,6 +29,7 @@ export const VIEW_MODE_META: readonly ViewModeMeta[] = [
   { mode: 'list', labelKey: 'viewMode.list', group: 'intervene' },
   { mode: 'spread', labelKey: 'viewMode.spread', group: 'intervene' },
   { mode: 'workspace', labelKey: 'viewMode.workspace', group: 'tools' },
+  { mode: 'data', labelKey: 'viewMode.data', group: 'tools' },
   { mode: 'prompt', labelKey: 'viewMode.prompt', group: 'tools' },
   { mode: 'efficio', labelKey: 'viewMode.efficio', group: 'tools' },
   // `archive` is the session-management surface (kept id for low churn); its label

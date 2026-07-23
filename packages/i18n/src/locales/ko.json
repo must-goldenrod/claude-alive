@@ -383,9 +383,57 @@
     "spread": "스프레드",
     "jarvis": "자비스",
     "workspace": "워크스페이스",
+    "data": "데이터",
     "archive": "세션 관리",
     "ticketMgmt": "티켓 관리",
     "backends": "백엔드 연결"
+  },
+  "data": {
+    "title": "LLM 사용량 데이터",
+    "subtitle": "모든 티켓·세션에서 발생한 토큰 사용량, 모델별 사용량, 콜 횟수, 비용을 한눈에.",
+    "refresh": "새로고침",
+    "refreshing": "불러오는 중…",
+    "unreachable": {
+      "title": "서버에 연결할 수 없음",
+      "body": "사용량 데이터를 불러오기 위해 서버에 연결하지 못했습니다."
+    },
+    "empty": {
+      "title": "아직 사용량 데이터가 없습니다",
+      "body": "티켓이나 세션을 실행하면 토큰·모델 사용량이 여기에 표시됩니다."
+    },
+    "stat": {
+      "totalTokens": "총 토큰",
+      "totalCost": "총 비용",
+      "totalCalls": "총 콜 수",
+      "models": "모델 수",
+      "ticketsOnly": "티켓·위임 기준",
+      "distinct": "고유 모델",
+      "records": "레코드 {{count}}개",
+      "today": "오늘",
+      "thisWeek": "이번 주",
+      "thisMonth": "이번 달"
+    },
+    "period": {
+      "day": "일",
+      "week": "주",
+      "month": "월"
+    },
+    "chart": {
+      "tokensByPeriod": "기간별 토큰 사용량",
+      "empty": "해당 기간의 데이터가 없습니다."
+    },
+    "table": {
+      "title": "모델별",
+      "model": "모델",
+      "input": "입력",
+      "output": "출력",
+      "cache": "캐시",
+      "total": "합계",
+      "cost": "비용",
+      "calls": "콜",
+      "share": "점유율"
+    },
+    "footnote": "비용은 티켓과 서브에이전트 위임에만 집계됩니다(종료 세션은 비용 없음). 콜 = API 콜(세션) 또는 에이전트 턴(티켓)."
   },
   "backends": {
     "title": "백엔드 연결",
