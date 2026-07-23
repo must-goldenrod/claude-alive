@@ -465,6 +465,7 @@
     "decisionLabel": "의사결정 필요",
     "decisionPending": "결정을 기다리는 중",
     "decisionAnswer": "답변이나 결정을 입력하세요…",
+    "decisionPickHint": "옵션을 클릭하면 답변란에 채워집니다. 수정 후 보내기를 누르세요.",
     "answerCta": "답변하기",
     "threadLabel": "대화",
     "threadUser": "나",

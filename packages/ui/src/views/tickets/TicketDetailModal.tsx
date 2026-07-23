@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation, TicketTurn, TicketDelegation, EvalLabel } from '@claude-alive/core';
 import { Markdown } from './Markdown.tsx';
-import { projectName, formatStarted, STATUS_COLOR, formatTokens, formatCost, formatDuration } from './ticketDisplay.ts';
+import {
+  projectName,
+  formatStarted,
+  STATUS_COLOR,
+  formatTokens,
+  formatCost,
+  formatDuration,
+  parseDecisionOptions,
+  type DecisionOption,
+} from './ticketDisplay.ts';
 import type { EvaluateFn, ReplyFn } from './useTickets.ts';
 
 interface TicketDetailModalProps {
@@ -23,7 +32,22 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   const isDecision = ticket.state === 'decision';
   const decisionColor = STATUS_COLOR.decision;
   const turns = ticket.turns ?? [];
-  const showThread = turns.length > 0 && (isDecision || (ticket.rounds ?? 1) > 1);
+
+  // Lifted so a click on a decision option can pre-fill the reply composer.
+  const [replyText, setReplyText] = useState('');
+
+  // The trailing pending-decision turn is rendered by the DecisionPanel at the
+  // bottom, so drop it from the history thread to avoid showing the question twice.
+  const threadTurns =
+    isDecision && turns.length > 0 && turns[turns.length - 1].kind === 'decision' ? turns.slice(0, -1) : turns;
+  const hasConversation = threadTurns.some((tn) => tn.role === 'user');
+  // Show the history thread only when there is genuine back-and-forth or multiple
+  // rounds; a first pending decision has no history worth a thread.
+  const showThread = threadTurns.length > 0 && (hasConversation || (ticket.rounds ?? 1) > 1);
+  // Show the agent's full context/result even while parked for a decision — the
+  // decision itself is rendered separately at the bottom.
+  const showResult = !!ticket.result && (!showThread || isDecision);
+  const decision = isDecision && ticket.decisionQuestion ? parseDecisionOptions(ticket.decisionQuestion) : null;
 
   // ESC closes the modal.
   useEffect(() => {
@@ -97,28 +121,9 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text-primary, #e6edf3)' }}>{ticket.goal}</div>
           </Section>
 
-          {isDecision && ticket.decisionQuestion && (
-            <Section label={t('tickets.decisionLabel')}>
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  lineHeight: 1.5,
-                  color: decisionColor,
-                  background: `color-mix(in srgb, ${decisionColor} 12%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${decisionColor} 40%, transparent)`,
-                  borderRadius: 10,
-                  padding: '10px 12px',
-                }}
-              >
-                {ticket.decisionQuestion}
-              </div>
-            </Section>
-          )}
-
           {showThread && (
             <Section label={t('tickets.threadLabel')}>
-              <Thread turns={turns} t={t} />
+              <Thread turns={threadTurns} t={t} />
             </Section>
           )}
 
@@ -137,9 +142,9 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
 
-          {!showThread && ticket.result && (
+          {showResult && (
             <Section label={t('tickets.resultLabel')}>
-              <Markdown text={ticket.result} />
+              <Markdown text={ticket.result ?? ''} />
             </Section>
           )}
 
@@ -169,11 +174,31 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
               <EvalSection ticketId={ticket.id} evaluation={evaluation} onEvaluate={onEvaluate} onClose={onClose} t={t} />
             </Section>
           )}
+
+          {/* The decision itself lives at the bottom, after all the context above. */}
+          {decision && (
+            <Section label={t('tickets.decisionLabel')}>
+              <DecisionPanel
+                decision={decision}
+                color={decisionColor}
+                pickable={!!onReply}
+                onPick={(o) => setReplyText(`${o.key}) ${o.text}`)}
+                t={t}
+              />
+            </Section>
+          )}
         </div>
 
         {/* Reply composer — only while a decision is pending */}
         {isDecision && onReply && (
-          <ReplyComposer ticketId={ticket.id} color={decisionColor} onReply={onReply} t={t} />
+          <ReplyComposer
+            ticketId={ticket.id}
+            color={decisionColor}
+            value={replyText}
+            onChange={setReplyText}
+            onReply={onReply}
+            t={t}
+          />
         )}
 
         {/* Actions */}
@@ -409,35 +434,144 @@ function Thread({ turns, t }: { turns: TicketTurn[]; t: (key: string) => string 
   );
 }
 
+/**
+ * The pending decision, shown at the bottom of the modal: the question stem
+ * followed by each labeled option wrapped in its own card so the choices are
+ * easy to tell apart. When a reply is possible, clicking a card pre-fills the
+ * composer with that choice (the human still confirms before sending).
+ */
+function DecisionPanel({
+  decision,
+  color,
+  pickable,
+  onPick,
+  t,
+}: {
+  decision: { prompt: string; options: DecisionOption[] };
+  color: string;
+  pickable: boolean;
+  onPick: (option: DecisionOption) => void;
+  t: (key: string) => string;
+}) {
+  const { prompt, options } = decision;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {prompt && (
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            lineHeight: 1.5,
+            color,
+            background: `color-mix(in srgb, ${color} 12%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+            borderRadius: 10,
+            padding: '10px 12px',
+          }}
+        >
+          {prompt}
+        </div>
+      )}
+
+      {options.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {options.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={pickable ? () => onPick(o) : undefined}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                width: '100%',
+                textAlign: 'left',
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: `1px solid color-mix(in srgb, ${color} 35%, var(--border-default, #30363d))`,
+                background: 'var(--bg-tertiary, #21262d)',
+                color: 'var(--text-primary, #e6edf3)',
+                cursor: pickable ? 'pointer' : 'default',
+                transition: 'background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!pickable) return;
+                e.currentTarget.style.background = `color-mix(in srgb, ${color} 14%, transparent)`;
+                e.currentTarget.style.borderColor = color;
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                if (!pickable) return;
+                e.currentTarget.style.background = 'var(--bg-tertiary, #21262d)';
+                e.currentTarget.style.borderColor = `color-mix(in srgb, ${color} 35%, var(--border-default, #30363d))`;
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <span
+                style={{
+                  flexShrink: 0,
+                  width: 24,
+                  height: 24,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 7,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono, monospace)',
+                  color: '#0d1117',
+                  background: color,
+                }}
+              >
+                {o.key}
+              </span>
+              <span style={{ fontSize: 13, lineHeight: 1.5, minWidth: 0, wordBreak: 'break-word' }}>{o.text}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {pickable && options.length > 0 && (
+        <span style={{ fontSize: 11, color: 'var(--text-secondary, #8b949e)', opacity: 0.75 }}>
+          {t('tickets.decisionPickHint')}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Follow-up input for a pending decision: submits a reply that resumes the run. */
 function ReplyComposer({
   ticketId,
   color,
+  value,
+  onChange,
   onReply,
   t,
 }: {
   ticketId: string;
   color: string;
+  value: string;
+  onChange: (text: string) => void;
   onReply: ReplyFn;
   t: (key: string) => string;
 }) {
-  const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const canSend = text.trim().length > 0 && !sending;
+  const canSend = value.trim().length > 0 && !sending;
 
   const send = async () => {
     if (!canSend) return;
     setSending(true);
-    const ok = await onReply(ticketId, text.trim());
+    const ok = await onReply(ticketId, value.trim());
     setSending(false);
-    if (ok) setText('');
+    if (ok) onChange('');
   };
 
   return (
     <div style={{ display: 'flex', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--border-default, #30363d)', alignItems: 'flex-end' }}>
       <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={t('tickets.decisionAnswer')}
         rows={2}
         onKeyDown={(e) => {

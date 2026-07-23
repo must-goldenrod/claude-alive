@@ -465,6 +465,7 @@
     "decisionLabel": "Decision needed",
     "decisionPending": "Waiting for your decision",
     "decisionAnswer": "Type your answer or decision…",
+    "decisionPickHint": "Click an option to fill the reply; edit it, then hit Send.",
     "answerCta": "Answer",
     "threadLabel": "Conversation",
     "threadUser": "You",
