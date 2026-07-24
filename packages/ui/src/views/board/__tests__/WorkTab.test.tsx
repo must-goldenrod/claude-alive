@@ -20,7 +20,10 @@ const rec = (overrides: Partial<TicketEvaluation>): TicketEvaluation => ({
   ...overrides,
 } as TicketEvaluation);
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('TicketList', () => {
   it('groups by route and fires onSelect', () => {
@@ -98,9 +101,26 @@ describe('TicketList', () => {
     expect(goodTicket).toHaveAttribute('aria-pressed', 'true');
     expect(badTicket).toHaveAttribute('aria-pressed', 'false');
     expect(unratedTicket).toHaveAttribute('aria-pressed', 'false');
-    expect(within(goodTicket).getByRole('img', { name: /good/i })).toBeInTheDocument();
-    expect(within(badTicket).getByRole('img', { name: /bad/i })).toBeInTheDocument();
-    expect(within(unratedTicket).getByRole('img', { name: /unrated|미평가/i })).toBeInTheDocument();
+    const goodLabel = within(goodTicket).getByRole('img', { name: /good/i });
+    const badLabel = within(badTicket).getByRole('img', { name: /bad/i });
+    const unratedLabel = within(unratedTicket).getByRole('img', { name: /unrated|미평가/i });
+
+    // jsdom drops unresolved CSS variables from computed border shorthands.
+    // These are inline token styles, so inspect their inline declaration.
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      (element) => (element as HTMLElement).style,
+    );
+    expect(goodLabel).toHaveStyle({ background: 'var(--accent-teal)' });
+    expect(badLabel).toHaveStyle({ background: 'var(--accent-red)' });
+    expect(unratedLabel).toHaveStyle({ background: 'var(--text-secondary)' });
+    expect(goodTicket).toHaveStyle({
+      background: 'rgba(88, 166, 255, 0.10)',
+      borderLeft: '2px solid var(--accent-blue)',
+    });
+    expect(badTicket).toHaveStyle({
+      background: 'transparent',
+      borderLeft: '2px solid transparent',
+    });
   });
 
   it('exposes route collapse state and toggles its tickets', () => {
