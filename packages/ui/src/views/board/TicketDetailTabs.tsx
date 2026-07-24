@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import type { TicketEvaluation } from '@claude-alive/core';
 import type { EvalLabel } from '../ticketmgmt/api.ts';
 import { EmptyState } from './panels/EmptyState.tsx';
+import { EfficiencyPanel } from './panels/EfficiencyPanel.tsx';
 import { OutcomePanel } from './panels/OutcomePanel.tsx';
+import { ProcessPanel } from './panels/ProcessPanel.tsx';
+import { QualityPanel } from './panels/QualityPanel.tsx';
 
 type SubTab = 'outcome' | 'quality' | 'efficiency' | 'process';
 
@@ -67,11 +70,13 @@ export function TicketDetailTabs({
       );
     }
 
-    return (
-      <EmptyState
-        message={sessionId ? t('board.empty.noData') : t('board.empty.noSession')}
-      />
-    );
+    if (panel === 'quality') {
+      return <QualityPanel sessionId={sessionId} />;
+    }
+    if (panel === 'efficiency') {
+      return <EfficiencyPanel sessionId={sessionId} />;
+    }
+    return <ProcessPanel sessionId={sessionId} />;
   };
 
   return (
