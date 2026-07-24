@@ -402,10 +402,17 @@
     "spread": "Spread",
     "jarvis": "Jarvis",
     "workspace": "Workspaces",
+    "board": "Board",
     "data": "Data",
     "archive": "Session Management",
     "ticketMgmt": "Ticket Management",
     "backends": "Backends"
+  },
+  "board": {
+    "tab": {
+      "work": "Work",
+      "cost": "Cost"
+    }
   },
   "data": {
     "title": "LLM Usage Data",

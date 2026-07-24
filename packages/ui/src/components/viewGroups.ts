@@ -9,7 +9,7 @@ import type { ViewMode } from '../App.tsx';
  * - intervene: observation / hands-on views you drop into when a ticket needs
  *              a closer look or direct intervention (animation, list, spread).
  * - tools:     productivity features managed separately from the main flow
- *              (workspace, prompt, efficio, session management, ticket management).
+ *              (workspace and the unified board).
  */
 export type ViewGroup = 'primary' | 'intervene' | 'tools';
 
@@ -29,13 +29,7 @@ export const VIEW_MODE_META: readonly ViewModeMeta[] = [
   { mode: 'list', labelKey: 'viewMode.list', group: 'intervene' },
   { mode: 'spread', labelKey: 'viewMode.spread', group: 'intervene' },
   { mode: 'workspace', labelKey: 'viewMode.workspace', group: 'tools' },
-  { mode: 'data', labelKey: 'viewMode.data', group: 'tools' },
-  { mode: 'prompt', labelKey: 'viewMode.prompt', group: 'tools' },
-  { mode: 'efficio', labelKey: 'viewMode.efficio', group: 'tools' },
-  // `archive` is the session-management surface (kept id for low churn); its label
-  // now reads "Session Management". `ticketMgmt` is the ticket-centric companion.
-  { mode: 'archive', labelKey: 'viewMode.archive', group: 'tools' },
-  { mode: 'ticketMgmt', labelKey: 'viewMode.ticketMgmt', group: 'tools' },
+  { mode: 'board', labelKey: 'viewMode.board', group: 'tools' },
   // `backends` (backend connection) moved into the Settings modal (backend tab),
   // so it is no longer a standalone tools view.
 ];

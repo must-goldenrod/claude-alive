@@ -23,31 +23,13 @@ const AgentListView = lazy(() =>
   import('./views/list/AgentListView.tsx').then(m => ({ default: m.AgentListView })),
 );
 
-const PromptView = lazy(() =>
-  import('./views/list/PromptView.tsx').then(m => ({ default: m.PromptView })),
-);
-
-const EfficioView = lazy(() =>
-  import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
-);
 const TicketsView = lazy(() =>
   import('./views/tickets/TicketsView.tsx').then(m => ({ default: m.TicketsView })),
 );
 import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
+import { BoardView } from './views/board/BoardView.tsx';
 
-const ArchiveView = lazy(() =>
-  import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
-);
-
-const TicketMgmtView = lazy(() =>
-  import('./views/ticketmgmt/TicketMgmtView.tsx').then(m => ({ default: m.TicketMgmtView })),
-);
-
-const DataView = lazy(() =>
-  import('./views/data/DataView.tsx').then(m => ({ default: m.DataView })),
-);
-
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data' | 'board';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -550,29 +532,13 @@ export default function App() {
               />
             </Suspense>
           </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'prompt' ? 'block' : 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'board' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
-              <PromptView active={viewMode === 'prompt'} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'efficio' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <EfficioView active={viewMode === 'efficio'} subscribeRaw={subscribeRaw} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'archive' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <ArchiveView active={viewMode === 'archive'} focusSessionId={archiveFocusSessionId} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'ticketMgmt' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <TicketMgmtView active={viewMode === 'ticketMgmt'} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'data' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <DataView active={viewMode === 'data'} />
+              <BoardView
+                active={viewMode === 'board'}
+                subscribeRaw={subscribeRaw}
+                focusSessionId={archiveFocusSessionId}
+              />
             </Suspense>
           </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
@@ -607,7 +573,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'data'}
+          contentViewActive={viewMode === 'board'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}

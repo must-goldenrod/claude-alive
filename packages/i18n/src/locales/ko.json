@@ -402,10 +402,17 @@
     "spread": "스프레드",
     "jarvis": "자비스",
     "workspace": "워크스페이스",
+    "board": "보드",
     "data": "데이터",
     "archive": "세션 관리",
     "ticketMgmt": "티켓 관리",
     "backends": "백엔드 연결"
+  },
+  "board": {
+    "tab": {
+      "work": "작업",
+      "cost": "비용"
+    }
   },
   "data": {
     "title": "LLM 사용량 데이터",
