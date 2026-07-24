@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { RawMessageSubscribe } from '../../App.tsx';
 import { DataView } from '../data/DataView.tsx';
+import { WorkTab } from './WorkTab.tsx';
 
 type TopTab = 'work' | 'cost';
 
@@ -40,10 +41,7 @@ export function BoardView({ active }: BoardViewProps) {
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <div style={{ display: tab === 'work' ? 'block' : 'none', height: '100%' }}>
-          {/* WorkTab is wired in Task 2. */}
-          <div style={{ padding: 24, color: 'var(--text-secondary)', fontSize: 13 }}>
-            {t('board.tab.work')}
-          </div>
+          <WorkTab active={active && tab === 'work'} />
         </div>
         <div style={{ display: tab === 'cost' ? 'block' : 'none', height: '100%' }}>
           <DataView active={active && tab === 'cost'} />

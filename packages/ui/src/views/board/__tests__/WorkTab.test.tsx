@@ -1,9 +1,21 @@
 import '@testing-library/jest-dom/vitest';
 import '@claude-alive/i18n';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TicketEvaluation } from '@claude-alive/core';
 import { TicketList } from '../TicketList';
+import { WorkTab } from '../WorkTab';
+
+const ticketApi = vi.hoisted(() => ({
+  fetchRecords: vi.fn(),
+  fetchGuide: vi.fn(),
+  setLabel: vi.fn(),
+  setReflected: vi.fn(),
+}));
+
+vi.mock('../../ticketmgmt/api.ts', () => ({
+  ...ticketApi,
+}));
 
 const rec = (overrides: Partial<TicketEvaluation>): TicketEvaluation => ({
   ticketId: 't1',
@@ -23,6 +35,20 @@ const rec = (overrides: Partial<TicketEvaluation>): TicketEvaluation => ({
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+beforeEach(() => {
+  ticketApi.fetchRecords.mockReset();
+  ticketApi.fetchGuide.mockReset();
+  ticketApi.setLabel.mockReset();
+  ticketApi.setReflected.mockReset();
+  ticketApi.fetchGuide.mockResolvedValue({
+    route: '/proj/a',
+    text: '',
+    goodCount: 0,
+    badCount: 0,
+    updatedAt: 1,
+  });
 });
 
 describe('TicketList', () => {
@@ -140,5 +166,95 @@ describe('TicketList', () => {
     fireEvent.click(group);
     expect(group).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Collapsible ticket')).toBeInTheDocument();
+  });
+});
+
+describe('WorkTab', () => {
+  it('shows the no-session empty state in quality, efficiency, and process', async () => {
+    ticketApi.fetchRecords.mockResolvedValue([
+      rec({ ticketId: 'without-session', headline: 'Sessionless ticket' }),
+    ]);
+
+    render(<WorkTab active />);
+    fireEvent.click(await screen.findByText('Sessionless ticket'));
+
+    for (const name of [/quality|품질/i, /efficiency|효율/i, /process|과정/i]) {
+      fireEvent.click(screen.getByRole('tab', { name }));
+      expect(screen.getByText(/no linked session|연결된 세션 없음/i)).toBeInTheDocument();
+    }
+  });
+
+  it('propagates the selected ticket and linked session to the detail tabs', async () => {
+    ticketApi.fetchRecords.mockResolvedValue([
+      rec({
+        ticketId: 'linked',
+        headline: 'Linked ticket',
+        goal: 'Linked outcome',
+        claudeSessionId: 'session-123',
+      }),
+    ]);
+
+    render(<WorkTab active />);
+    fireEvent.click(await screen.findByText('Linked ticket'));
+    expect(screen.getByText('Linked outcome')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /quality|품질/i }));
+    expect(screen.getByText(/no data|데이터 없음/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no linked session|연결된 세션 없음/i)).not.toBeInTheDocument();
+  });
+
+  it('ports label and reflection updates through the outcome panel', async () => {
+    const initial = rec({ ticketId: 'actions', headline: 'Action ticket' });
+    ticketApi.fetchRecords.mockResolvedValue([initial]);
+    ticketApi.setLabel.mockResolvedValue({
+      ...initial,
+      label: 'bad',
+      humanLabeled: true,
+    });
+    ticketApi.setReflected.mockResolvedValue({
+      ...initial,
+      label: 'bad',
+      humanLabeled: true,
+      reflected: true,
+    });
+
+    render(<WorkTab active />);
+    fireEvent.click(await screen.findByText('Action ticket'));
+    fireEvent.click(screen.getByRole('button', { name: /^bad|나쁨$/i }));
+    await waitFor(() => {
+      expect(ticketApi.setLabel).toHaveBeenCalledWith('actions', {
+        label: 'bad',
+        weight: 3,
+        note: '',
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /reflect into bias|편향에 반영/i }));
+    await waitFor(() => {
+      expect(ticketApi.setReflected).toHaveBeenCalledWith('actions', true);
+    });
+  });
+
+  it('fetches only while active and clears its refresh timer on cleanup', async () => {
+    ticketApi.fetchRecords.mockResolvedValue([]);
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+    const view = render(<WorkTab active={false} />);
+    expect(ticketApi.fetchRecords).not.toHaveBeenCalled();
+
+    view.rerender(<WorkTab active />);
+    await waitFor(() => expect(ticketApi.fetchRecords).toHaveBeenCalledTimes(1));
+    const cleanupCountBeforeUnmount = clearIntervalSpy.mock.calls.length;
+    view.unmount();
+    expect(clearIntervalSpy.mock.calls).toHaveLength(cleanupCountBeforeUnmount + 1);
+  });
+
+  it('shows the translated unreachable state when loading fails', async () => {
+    ticketApi.fetchRecords.mockRejectedValue(new Error('offline'));
+    render(<WorkTab active />);
+    expect(
+      await screen.findByText(
+        /could not reach the server to load ticket records|티켓 기록을 불러오기 위해 서버에 연결하지 못했습니다/i,
+      ),
+    ).toBeInTheDocument();
   });
 });

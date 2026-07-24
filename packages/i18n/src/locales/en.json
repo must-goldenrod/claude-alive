@@ -412,6 +412,17 @@
     "tab": {
       "work": "Work",
       "cost": "Cost"
+    },
+    "subtab": {
+      "outcome": "Outcome",
+      "quality": "Quality",
+      "efficiency": "Efficiency",
+      "process": "Process"
+    },
+    "empty": {
+      "noSession": "No linked session",
+      "noData": "No data",
+      "pickTicket": "Select a ticket"
     }
   },
   "data": {
