@@ -109,6 +109,7 @@ export function TicketList({ records, selectedId, onSelect }: TicketListProps) {
             <div key={g.route}>
               <button
                 onClick={() => toggleCollapsed(g.route)}
+                aria-expanded={!collapsed.has(g.route)}
                 style={{ width: '100%', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 16px', background: 'var(--bg-secondary)', border: 'none', borderBottom: '1px solid var(--border-color)', cursor: 'pointer', position: 'sticky', top: 0, zIndex: 1 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -128,10 +129,15 @@ export function TicketList({ records, selectedId, onSelect }: TicketListProps) {
                   <button
                     key={r.ticketId}
                     onClick={() => onSelect(r.ticketId)}
+                    aria-pressed={isSel}
                     style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 16px 10px 24px', borderBottom: '1px solid var(--border-color)', background: isSel ? 'rgba(88, 166, 255, 0.10)' : 'transparent', border: 'none', borderLeft: isSel ? '2px solid var(--accent-blue)' : '2px solid transparent', cursor: 'pointer', textAlign: 'left' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: LABEL_COLOR[r.label], flexShrink: 0 }} />
+                      <span
+                        role="img"
+                        aria-label={t(`ticketMgmt.score.${r.label}`)}
+                        style={{ width: 8, height: 8, borderRadius: '50%', background: LABEL_COLOR[r.label], flexShrink: 0 }}
+                      />
                       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>#{r.seq}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.headline || r.goal}</span>
                       {r.reflected && (
