@@ -54,6 +54,8 @@ export function TicketDissection({ record, guideRefreshKey, onLabel, onReflect }
     try {
       await onLabel({ label, weight, note });
       flashSaved();
+    } catch {
+      // The parent owns recovery. A rejected mutation must not be presented as saved.
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TicketEvaluation } from '@claude-alive/core';
 import {
@@ -21,29 +21,55 @@ export function WorkTab({ active }: WorkTabProps) {
   const [reachable, setReachable] = useState<boolean | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [guideRefreshKey, setGuideRefreshKey] = useState(0);
+  const refreshGenerationRef = useRef(0);
+  const refreshEnabledRef = useRef(false);
+  const selectedIdRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!refreshEnabledRef.current) {
+      return;
+    }
+
+    const generation = ++refreshGenerationRef.current;
     try {
       const nextRecords = await fetchRecords();
+      if (!refreshEnabledRef.current || generation !== refreshGenerationRef.current) {
+        return;
+      }
       setRecords(nextRecords);
       setReachable(true);
     } catch {
+      if (!refreshEnabledRef.current || generation !== refreshGenerationRef.current) {
+        return;
+      }
       setReachable(false);
     }
   }, []);
 
   useEffect(() => {
     if (!active) {
+      refreshEnabledRef.current = false;
+      refreshGenerationRef.current += 1;
       return;
     }
 
+    refreshEnabledRef.current = true;
     void refresh();
     const intervalId = window.setInterval(() => {
       void refresh();
     }, 10000);
 
-    return () => window.clearInterval(intervalId);
+    return () => {
+      refreshEnabledRef.current = false;
+      refreshGenerationRef.current += 1;
+      window.clearInterval(intervalId);
+    };
   }, [active, refresh]);
+
+  const handleSelect = useCallback((ticketId: string) => {
+    selectedIdRef.current = ticketId;
+    setSelectedId(ticketId);
+  }, []);
 
   const selected = useMemo(
     () =>
@@ -71,8 +97,9 @@ export function WorkTab({ active }: WorkTabProps) {
 
       try {
         applyRecord(await setLabel(selected.ticketId, input));
-      } catch {
+      } catch (error) {
         void refresh();
+        throw error;
       }
     },
     [applyRecord, refresh, selected],
@@ -84,9 +111,12 @@ export function WorkTab({ active }: WorkTabProps) {
         return;
       }
 
+      const ticketId = selected.ticketId;
       try {
-        applyRecord(await setReflected(selected.ticketId, reflected));
-        setGuideRefreshKey((current) => current + 1);
+        applyRecord(await setReflected(ticketId, reflected));
+        if (selectedIdRef.current === ticketId) {
+          setGuideRefreshKey((current) => current + 1);
+        }
       } catch {
         void refresh();
       }
@@ -119,7 +149,7 @@ export function WorkTab({ active }: WorkTabProps) {
           background: 'var(--bg-secondary)',
         }}
       >
-        <TicketList records={records} selectedId={selectedId} onSelect={setSelectedId} />
+        <TicketList records={records} selectedId={selectedId} onSelect={handleSelect} />
       </div>
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <TicketDetailTabs
