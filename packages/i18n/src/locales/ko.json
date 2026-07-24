@@ -695,7 +695,20 @@
     "gitRepo": "git",
     "folder": "폴더",
     "heuristic": "추정",
-    "heuristicHint": "공급자가 직접 보고한 상태가 아니라 추론된 값입니다."
+    "heuristicHint": "공급자가 직접 보고한 상태가 아니라 추론된 값입니다.",
+    "headerTitle": "개입 제어탑",
+    "headerSubtitle": "머신·저장소별로 지금 무엇이 돌고 있고 어디에 답해야 하는지",
+    "pendingTotal": "{{count}}건 응답 대기",
+    "pendingNone": "응답 대기 없음",
+    "showPendingOnly": "대기만 보기",
+    "showAll": "전체 보기",
+    "allClear": "응답 대기 중인 세션이 없습니다.",
+    "allClearHint": "전체 보기로 돌아가면 모든 세션이 표시됩니다.",
+    "lastActiveTitle": "마지막 활동",
+    "lastActiveNow": "방금",
+    "lastActiveMin": "{{count}}분 전",
+    "lastActiveHour": "{{count}}시간 전",
+    "lastActiveDay": "{{count}}일 전"
   },
   "conversation": {
     "selectPrompt": "대화를 보려면 세션을 선택하세요.",

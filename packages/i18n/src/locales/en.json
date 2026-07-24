@@ -696,7 +696,20 @@
     "gitRepo": "git",
     "folder": "folder",
     "heuristic": "estimated",
-    "heuristicHint": "This state was inferred, not reported directly by the provider."
+    "heuristicHint": "This state was inferred, not reported directly by the provider.",
+    "headerTitle": "Intervention control tower",
+    "headerSubtitle": "What is running per machine and repo, and where you need to respond",
+    "pendingTotal": "{{count}} awaiting you",
+    "pendingNone": "Nothing awaiting you",
+    "showPendingOnly": "Awaiting only",
+    "showAll": "Show all",
+    "allClear": "No sessions are awaiting a response.",
+    "allClearHint": "Switch back to Show all to see every session.",
+    "lastActiveTitle": "Last active",
+    "lastActiveNow": "just now",
+    "lastActiveMin": "{{count}}m ago",
+    "lastActiveHour": "{{count}}h ago",
+    "lastActiveDay": "{{count}}d ago"
   },
   "conversation": {
     "selectPrompt": "Select a session to read its conversation.",
