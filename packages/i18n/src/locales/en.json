@@ -17,7 +17,8 @@
     "tabs": {
       "sound": "Sound",
       "terminal": "Terminal",
-      "alerts": "Alerts"
+      "alerts": "Alerts",
+      "backend": "Backend"
     },
     "sound": {
       "completion": {
@@ -60,6 +61,12 @@
       "sustain": "Sustain time before firing",
       "seconds": "s",
       "soundEnabled": "Play sound on alert"
+    },
+    "backend": {
+      "checkOnStartup": "Check connections on startup",
+      "checkOnStartupHint": "Automatically verify saved backend connections each time the app loads.",
+      "alertOnFailure": "Alert when a connection fails",
+      "checkAll": "Check all"
     }
   },
   "alert": {
@@ -69,7 +76,12 @@
       "both": "High system load"
     },
     "message": "System resource usage has exceeded the configured threshold.",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "backend": {
+      "title": "Backend connection needs attention",
+      "message": "Some backends could not be reached. Check their connection.",
+      "recheck": "Re-check"
+    }
   },
   "agents": {
     "noAgentsYet": "No agents yet",

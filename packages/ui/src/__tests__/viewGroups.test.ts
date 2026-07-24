@@ -23,7 +23,6 @@ describe('viewGroups', () => {
       'efficio',
       'archive',
       'ticketMgmt',
-      'backends',
     ]);
   });
 

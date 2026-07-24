@@ -36,7 +36,8 @@ export const VIEW_MODE_META: readonly ViewModeMeta[] = [
   // now reads "Session Management". `ticketMgmt` is the ticket-centric companion.
   { mode: 'archive', labelKey: 'viewMode.archive', group: 'tools' },
   { mode: 'ticketMgmt', labelKey: 'viewMode.ticketMgmt', group: 'tools' },
-  { mode: 'backends', labelKey: 'viewMode.backends', group: 'tools' },
+  // `backends` (backend connection) moved into the Settings modal (backend tab),
+  // so it is no longer a standalone tools view.
 ];
 
 /** Views in a given group, preserving declaration order. */

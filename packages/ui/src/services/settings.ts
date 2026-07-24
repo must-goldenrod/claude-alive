@@ -234,6 +234,12 @@ export interface AppSettings {
     memory: { enabled: boolean; thresholdPct: number; soundEnabled: boolean };
     sustainSeconds: number; // 1..30 — must stay above threshold for this long before firing
   };
+  backend: {
+    /** Run a connectivity check against configured backends when the app loads. */
+    checkOnStartup: boolean;
+    /** Raise a modal alert (RAM-alert style) if a backend fails the startup check. */
+    alertOnFailure: boolean;
+  };
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -260,6 +266,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
     memory: { enabled: true, thresholdPct: 90, soundEnabled: true },
     sustainSeconds: 3,
   },
+  backend: {
+    checkOnStartup: true,
+    alertOnFailure: true,
+  },
 };
 
 // ── Persistence ────────────────────────────────────────────────────────────
@@ -279,6 +289,7 @@ function sanitize(raw: unknown): AppSettings {
   const alerts = (obj.alerts ?? {}) as Partial<AppSettings['alerts']>;
   const alertsCpu = (alerts.cpu ?? {}) as Partial<AppSettings['alerts']['cpu']>;
   const alertsMem = (alerts.memory ?? {}) as Partial<AppSettings['alerts']['memory']>;
+  const backend = (obj.backend ?? {}) as Partial<AppSettings['backend']>;
   return {
     sound: {
       completion: {
@@ -321,6 +332,10 @@ function sanitize(raw: unknown): AppSettings {
         soundEnabled: typeof alertsMem.soundEnabled === 'boolean' ? alertsMem.soundEnabled : DEFAULT_SETTINGS.alerts.memory.soundEnabled,
       },
       sustainSeconds: clamp(Number(alerts.sustainSeconds ?? DEFAULT_SETTINGS.alerts.sustainSeconds), 1, 30),
+    },
+    backend: {
+      checkOnStartup: typeof backend.checkOnStartup === 'boolean' ? backend.checkOnStartup : DEFAULT_SETTINGS.backend.checkOnStartup,
+      alertOnFailure: typeof backend.alertOnFailure === 'boolean' ? backend.alertOnFailure : DEFAULT_SETTINGS.backend.alertOnFailure,
     },
   };
 }

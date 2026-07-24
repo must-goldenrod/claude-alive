@@ -11,6 +11,8 @@ import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { ResourceAlert, type ResourceAlertData } from './components/ResourceAlert.tsx';
+import { BackendAlert, type BackendAlertData } from './components/BackendAlert.tsx';
+import { checkBackendHealth } from './services/backendHealth.ts';
 import { getSettings } from './services/settings.ts';
 
 const PixelOfficePage = lazy(() =>
@@ -33,10 +35,6 @@ const TicketsView = lazy(() =>
 );
 import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
 
-const BackendsView = lazy(() =>
-  import('./views/backends/BackendsView.tsx').then(m => ({ default: m.BackendsView })),
-);
-
 const ArchiveView = lazy(() =>
   import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
 );
@@ -49,7 +47,7 @@ const DataView = lazy(() =>
   import('./views/data/DataView.tsx').then(m => ({ default: m.DataView })),
 );
 
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends' | 'data';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -285,6 +283,42 @@ export default function App() {
     breachStartRef.current = null;
   }, []);
 
+  // Backend connection guard. On startup (once), verify the saved backend
+  // connections and, if any fail, raise a modal alert mirroring the resource
+  // alert. The check honours the persisted `backend.checkOnStartup` /
+  // `alertOnFailure` toggles so the previous session's setup carries over.
+  const [backendAlert, setBackendAlert] = useState<BackendAlertData | null>(null);
+  const [backendRechecking, setBackendRechecking] = useState(false);
+  const backendCheckedRef = useRef(false);
+
+  useEffect(() => {
+    if (backendCheckedRef.current) return;
+    if (!getSettings().backend.checkOnStartup) return;
+    backendCheckedRef.current = true;
+    let cancelled = false;
+    void checkBackendHealth()
+      .then((failures) => {
+        if (cancelled) return;
+        if (failures.length > 0 && getSettings().backend.alertOnFailure) {
+          setBackendAlert({ failures });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleBackendRecheck = useCallback(() => {
+    setBackendRechecking(true);
+    void checkBackendHealth()
+      .then((failures) => {
+        setBackendAlert(failures.length > 0 ? { failures } : null);
+      })
+      .catch(() => {})
+      .finally(() => setBackendRechecking(false));
+  }, []);
+
   // Keep the snapshot ref in sync for the toast-label lookup
   agentsSnapshotRef.current = useMemo(() => {
     const m = new Map<string, { displayName: string | null }>();
@@ -474,6 +508,12 @@ export default function App() {
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ResourceAlert alert={resourceAlert} onDismiss={handleResourceAlertDismiss} />
+      <BackendAlert
+        alert={backendAlert}
+        onDismiss={() => setBackendAlert(null)}
+        onRecheck={handleBackendRecheck}
+        rechecking={backendRechecking}
+      />
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 56, position: 'relative' }}>
         <ErrorBoundary>
           {/* Both views stay mounted. Only CSS display toggles — preserves game state, selected agent, list scroll, etc. */}
@@ -530,11 +570,6 @@ export default function App() {
               <TicketMgmtView active={viewMode === 'ticketMgmt'} />
             </Suspense>
           </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'backends' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <BackendsView active={viewMode === 'backends'} />
-            </Suspense>
-          </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'data' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
               <DataView active={viewMode === 'data'} />
@@ -572,7 +607,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'backends' || viewMode === 'data'}
+          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'data'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}

@@ -17,7 +17,8 @@
     "tabs": {
       "sound": "사운드",
       "terminal": "터미널",
-      "alerts": "알림"
+      "alerts": "알림",
+      "backend": "백엔드"
     },
     "sound": {
       "completion": {
@@ -60,6 +61,12 @@
       "sustain": "발동 전 지속 시간",
       "seconds": "초",
       "soundEnabled": "알림음 재생"
+    },
+    "backend": {
+      "checkOnStartup": "시작 시 연결 점검",
+      "checkOnStartupHint": "앱을 켤 때마다 저장된 백엔드 연결을 자동으로 확인합니다.",
+      "alertOnFailure": "연결 실패 시 알림",
+      "checkAll": "모두 확인"
     }
   },
   "alert": {
@@ -69,7 +76,12 @@
       "both": "시스템 부하 높음"
     },
     "message": "시스템 리소스 사용량이 설정한 임계값을 초과했습니다.",
-    "dismiss": "확인"
+    "dismiss": "확인",
+    "backend": {
+      "title": "백엔드 연결 확인 필요",
+      "message": "일부 백엔드에 연결하지 못했습니다. 연결을 확인해 주세요.",
+      "recheck": "다시 확인"
+    }
   },
   "agents": {
     "noAgentsYet": "아직 에이전트가 없습니다",
