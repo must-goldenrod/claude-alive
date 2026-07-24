@@ -164,11 +164,11 @@ Expected: PASS (2 tests).
 ```ts
 { mode: 'board', labelKey: 'viewMode.board', group: 'tools' },
 ```
-결과 tools 그룹: `workspace`, `board`, `backends`.
+결과 tools 그룹: `workspace`, `board`. 기존 backend 연결 UI는 Settings의 `BackendsPanel`에 유지하며 `ViewMode`/헤더 nav 항목으로 복원하지 않는다.
 
 `App.tsx:52` — union에 `'board'` 추가(기존 mode 문자열은 남겨둠 — 딥링크 하위호환):
 ```ts
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends' | 'data' | 'board';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data' | 'board';
 ```
 
 `App.tsx:553-577` — `prompt`/`efficio`/`archive`/`ticketMgmt`/`data` 5개 렌더 `<div>` 블록을 삭제하고 하나로 교체:

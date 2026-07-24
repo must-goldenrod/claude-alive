@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { VIEW_MODE_META, viewsInGroup, groupOf } from '../components/viewGroups.ts';
+import {
+  VIEW_MODE_META,
+  viewsInGroup,
+  groupOf,
+  normalizeViewMode,
+} from '../components/viewGroups.ts';
 
 describe('viewGroups', () => {
   it('places tickets alone in the primary group', () => {
@@ -38,5 +43,17 @@ describe('viewGroups', () => {
     for (const m of VIEW_MODE_META) {
       expect(m.labelKey).toMatch(/^viewMode\./);
     }
+  });
+
+  it.each(['prompt', 'efficio', 'archive', 'ticketMgmt', 'data'] as const)(
+    'normalizes legacy %s navigation to board',
+    (mode) => {
+      expect(normalizeViewMode(mode)).toBe('board');
+    },
+  );
+
+  it('preserves non-legacy navigation modes', () => {
+    expect(normalizeViewMode('tickets')).toBe('tickets');
+    expect(normalizeViewMode('spread')).toBe('spread');
   });
 });

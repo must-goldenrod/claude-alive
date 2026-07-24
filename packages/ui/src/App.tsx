@@ -3,6 +3,7 @@ import type { ReactNode, MutableRefObject } from 'react';
 import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
 import { HeaderBar } from './components/HeaderBar.tsx';
+import { normalizeViewMode } from './components/viewGroups.ts';
 import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
 import { playErrorSound, playResourceAlertSound, playWaitingSound, installAudioUnlock } from './services/sound.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
@@ -426,9 +427,10 @@ export default function App() {
   // Remember the view we entered Spread from, so promoting a tile returns there.
   const prevViewRef = useRef<ViewMode>('tickets');
   const handleViewModeChange = useCallback((mode: ViewMode) => {
+    const normalizedMode = normalizeViewMode(mode);
     setViewMode((prev) => {
-      if (mode === 'spread' && prev !== 'spread') prevViewRef.current = prev;
-      return mode;
+      if (normalizedMode === 'spread' && prev !== 'spread') prevViewRef.current = prev;
+      return normalizedMode;
     });
   }, []);
   // Spread tile click → return to the prior (non-spread) view and focus that terminal.
@@ -454,8 +456,8 @@ export default function App() {
     };
     const onCreate = () => setChatOpen(true);
     const onResume = () => setChatOpen(true);
-    // Cross-surface view navigation (e.g. CompletionLog's "view all" → Archive,
-    // or Ticket Management's "view the process" → session management with a target).
+    // Cross-surface navigation. Legacy content modes normalize to Board while
+    // preserving a target session for the later process-tab focus handoff.
     const onNavigate = (event: Event) => {
       const detail = (event as CustomEvent).detail as { mode?: ViewMode; sessionId?: string } | undefined;
       if (detail?.sessionId !== undefined) setArchiveFocusSessionId(detail.sessionId);

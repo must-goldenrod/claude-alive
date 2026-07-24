@@ -19,6 +19,19 @@ export interface ViewModeMeta {
   group: ViewGroup;
 }
 
+const LEGACY_BOARD_MODES: ReadonlySet<ViewMode> = new Set([
+  'prompt',
+  'efficio',
+  'archive',
+  'ticketMgmt',
+  'data',
+]);
+
+/** Keep legacy links usable after their standalone content views moved into Board. */
+export function normalizeViewMode(mode: ViewMode): ViewMode {
+  return LEGACY_BOARD_MODES.has(mode) ? 'board' : mode;
+}
+
 /**
  * Ordered nav metadata. `jarvis` is intentionally omitted — it is not surfaced
  * in the header (matches prior behaviour).

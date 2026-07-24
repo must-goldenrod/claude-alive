@@ -22,14 +22,15 @@
 
 1. **1차 엔티티 = 티켓(A안).** 좌측은 프로젝트(route)→티켓 그룹 리스트. 티켓 하나를 고르면 `claudeSessionId`로 세션을 조인해 우측 상세를 채운다.
 2. **비용은 as-is 재사용.** `UsageRecordDTO`/`/api/usage`/`parseUsageLine`을 변경하지 않는다. sessionId 백필·시간창 조인 없음. 비용은 전역·시간버킷 뷰로만 보여준다(티켓별 비용 귀속 없음).
-3. **보드 IA = 작업/비용 2대탭.** workspace(관제탑)·backends(연결 설정)는 성격이 달라 보드 밖에 그대로 둔다.
+3. **보드 IA = 작업/비용 2대탭.** workspace(관제탑)는 별도 top-level 뷰로 유지한다. backends(연결 설정)는 현행 Settings의 `BackendsPanel`에 그대로 두며, 보드나 `ViewMode`/헤더 nav 항목으로 복원하지 않는다.
 4. **콘텐츠 컴포넌트 재사용.** 기존 4개 뷰의 렌더링 컴포넌트를 최대한 그대로 재사용하고, 없애는 것은 각 뷰의 top-level nav 진입점과 중복된 reachable/loading 껍데기뿐. "재편"은 IA(껍데기) 교체이며 내부 렌더는 보존 → 회귀 위험 최소화.
 
 ## 3. IA 구조 / Information Architecture
 
 ```
-헤더 nav:  [ 티켓 ] [ 관제탑(workspace) ] [ 보드 ] [ 백엔드(backends) ] ...
+헤더 nav:  [ 티켓 ] [ 관제탑(workspace) ] [ 보드 ] ...
                                           └── prompt·efficio·archive·ticketMgmt·data 흡수
+설정(Settings): [ BackendsPanel ]  ← 기존 위치 유지
 
 보드:
 ┌─ [ 작업 ]  [ 비용 ] ──────────────────────────────┐  (대탭 2)
@@ -102,7 +103,8 @@
 
 - usage의 sessionId 백필·티켓별 비용 귀속.
 - 프롬프트/efficio 파이프라인 자체 로직 변경.
-- workspace·backends 통합.
+- workspace 통합.
+- Settings의 `BackendsPanel`을 보드/`ViewMode`/헤더 nav로 이동.
 - 티켓↔세션 다대다(브랜치/재개) 정밀 처리 — 1차는 단일 `claudeSessionId` 기준.
 
 ## 10. 단계 / Phasing
