@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
@@ -29,6 +29,16 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
 
   // Derive the open ticket from the live list so it reflects state changes.
   const selected = selectedId ? tickets.find((x) => x.id === selectedId) ?? null : null;
+
+  /** Sweep the whole closed lane in one click. Deletion is irreversible, so it
+   *  confirms with the exact count first; requests fire in parallel and the WS
+   *  broadcast reconciles the board. */
+  const clearClosed = useCallback(async () => {
+    const targets = grouped.closed;
+    if (targets.length === 0) return;
+    if (!window.confirm(t('tickets.clearClosedConfirm', { count: targets.length }))) return;
+    await Promise.all(targets.map((x) => deleteTicket(x.id)));
+  }, [grouped.closed, deleteTicket, t]);
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
@@ -100,7 +110,12 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
                   borderRight: i < COLUMNS.length - 1 ? '1px solid var(--border-color, #21262d)' : 'none',
                 }}
               >
-                <ColumnHeader status={col} label={t(`tickets.columns.${col}`)} count={grouped[col].length} />
+                <ColumnHeader
+                  status={col}
+                  label={t(`tickets.columns.${col}`)}
+                  count={grouped[col].length}
+                  onClear={col === 'closed' ? clearClosed : undefined}
+                />
                 {grouped[col].length === 0 ? (
                   <div style={{ fontSize: 12, opacity: 0.35, padding: '10px 2px', textAlign: 'center' }}>{t('tickets.empty')}</div>
                 ) : (
@@ -138,7 +153,18 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
 
 /** Status lane header: a color dot + label + a filled count pill, all tinted by
  *  the lane's status so each column is identifiable at a glance. */
-function ColumnHeader({ status, label, count }: { status: DisplayStatus; label: string; count: number }) {
+function ColumnHeader({
+  status,
+  label,
+  count,
+  onClear,
+}: {
+  status: DisplayStatus;
+  label: string;
+  count: number;
+  onClear?: () => void;
+}) {
+  const { t } = useTranslation();
   const color = STATUS_COLOR[status];
   return (
     <div
@@ -168,6 +194,26 @@ function ColumnHeader({ status, label, count }: { status: DisplayStatus; label: 
       >
         {count}
       </span>
+      {onClear && count > 0 && (
+        <button
+          type="button"
+          onClick={onClear}
+          title={t('tickets.clearClosed')}
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '2px 8px',
+            borderRadius: 6,
+            border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+            background: 'transparent',
+            color: 'var(--text-secondary, #8b949e)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          {t('tickets.clearClosed')}
+        </button>
+      )}
     </div>
   );
 }
