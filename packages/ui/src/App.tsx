@@ -124,6 +124,25 @@ export default function App() {
   // sounds stay silent on a dashboard that's only watched. This primes them.
   useEffect(() => installAudioUnlock(), []);
 
+  // Reload/close guard. An accidental Cmd-R tears down every xterm in the app
+  // plus the reconnect epoch, and even with session resume a reload interrupts
+  // whatever is live. This guard used to live inside ChatOverlay but was dropped
+  // when session persistence landed (commit d206c96 → 5d43fcb), which is why the
+  // prompt silently stopped appearing. It now lives at the app root so it fires
+  // on ANY refresh/close regardless of the active view, and can't be removed as a
+  // side effect of a terminal-only change. The browser shows its native "Leave
+  // site?" dialog — per spec the custom message is ignored, so no i18n string is
+  // needed. This is unconditional by design: the user must always be asked first.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Required for legacy browsers; modern ones display a generic message.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   // Project names (cwd → name) — single source of truth for project labels across sidebar/tabs/CLI.
   const [projectNames, setProjectNames] = useState<Record<string, string>>({});
 
