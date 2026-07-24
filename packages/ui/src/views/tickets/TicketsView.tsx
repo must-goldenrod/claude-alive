@@ -32,11 +32,11 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
-      {/* Detached To-do dock: fixed to the viewport's right edge so it floats
+      {/* Detached To-do dock: fixed to the viewport's left edge so it floats
           independently of the centered composer/board frame — it must not push
           or reflow the existing layout. Lives inside TicketsView so it inherits
           the view's display toggle (hidden on other tabs automatically). */}
-      <div style={{ position: 'fixed', top: 72, right: 24, width: 300, zIndex: 20 }}>
+      <div style={{ position: 'fixed', top: 72, left: 24, width: 300, zIndex: 20 }}>
         <TodoList />
       </div>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
