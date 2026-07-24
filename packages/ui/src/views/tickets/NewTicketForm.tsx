@@ -33,7 +33,9 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
     return () => window.removeEventListener(SSH_PRESETS_CHANGED, onChange);
   }, []);
   const [locId, setLocId] = useState('local');
-  const [orchestrated, setOrchestrated] = useState(false);
+  // Default ON: orchestrated runs are the normal way tickets are executed here,
+  // so the checkbox starts checked and stays a one-click opt-out.
+  const [orchestrated, setOrchestrated] = useState(true);
   const preset = sshHosts.find((p) => p.id === locId);
   const isRemote = Boolean(preset);
 
