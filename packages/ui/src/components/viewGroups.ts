@@ -5,13 +5,16 @@ import type { ViewMode } from '../App.tsx';
  * belongs to which tier". HeaderBar only renders this — it never re-decides
  * grouping. See docs/superpowers/specs/2026-07-22-ticket-centric-ia-design.md.
  *
- * - primary:   the ticket hub — the default surface you live in.
- * - intervene: observation / hands-on views you drop into when a ticket needs
- *              a closer look or direct intervention (animation, list, spread).
- * - tools:     productivity features managed separately from the main flow
- *              (workspace and the unified board).
+ * - primary: the ticket hub — the default surface you live in.
+ * - monitor: live observation surfaces you drop into when a ticket needs a
+ *            closer look or direct intervention (animation, list, spread).
+ * - tools:   analysis + productivity surfaces used alongside the main flow
+ *            (board first — it holds work/cost analytics — then workspace).
+ *
+ * All three tiers are rendered inline in the header (no dropdown, no visible
+ * group caption) so every surface is one click away and self-describing.
  */
-export type ViewGroup = 'primary' | 'intervene' | 'tools';
+export type ViewGroup = 'primary' | 'monitor' | 'tools';
 
 export interface ViewModeMeta {
   mode: ViewMode;
@@ -38,11 +41,11 @@ export function normalizeViewMode(mode: ViewMode): ViewMode {
  */
 export const VIEW_MODE_META: readonly ViewModeMeta[] = [
   { mode: 'tickets', labelKey: 'viewMode.tickets', group: 'primary' },
-  { mode: 'animation', labelKey: 'viewMode.animation', group: 'intervene' },
-  { mode: 'list', labelKey: 'viewMode.list', group: 'intervene' },
-  { mode: 'spread', labelKey: 'viewMode.spread', group: 'intervene' },
-  { mode: 'workspace', labelKey: 'viewMode.workspace', group: 'tools' },
+  { mode: 'animation', labelKey: 'viewMode.animation', group: 'monitor' },
+  { mode: 'list', labelKey: 'viewMode.list', group: 'monitor' },
+  { mode: 'spread', labelKey: 'viewMode.spread', group: 'monitor' },
   { mode: 'board', labelKey: 'viewMode.board', group: 'tools' },
+  { mode: 'workspace', labelKey: 'viewMode.workspace', group: 'tools' },
   // `backends` (backend connection) moved into the Settings modal (backend tab),
   // so it is no longer a standalone tools view.
 ];

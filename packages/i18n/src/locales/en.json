@@ -392,7 +392,7 @@
   },
   "viewMode": {
     "label": "View mode",
-    "groupIntervene": "View",
+    "groupMonitor": "Monitor",
     "groupTools": "Tools",
     "animation": "Animation",
     "list": "List",
@@ -430,6 +430,23 @@
     "subtitle": "Token usage, per-model usage, call counts and cost from Claude Code transcripts (ccusage-style).",
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
+    "filter": {
+      "title": "Date range",
+      "from": "From",
+      "to": "To",
+      "preset": {
+        "all": "All",
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "thisMonth": "This month"
+      },
+      "reset": "Reset filter",
+      "scoped": "Selected range",
+      "rangeDays": "Range total ({{count}} days)",
+      "dailyAvg": "Daily average",
+      "empty": "No usage data in the selected range.",
+      "invalid": "Start date is after end date. Pick a valid range."
+    },
     "unreachable": {
       "title": "Server unreachable",
       "body": "Could not reach the server to load usage data."

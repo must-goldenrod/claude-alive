@@ -12,18 +12,18 @@ describe('viewGroups', () => {
     expect(primary.map((m) => m.mode)).toEqual(['tickets']);
   });
 
-  it('groups observation/hands-on views under intervene, in order', () => {
-    expect(viewsInGroup('intervene').map((m) => m.mode)).toEqual([
+  it('groups live observation views under monitor, in order', () => {
+    expect(viewsInGroup('monitor').map((m) => m.mode)).toEqual([
       'animation',
       'list',
       'spread',
     ]);
   });
 
-  it('groups productivity views under tools, in order', () => {
+  it('groups analysis/productivity views under tools, board first', () => {
     expect(viewsInGroup('tools').map((m) => m.mode)).toEqual([
-      'workspace',
       'board',
+      'workspace',
     ]);
   });
 

@@ -193,6 +193,53 @@ function bucketStart(granularity: PeriodGranularity, ts: number): number {
   return startOfMonth(ts);
 }
 
+/* ---------- date-range filtering (used by the Data dashboard filter bar) ---------- */
+
+/** `YYYY-MM-DD` (the value shape of `<input type="date">`), local time. */
+export type DateInputValue = string;
+
+const DATE_INPUT_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Format a timestamp as the local `YYYY-MM-DD` an `<input type="date">` expects. */
+export function toDateInputValue(ts: number): DateInputValue {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * Parse `YYYY-MM-DD` into local epoch ms. `edge: 'end'` returns the last
+ * millisecond of that day so ranges are inclusive on both sides — a user
+ * picking 07-01 ~ 07-01 expects that whole day's usage, not zero.
+ * Returns null for empty/invalid input so callers can treat it as "unbounded".
+ */
+export function parseDateInput(value: string | null | undefined, edge: 'start' | 'end' = 'start'): number | null {
+  if (!value) return null;
+  const m = DATE_INPUT_RE.exec(value.trim());
+  if (!m) return null;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const d =
+    edge === 'start'
+      ? new Date(year, month - 1, day, 0, 0, 0, 0)
+      : new Date(year, month - 1, day, 23, 59, 59, 999);
+  // Reject impossible calendar dates (e.g. 2026-02-31 rolls over into March).
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  return d.getTime();
+}
+
+/**
+ * Keep only records whose timestamp falls inside `[from, to]` (both inclusive,
+ * both optional). A null bound means "unbounded on that side"; with both null
+ * the input array is returned untouched.
+ */
+export function filterRecordsByRange<T extends { at: number }>(
+  records: readonly T[],
+  from: number | null,
+  to: number | null,
+): T[] {
+  if (from === null && to === null) return [...records];
+  return records.filter((r) => (from === null || r.at >= from) && (to === null || r.at <= to));
+}
+
 function totalsOf(r: UsageRecord): UsageTotals {
   return {
     inputTokens: r.inputTokens,

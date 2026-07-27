@@ -4,6 +4,11 @@ import type { UsageRecordDTO } from '@claude-alive/core';
 import { formatTokens, formatCost } from '../tickets/ticketDisplay.ts';
 import {
   summarizeRecords,
+  filterRecordsByRange,
+  parseDateInput,
+  toDateInputValue,
+  startOfDay,
+  startOfMonth,
   type PeriodGranularity,
   type PeriodBucket,
   type UsageTotals,
@@ -22,6 +27,27 @@ interface DataViewProps {
 /** Compact "1,234" grouping for exact counts in tiles/tables. */
 function grouped(n: number): string {
   return Math.round(n).toLocaleString();
+}
+
+/** Quick-pick ranges offered next to the two date inputs. */
+type RangePreset = 'all' | 'last7' | 'last30' | 'thisMonth' | 'custom';
+const PRESETS = ['all', 'last7', 'last30', 'thisMonth'] as const;
+
+const DAY_MS = 86_400_000;
+
+/** Calendar-day shift (DST-safe — never assumes a day is 24h). */
+function shiftDays(ts: number, delta: number): number {
+  const d = new Date(ts);
+  d.setDate(d.getDate() + delta);
+  return d.getTime();
+}
+
+/** The from/to inputs a preset resolves to, as `YYYY-MM-DD` ('' = unbounded). */
+function presetRange(preset: RangePreset, now: number): { from: string; to: string } {
+  if (preset === 'all' || preset === 'custom') return { from: '', to: '' };
+  const to = toDateInputValue(now);
+  if (preset === 'thisMonth') return { from: toDateInputValue(startOfMonth(now)), to };
+  return { from: toDateInputValue(shiftDays(startOfDay(now), preset === 'last7' ? -6 : -29)), to };
 }
 
 export function DataView({ active }: DataViewProps) {
@@ -54,7 +80,39 @@ export function DataView({ active }: DataViewProps) {
     refresh();
   }, [active, refresh]);
 
-  const summary = useMemo(() => summarizeRecords(records ?? []), [records]);
+  // Date-range filter. Both bounds are inclusive calendar days; '' means unbounded.
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [preset, setPreset] = useState<RangePreset>('all');
+
+  const applyPreset = useCallback((next: RangePreset) => {
+    const range = presetRange(next, Date.now());
+    setFrom(range.from);
+    setTo(range.to);
+    setPreset(next);
+  }, []);
+
+  const fromMs = useMemo(() => parseDateInput(from, 'start'), [from]);
+  const toMs = useMemo(() => parseDateInput(to, 'end'), [to]);
+  const rangeActive = fromMs !== null || toMs !== null;
+  const rangeInvalid = fromMs !== null && toMs !== null && fromMs > toMs;
+
+  /** Every number below this line is computed from the filtered slice. */
+  const filtered = useMemo(
+    () => (rangeInvalid ? [] : filterRecordsByRange(records ?? [], fromMs, toMs)),
+    [records, fromMs, toMs, rangeInvalid],
+  );
+
+  const summary = useMemo(() => summarizeRecords(filtered), [filtered]);
+
+  /** Inclusive day count of the selected range — drives the per-day averages. */
+  const rangeDays = useMemo(() => {
+    if (!rangeActive || rangeInvalid) return 0;
+    const start = fromMs ?? summary.firstAt;
+    const end = toMs ?? summary.lastAt;
+    if (start === null || end === null) return 0;
+    return Math.max(1, Math.round((startOfDay(end) - startOfDay(start)) / DAY_MS) + 1);
+  }, [rangeActive, rangeInvalid, fromMs, toMs, summary.firstAt, summary.lastAt]);
 
   const buckets = useMemo(() => {
     const all =
@@ -71,7 +129,10 @@ export function DataView({ active }: DataViewProps) {
     );
   }
 
-  const isEmpty = reachable === true && summary.recordCount === 0;
+  const hasAnyRecords = (records?.length ?? 0) > 0;
+  const isEmpty = reachable === true && !hasAnyRecords;
+  // Data exists, but the chosen range excludes all of it — a distinct state from "no data at all".
+  const rangeEmpty = hasAnyRecords && summary.recordCount === 0;
 
   return (
     <div style={{ height: '100%', width: '100%', overflowY: 'auto', background: 'var(--bg-primary)' }}>
@@ -96,19 +157,51 @@ export function DataView({ active }: DataViewProps) {
           </div>
         ) : (
           <>
-            {/* Grand-total stat tiles */}
+            {/* Date-range filter — every total/chart/table below is scoped to it. */}
+            <RangeFilter
+              from={from}
+              to={to}
+              preset={preset}
+              invalid={rangeInvalid}
+              onFromChange={(v) => { setFrom(v); setPreset('custom'); }}
+              onToChange={(v) => { setTo(v); setPreset('custom'); }}
+              onPreset={applyPreset}
+              t={t}
+            />
+
+            {rangeEmpty ? (
+              <div style={{ ...centeredMessage, height: 200 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {rangeInvalid ? t('data.filter.invalid') : t('data.filter.empty')}
+                </div>
+                <button onClick={() => applyPreset('all')} style={refreshBtn}>{t('data.filter.reset')}</button>
+              </div>
+            ) : (
+              <>
+            {/* Totals for the selected range (all records when no range is set) */}
             <div style={tileRow}>
               <StatTile label={t('data.stat.totalTokens')} value={formatTokens(summary.total.totalTokens) ?? '0'} sub={`${grouped(summary.total.totalTokens)} tok`} accent="var(--accent-blue)" />
-              <StatTile label={t('data.stat.totalCost')} value={formatCost(summary.total.costUsd) ?? '$0'} sub={t('data.stat.ccusageBased')} accent="var(--accent-teal)" />
+              <StatTile label={t('data.stat.totalCost')} value={formatCost(summary.total.costUsd) ?? '$0'} sub={rangeActive ? t('data.filter.scoped') : t('data.stat.ccusageBased')} accent="var(--accent-teal)" />
               <StatTile label={t('data.stat.totalCalls')} value={grouped(summary.total.calls)} sub={t('data.stat.records', { count: summary.recordCount })} accent="var(--accent-amber)" />
               <StatTile label={t('data.stat.models')} value={grouped(summary.modelCount)} sub={t('data.stat.distinct')} accent="var(--accent-purple)" />
             </div>
 
-            {/* Rolling period totals */}
+            {/* With a range set the rolling today/week/month tiles would contradict the
+                filter, so they are swapped for range-relative averages. */}
             <div style={{ ...tileRow, marginTop: 10 }}>
-              <PeriodTile label={t('data.stat.today')} totals={summary.today} />
-              <PeriodTile label={t('data.stat.thisWeek')} totals={summary.thisWeek} />
-              <PeriodTile label={t('data.stat.thisMonth')} totals={summary.thisMonth} />
+              {rangeActive ? (
+                <>
+                  <PeriodTile label={t('data.filter.rangeDays', { count: rangeDays })} totals={summary.total} />
+                  <PeriodTile label={t('data.filter.dailyAvg')} totals={perDay(summary.total, rangeDays)} />
+                  <PeriodTile label={t('data.stat.today')} totals={summary.today} />
+                </>
+              ) : (
+                <>
+                  <PeriodTile label={t('data.stat.today')} totals={summary.today} />
+                  <PeriodTile label={t('data.stat.thisWeek')} totals={summary.thisWeek} />
+                  <PeriodTile label={t('data.stat.thisMonth')} totals={summary.thisMonth} />
+                </>
+              )}
             </div>
 
             {/* Time-series bar chart */}
@@ -141,6 +234,8 @@ export function DataView({ active }: DataViewProps) {
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', opacity: 0.6, marginTop: 14, lineHeight: 1.5 }}>
               {t('data.footnote')}
             </div>
+              </>
+            )}
           </>
         )}
       </div>
@@ -148,7 +243,87 @@ export function DataView({ active }: DataViewProps) {
   );
 }
 
+/** Per-day average of a totals bag — shown instead of rolling tiles when a range is active. */
+function perDay(totals: UsageTotals, days: number): UsageTotals {
+  const d = Math.max(1, days);
+  return {
+    inputTokens: totals.inputTokens / d,
+    outputTokens: totals.outputTokens / d,
+    cacheTokens: totals.cacheTokens / d,
+    totalTokens: totals.totalTokens / d,
+    costUsd: totals.costUsd / d,
+    calls: totals.calls / d,
+  };
+}
+
 /* ---------- subcomponents ---------- */
+
+/**
+ * From/to day pickers plus quick presets. Purely controlled — the parent owns the
+ * range so that every tile, chart and table below re-folds from the same filter.
+ */
+function RangeFilter({
+  from,
+  to,
+  preset,
+  invalid,
+  onFromChange,
+  onToChange,
+  onPreset,
+  t,
+}: {
+  from: string;
+  to: string;
+  preset: RangePreset;
+  invalid: boolean;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+  onPreset: (preset: RangePreset) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  return (
+    <div style={{ ...card, marginTop: 0, marginBottom: 12, padding: '12px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <span style={{ ...tileLabel, marginBottom: 0 }}>{t('data.filter.title')}</span>
+        <label style={fieldLabel}>
+          {t('data.filter.from')}
+          <input
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => onFromChange(e.target.value)}
+            aria-label={t('data.filter.from')}
+            style={dateInput}
+          />
+        </label>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>~</span>
+        <label style={fieldLabel}>
+          {t('data.filter.to')}
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => onToChange(e.target.value)}
+            aria-label={t('data.filter.to')}
+            style={dateInput}
+          />
+        </label>
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', flexWrap: 'wrap' }}>
+          {PRESETS.map((p) => (
+            <button key={p} onClick={() => onPreset(p)} style={p === preset ? toggleActive : toggleBtn}>
+              {t(`data.filter.preset.${p}`)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {invalid && (
+        <div role="alert" style={{ marginTop: 8, fontSize: 11.5, color: 'var(--accent-red)' }}>
+          {t('data.filter.invalid')}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatTile({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent: string }) {
   return (
@@ -281,6 +456,8 @@ const card: React.CSSProperties = { background: 'var(--bg-secondary)', border: '
 const cardHeader: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 };
 const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' };
 const refreshBtn: React.CSSProperties = { padding: '6px 14px', fontSize: 12, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap' };
+const fieldLabel: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' };
+const dateInput: React.CSSProperties = { padding: '5px 8px', fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 7, colorScheme: 'dark' };
 const toggleBtn: React.CSSProperties = { padding: '4px 12px', fontSize: 11.5, fontWeight: 600, background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: 7, cursor: 'pointer' };
 const toggleActive: React.CSSProperties = { ...toggleBtn, background: 'var(--accent-blue)', color: '#fff', borderColor: 'var(--accent-blue)' };
 const thBase: React.CSSProperties = { fontSize: 10.5, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 8px' };
