@@ -91,9 +91,13 @@ function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string)
               fontSize: 11,
               color: 'var(--text-secondary)',
               marginTop: 2,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              // The prompt line is shown in full — it wraps and keeps its own line breaks
+              // instead of being cut off, since the OS notification is the surface that
+              // truncates and the toast is where the whole request stays readable.
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
+              maxHeight: 160,
+              overflowY: 'auto',
             }}
             title={line}
           >
