@@ -216,7 +216,8 @@ describe('WorkTab', () => {
     expect(screen.getByText('Linked outcome')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /quality|품질/i }));
-    expect(screen.getByText(/no data|데이터 없음/i)).toBeInTheDocument();
+    expect(screen.getByText(/loading|불러오는 중/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
     expect(screen.queryByText(/no linked session|연결된 세션 없음/i)).not.toBeInTheDocument();
   });
 

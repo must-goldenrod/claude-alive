@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import type { Server } from 'node:http';
 import { SessionStore } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
 import { createHttpServer } from '../httpRouter.js';
+import type { EfficioReader } from '../efficioReader.js';
 
 let server: Server;
 let baseUrl: string;
@@ -44,6 +45,69 @@ afterAll(() => {
 });
 
 describe('HTTP Router', () => {
+  describe('GET /api/efficio/profiles', () => {
+    it('uses the exact reader path for a decoded session_id query', async () => {
+      const profile = vi.fn(() => ({
+        modelVersion: 1,
+        sessions: [],
+      }));
+      const profiles = vi.fn(() => ({
+        modelVersion: 1,
+        sessions: [],
+      }));
+      const efficioServer = createHttpServer({
+        onEvent: () => {},
+        getSnapshot: () => ({}),
+        renameAgent: () => false,
+        removeAgent: () => false,
+        getStats: () => ({}),
+        getCompletedArchive: () => [],
+        getProjectNames: () => ({}),
+        saveProjectName: async () => {},
+        removeProjectName: async () => {},
+        efficio: {
+          dbPath: '/read-only',
+          status: () => ({
+            available: true,
+            sessionCount: 1,
+            modelVersion: 1,
+            modelN: 1,
+            lastScoredAt: 1,
+          }),
+          timeline: () => ({ axis: 'w2', rows: [] }),
+          profiles,
+          profile,
+        } as EfficioReader,
+      });
+      const exactBaseUrl = await new Promise<string>((resolve) => {
+        efficioServer.listen(0, () => {
+          const address = efficioServer.address();
+          if (typeof address === 'object' && address) {
+            resolve(`http://localhost:${address.port}`);
+          }
+        });
+      });
+
+      try {
+        const sessionId = 'historical/session ? 한글';
+        const response = await fetch(
+          `${exactBaseUrl}/api/efficio/profiles?session_id=${encodeURIComponent(sessionId)}`,
+        );
+
+        expect(response.status).toBe(200);
+        expect(profile).toHaveBeenCalledWith(sessionId);
+        expect(profiles).not.toHaveBeenCalled();
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          efficioServer.close((error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        });
+      }
+    });
+  });
+
   describe('GET /health', () => {
     it('returns { ok: true }', async () => {
       const res = await fetch(`${baseUrl}/health`);

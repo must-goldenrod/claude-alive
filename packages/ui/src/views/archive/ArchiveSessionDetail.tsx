@@ -58,7 +58,7 @@ export function ArchiveSessionDetail({ session }: ArchiveSessionDetailProps) {
           {session.displayName || session.projectName || t('agents.generalAgent')}
         </span>
         <span style={{ fontSize: 12, fontWeight: 600, color: stateColor }}>
-          {t(`states.${finalState}`)}
+          {t(`states.${finalState}`, { defaultValue: finalState })}
         </span>
       </div>
 

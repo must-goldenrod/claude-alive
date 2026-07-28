@@ -690,10 +690,15 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
-    // GET /api/efficio/profiles?last=60 — per-session 4-axis profiles + size (full dashboard)
+    // GET /api/efficio/profiles?last=60 or ?session_id=... — full dashboard or exact historical session.
     if (req.method === 'GET' && url.pathname === '/api/efficio/profiles') {
       const last = parseInt(url.searchParams.get('last') ?? '60', 10);
-      const profiles = efficio ? efficio.profiles(last) : { modelVersion: null, sessions: [] };
+      const sessionId = url.searchParams.get('session_id');
+      const profiles = efficio
+        ? sessionId === null
+          ? efficio.profiles(last)
+          : efficio.profile(sessionId)
+        : { modelVersion: null, sessions: [] };
       sendJson(res, 200, profiles, req);
       return;
     }

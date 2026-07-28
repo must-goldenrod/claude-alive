@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import type {
   EfficioAxisKey,
   EfficioAxisScore,
-  EfficioProfiles,
   EfficioRepeat,
   EfficioSessionProfile,
 } from '@claude-alive/core';
@@ -60,32 +59,46 @@ function isSessionProfile(value: unknown): value is EfficioSessionProfile {
   );
 }
 
-function isProfiles(value: unknown): value is EfficioProfiles {
+function findProfile(
+  value: unknown,
+  sessionId: string,
+): EfficioSessionProfile | null {
   if (typeof value !== 'object' || value === null) {
-    return false;
+    return null;
   }
   const profiles = value as Record<string, unknown>;
-  return (
-    (profiles.modelVersion === null || typeof profiles.modelVersion === 'number') &&
-    Array.isArray(profiles.sessions) &&
-    profiles.sessions.every(isSessionProfile)
+  if (
+    !(
+      profiles.modelVersion === null ||
+      typeof profiles.modelVersion === 'number'
+    ) ||
+    !Array.isArray(profiles.sessions)
+  ) {
+    return null;
+  }
+  const rawMatch = profiles.sessions.find(
+    (profile) =>
+      typeof profile === 'object' &&
+      profile !== null &&
+      (profile as Record<string, unknown>).sessionId === sessionId,
   );
+  return isSessionProfile(rawMatch) ? rawMatch : null;
 }
 
 async function loadProfile(
   sessionId: string,
   signal: AbortSignal,
 ): Promise<EfficioSessionProfile | null> {
-  const response = await fetch(`${API_BASE}/api/efficio/profiles?last=1000`, { signal });
+  const response = await fetch(
+    `${API_BASE}/api/efficio/profiles?session_id=${encodeURIComponent(sessionId)}`,
+    { signal },
+  );
   if (!response.ok) {
     return null;
   }
 
   const data: unknown = await response.json();
-  if (!isProfiles(data)) {
-    return null;
-  }
-  return data.sessions.find((profile) => profile.sessionId === sessionId) ?? null;
+  return findProfile(data, sessionId);
 }
 
 interface EfficiencyPanelProps {
@@ -98,6 +111,9 @@ export function EfficiencyPanel({ sessionId }: EfficiencyPanelProps) {
 
   if (!sessionId) {
     return <EmptyState message={t('board.empty.noSession')} />;
+  }
+  if (resource.status === 'loading') {
+    return <EmptyState message={t('efficio.loading')} />;
   }
   if (resource.status !== 'ready' || !resource.value) {
     return <EmptyState message={t('board.empty.noData')} />;

@@ -16,14 +16,17 @@ import { QualityPanel } from '../panels/QualityPanel.tsx';
 interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
 }
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function jsonResponse(body: unknown, ok = true): Response {
@@ -117,14 +120,14 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  vi.spyOn(globalThis, 'fetch');
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({}, false));
 });
 
 describe.each([
-  ['QualityPanel', QualityPanel],
-  ['EfficiencyPanel', EfficiencyPanel],
-  ['ProcessPanel', ProcessPanel],
-] as const)('%s join states', (_name, Panel) => {
+  ['QualityPanel', QualityPanel, /loading|불러오는 중/i],
+  ['EfficiencyPanel', EfficiencyPanel, /loading|불러오는 중/i],
+  ['ProcessPanel', ProcessPanel, /loading|불러오는 중/i],
+] as const)('%s join states', (_name, Panel, loadingText) => {
   it('does not fetch and shows the translated no-session state without a session id', () => {
     render(<Panel sessionId={null} />);
 
@@ -132,26 +135,43 @@ describe.each([
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('shows the translated no-data state when the request fails', async () => {
-    vi.mocked(fetch).mockRejectedValueOnce(new Error('network'));
+  it('shows loading while pending, then no data after the request fails', async () => {
+    const pending = deferred<Response>();
+    vi.mocked(fetch).mockReturnValueOnce(pending.promise);
     render(<Panel sessionId="S" />);
 
+    expect(screen.getByText(loadingText)).toBeInTheDocument();
+    await act(async () => {
+      pending.reject(new Error('network'));
+      await expect(pending.promise).rejects.toThrow('network');
+    });
     expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
   });
 });
 
 describe('QualityPanel', () => {
-  it('renders only prompts joined by session_id from the real response envelope', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({ prompts: [prompt('match', 'S'), prompt('other', 'OTHER')] }),
-    );
+  it('renders only prompts joined by session_id from the real filtered endpoint', async () => {
+    const pending = deferred<Response>();
+    vi.mocked(fetch).mockReturnValueOnce(pending.promise);
 
-    render(<QualityPanel sessionId="S" />);
+    render(<QualityPanel sessionId="S /?한글" />);
 
+    expect(screen.getByText(/loading|불러오는 중/i)).toBeInTheDocument();
+    await act(async () => {
+      pending.resolve(
+        jsonResponse({
+          prompts: [
+            prompt('match', 'S /?한글'),
+            prompt('other', 'OTHER'),
+          ],
+        }),
+      );
+      await pending.promise;
+    });
     expect(await screen.findByText('prompt-match')).toBeInTheDocument();
     expect(screen.queryByText('prompt-other')).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
-      '/api/prompts?limit=1000',
+      `/api/prompts?limit=500&session_id=${encodeURIComponent('S /?한글')}`,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
@@ -164,6 +184,68 @@ describe('QualityPanel', () => {
     render(<QualityPanel sessionId="S" />);
 
     expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
+  });
+
+  it('ignores malformed rows from unrelated sessions', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        prompts: [
+          { session_id: 'OTHER' },
+          prompt('valid-target', 'S'),
+        ],
+      }),
+    );
+
+    render(<QualityPanel sessionId="S" />);
+
+    expect(await screen.findByText('prompt-valid-target')).toBeInTheDocument();
+  });
+
+  it('selects a filtered prompt and renders its full detail and rule hits', async () => {
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/prompts?')) {
+        return jsonResponse({
+          prompts: [
+            prompt('first', 'S', 'First filtered prompt'),
+            prompt('second', 'S', 'Second filtered prompt'),
+          ],
+        });
+      }
+      if (url.endsWith('/api/prompts/second')) {
+        return jsonResponse({
+          prompt: {
+            ...prompt('second', 'S', 'Second filtered prompt detail'),
+            coach_context: 'Coach this prompt',
+            judge_score: 0.7,
+            computed_at: '2026-07-24T00:01:00.000Z',
+            rules_version: 1,
+          },
+          hits: [
+            {
+              rule_id: 'R-DETAIL',
+              severity: 5,
+              message: 'Add an explicit acceptance criterion',
+              evidence: 'missing criterion',
+            },
+          ],
+        });
+      }
+      return jsonResponse({}, false);
+    });
+
+    render(<QualityPanel sessionId="S" />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /second filtered prompt/i }),
+    );
+    expect(await screen.findByText('Second filtered prompt detail')).toBeInTheDocument();
+    expect(screen.getByText('R-DETAIL')).toBeInTheDocument();
+    expect(screen.getByText('Add an explicit acceptance criterion')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/prompts/second',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('ignores an older response after the session changes', async () => {
@@ -187,22 +269,32 @@ describe('QualityPanel', () => {
 
 describe('EfficiencyPanel', () => {
   it('renders the matching profile through SessionDetailCard', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({
-        modelVersion: 1,
-        sessions: [
-          efficiencyProfile('OTHER', 'other-profile'),
-          efficiencyProfile('S', 'matching-profile'),
-        ],
-      }),
-    );
+    const pending = deferred<Response>();
+    vi.mocked(fetch).mockReturnValueOnce(pending.promise);
 
     render(<EfficiencyPanel sessionId="S" />);
 
+    expect(screen.getByText(/loading|불러오는 중/i)).toBeInTheDocument();
+    await act(async () => {
+      pending.resolve(
+        jsonResponse({
+          modelVersion: 1,
+          sessions: [
+            efficiencyProfile('OTHER', 'other-profile'),
+            efficiencyProfile('S', 'matching-profile'),
+          ],
+        }),
+      );
+      await pending.promise;
+    });
     expect(await screen.findByText('matching-profile')).toBeInTheDocument();
     expect(screen.queryByText('other-profile')).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/efficio\/profiles\?last=1000$/),
+      expect.stringMatching(
+        new RegExp(
+          `/api/efficio/profiles\\?session_id=${encodeURIComponent('S')}$`,
+        ),
+      ),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
@@ -215,6 +307,22 @@ describe('EfficiencyPanel', () => {
     render(<EfficiencyPanel sessionId="S" />);
 
     expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
+  });
+
+  it('ignores malformed profiles from unrelated sessions', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        modelVersion: 1,
+        sessions: [
+          { sessionId: 'OTHER' },
+          efficiencyProfile('S', 'valid-target-profile'),
+        ],
+      }),
+    );
+
+    render(<EfficiencyPanel sessionId="S" />);
+
+    expect(await screen.findByText('valid-target-profile')).toBeInTheDocument();
   });
 
   it('ignores an older response after the session changes', async () => {
@@ -248,21 +356,27 @@ describe('EfficiencyPanel', () => {
 
 describe('ProcessPanel', () => {
   it('renders only the completed session joined by sessionId', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({
-        sessions: [
-          completedSession('OTHER', 'Other run'),
-          completedSession('S', 'Matching run'),
-        ],
-      }),
-    );
+    const pending = deferred<Response>();
+    vi.mocked(fetch).mockReturnValueOnce(pending.promise);
 
     render(<ProcessPanel sessionId="S" />);
 
+    expect(screen.getByText(/loading|불러오는 중/i)).toBeInTheDocument();
+    await act(async () => {
+      pending.resolve(
+        jsonResponse({
+          sessions: [
+            completedSession('OTHER', 'Other run'),
+            completedSession('S', 'Matching run'),
+          ],
+        }),
+      );
+      await pending.promise;
+    });
     expect(await screen.findByText('Matching run')).toBeInTheDocument();
     expect(screen.queryByText('Other run')).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/completed\?limit=1000$/),
+      expect.stringMatching(/\/api\/completed\?limit=2000$/),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
@@ -275,6 +389,22 @@ describe('ProcessPanel', () => {
     render(<ProcessPanel sessionId="S" />);
 
     expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
+  });
+
+  it('ignores malformed unrelated rows and degrades a legacy target safely', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        sessions: [
+          { sessionId: 'OTHER', tokenUsage: 'invalid' },
+          { sessionId: 'S', displayName: 'Legacy matching run' },
+        ],
+      }),
+    );
+
+    render(<ProcessPanel sessionId="S" />);
+
+    expect(await screen.findByText('Legacy matching run')).toBeInTheDocument();
+    expect(screen.getByText('S')).toBeInTheDocument();
   });
 
   it('ignores an older response after the session changes', async () => {
@@ -315,17 +445,22 @@ it.each([
 });
 
 it('TicketDetailTabs mounts each joined panel from its sub-tab', async () => {
-  vi.mocked(fetch)
-    .mockResolvedValueOnce(jsonResponse({ prompts: [prompt('quality', 'S')] }))
-    .mockResolvedValueOnce(
-      jsonResponse({
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/prompts?')) {
+      return jsonResponse({ prompts: [prompt('quality', 'S')] });
+    }
+    if (url.includes('/api/efficio/profiles?')) {
+      return jsonResponse({
         modelVersion: 1,
         sessions: [efficiencyProfile('S', 'efficiency-match')],
-      }),
-    )
-    .mockResolvedValueOnce(
-      jsonResponse({ sessions: [completedSession('S', 'process-match')] }),
-    );
+      });
+    }
+    if (url.includes('/api/completed?')) {
+      return jsonResponse({ sessions: [completedSession('S', 'process-match')] });
+    }
+    return jsonResponse({}, false);
+  });
   render(
     <TicketDetailTabs
       record={ticket}
@@ -338,9 +473,24 @@ it('TicketDetailTabs mounts each joined panel from its sub-tab', async () => {
   );
 
   expect(await screen.findByText('prompt-quality')).toBeInTheDocument();
+  expect(
+    vi.mocked(fetch).mock.calls.some(([input]) =>
+      String(input).includes('/api/efficio/profiles?'),
+    ),
+  ).toBe(false);
+  expect(
+    vi.mocked(fetch).mock.calls.some(([input]) =>
+      String(input).includes('/api/completed?'),
+    ),
+  ).toBe(false);
 
   fireEvent.click(screen.getByRole('tab', { name: /efficiency|효율/i }));
   expect(await screen.findByText('efficiency-match')).toBeInTheDocument();
+  expect(
+    vi.mocked(fetch).mock.calls.some(([input]) =>
+      String(input).includes('/api/completed?'),
+    ),
+  ).toBe(false);
 
   fireEvent.click(screen.getByRole('tab', { name: /process|과정/i }));
   expect(await screen.findByText('process-match')).toBeInTheDocument();
