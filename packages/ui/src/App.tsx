@@ -10,6 +10,8 @@ import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
+import { buildAlertContent } from './services/notificationContent.ts';
+import type { AlertContext, AlertKind } from './services/notificationContent.ts';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { ResourceAlert, type ResourceAlertData } from './components/ResourceAlert.tsx';
 import { BackendAlert, type BackendAlertData } from './components/BackendAlert.tsx';
@@ -91,8 +93,12 @@ export default function App() {
   const rawSubscribersRef = useRef<Set<(msg: WSServerMessage) => void>>(new Set());
   const terminalHandlerRef: MutableRefObject<TerminalEventHandler | null> = useRef<TerminalEventHandler | null>(null);
 
-  // Snapshot of agents for label lookup in toasts (avoids useWebSocket callback identity churn)
-  const agentsSnapshotRef = useRef<Map<string, { displayName: string | null }>>(new Map());
+  // Snapshot of agents for notification content lookup (avoids useWebSocket callback identity
+  // churn). Carries everything a notification needs to describe the work: which root folder,
+  // which prompt, which agent — never the sessionId.
+  const agentsSnapshotRef = useRef<Map<string, AlertContext>>(new Map());
+  // cwd → user-defined project name, kept in a ref for the same reason.
+  const projectNamesRef = useRef<Record<string, string>>({});
 
   // Last broadcast state per session. Used to fire the decision-request sound only
   // on the *transition* into `waiting`, not on every `waiting` re-broadcast — the
@@ -158,18 +164,42 @@ export default function App() {
       prevStateRef.current.delete(msg.sessionId);
     }
     if (msg.type === 'agent:state') {
-      const label = agentsSnapshotRef.current.get(msg.sessionId)?.displayName || msg.sessionId.slice(0, 8);
+      const agent = agentsSnapshotRef.current.get(msg.sessionId);
       const prevState = prevStateRef.current.get(msg.sessionId);
       prevStateRef.current.set(msg.sessionId, msg.state);
-      if (msg.state === 'waiting') {
-        addToastRef.current('warning', label, 'notifications.needsPermission', `${msg.sessionId}:waiting`);
-        // Native notification (only fires if permission granted, enabled, and tab unfocused).
-        fireNotification({
-          title: i18n.t('notifications.needsPermission'),
-          body: msg.tool ? `${label} · ${msg.tool}` : label,
-          tag: `${msg.sessionId}:waiting`,
-          requireInteraction: true,
+
+      /**
+       * Describe the transition in terms a reader can act on — root folder, the prompt
+       * that started the work, the tool involved — and deliver it as an OS notification.
+       * The in-app toast is the fallback for when the native path is unavailable
+       * (permission not granted, notifications toggled off, unsupported browser), so the
+       * alert is never lost, and the same message never lands twice.
+       */
+      const notify = (
+        kind: AlertKind,
+        toastType: 'warning' | 'error' | 'success',
+        requireInteraction: boolean,
+      ) => {
+        const content = buildAlertContent(kind, {
+          ...agent,
+          // A user-defined project name (set in the sidebar) beats the cwd basename.
+          projectName: (agent?.cwd ? projectNamesRef.current[agent.cwd] : undefined) || agent?.projectName,
+          tool: msg.type === 'agent:state' ? msg.tool : null,
         });
+        const tag = `${msg.sessionId}:${kind}`;
+        const fired = fireNotification({
+          title: content.title,
+          body: content.body,
+          tag,
+          requireInteraction,
+        });
+        if (!fired) {
+          addToastRef.current(toastType, content, tag);
+        }
+      };
+
+      if (msg.state === 'waiting') {
+        notify('waiting', 'warning', true);
         // Audible cue so a decision request is noticed even when the dashboard
         // is in the background. Fire only on the transition into `waiting` — the
         // state is sticky and re-broadcasts on later tool events, which would
@@ -178,13 +208,7 @@ export default function App() {
           playWaitingSound(msg.sessionId);
         }
       } else if (msg.state === 'error') {
-        addToastRef.current('error', label, 'notifications.errorOccurred', `${msg.sessionId}:error`);
-        fireNotification({
-          title: i18n.t('notifications.errorOccurred'),
-          body: msg.tool ? `${label} · ${msg.tool}` : label,
-          tag: `${msg.sessionId}:error`,
-          requireInteraction: true,
-        });
+        notify('error', 'error', true);
         playErrorSound(msg.sessionId);
       } else if (
         (msg.state === 'idle' || msg.state === 'done') &&
@@ -195,13 +219,7 @@ export default function App() {
         // notification always agree on what "done" means. Unlike waiting/error
         // this is informational, so the native notification does not require
         // interaction — it auto-dismisses.
-        addToastRef.current('success', label, 'notifications.taskCompleted', `${msg.sessionId}:done`);
-        fireNotification({
-          title: i18n.t('notifications.taskCompleted'),
-          body: label,
-          tag: `${msg.sessionId}:done`,
-          requireInteraction: false,
-        });
+        notify('done', 'success', false);
       }
     }
     // Fan out to view-level subscribers
@@ -302,12 +320,21 @@ export default function App() {
       .finally(() => setBackendRechecking(false));
   }, []);
 
-  // Keep the snapshot ref in sync for the toast-label lookup
+  // Keep the snapshot ref in sync for notification content lookup
   agentsSnapshotRef.current = useMemo(() => {
-    const m = new Map<string, { displayName: string | null }>();
-    for (const [sid, a] of agents) m.set(sid, { displayName: a.displayName });
+    const m = new Map<string, AlertContext>();
+    for (const [sid, a] of agents) {
+      m.set(sid, {
+        displayName: a.displayName,
+        cwd: a.cwd,
+        projectName: a.projectName,
+        lastPrompt: a.lastPrompt,
+      });
+    }
     return m;
   }, [agents]);
+
+  projectNamesRef.current = projectNames;
 
   // Set of Claude session IDs currently in the `waiting` state. Recomputed on every agent
   // map change; the identity is stable when nothing changed (empty stays empty), so the

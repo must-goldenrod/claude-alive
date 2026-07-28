@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 
 export interface ToastItem {
   id: string;
   type: 'warning' | 'error' | 'success';
-  agentLabel: string;
-  messageKey: string;
+  /** Headline — `<project> · <stage>`, already translated. */
+  title: string;
+  /** Stage label alone, rendered in the type colour. */
+  stage: string;
+  /** Labelled detail lines (folder / agent / input / tool), already translated. */
+  lines: string[];
   timestamp: number;
 }
 
@@ -30,7 +33,6 @@ const TYPE_CONFIG: Record<ToastItem['type'], { color: string; borderColor: strin
 };
 
 function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
-  const { t } = useTranslation();
   const [exiting, setExiting] = useState(false);
   const config = TYPE_CONFIG[toast.type];
 
@@ -47,7 +49,7 @@ function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string)
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 10,
         padding: '10px 16px',
         background: 'rgba(13, 17, 23, 0.92)',
@@ -56,11 +58,12 @@ function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string)
         border: `1px solid ${config.borderColor}`,
         borderLeft: `3px solid ${config.color}`,
         borderRadius: 10,
-        minWidth: 240,
-        maxWidth: 360,
+        minWidth: 260,
+        maxWidth: 380,
         boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
         opacity: exiting ? 0 : 1,
-        transform: exiting ? 'translateX(20px)' : 'translateX(0)',
+        // Slides out toward the left edge it entered from (bottom-left anchor).
+        transform: exiting ? 'translateX(-20px)' : 'translateX(0)',
         transition: 'opacity 300ms ease, transform 300ms ease',
         animation: 'toast-in 300ms ease',
       }}
@@ -73,17 +76,30 @@ function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string)
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: 'var(--text-primary)',
+            color: config.color,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
           }}
         >
-          {toast.agentLabel}
+          {toast.title}
         </div>
-        <div style={{ fontSize: 11, color: config.color, marginTop: 2 }}>
-          {t(toast.messageKey)}
-        </div>
+        {toast.lines.map((line) => (
+          <div
+            key={line}
+            style={{
+              fontSize: 11,
+              color: 'var(--text-secondary)',
+              marginTop: 2,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+            title={line}
+          >
+            {line}
+          </div>
+        ))}
       </div>
       <button
         onClick={() => onDismiss(toast.id)}
@@ -110,7 +126,11 @@ export function useToasts() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const recentRef = useRef(new Map<string, number>());
 
-  const addToast = useCallback((type: ToastItem['type'], agentLabel: string, messageKey: string, dedupeKey?: string) => {
+  const addToast = useCallback((
+    type: ToastItem['type'],
+    content: { title: string; stage: string; lines: string[] },
+    dedupeKey?: string,
+  ) => {
     // Deduplicate: skip if same agent+type fired within 3 seconds
     if (dedupeKey) {
       const lastTime = recentRef.current.get(dedupeKey);
@@ -119,7 +139,7 @@ export function useToasts() {
     }
 
     const id = `toast-${++toastIdCounter}`;
-    setToasts(prev => [...prev.slice(-4), { id, type, agentLabel, messageKey, timestamp: Date.now() }]);
+    setToasts(prev => [...prev.slice(-4), { id, type, ...content, timestamp: Date.now() }]);
   }, []);
 
   const dismissToast = useCallback((id: string) => {
@@ -136,18 +156,21 @@ export function ToastContainer({ toasts, onDismiss }: { toasts: ToastItem[]; onD
     <>
       <style>{`
         @keyframes toast-in {
-          from { opacity: 0; transform: translateX(40px); }
+          from { opacity: 0; transform: translateX(-40px); }
           to { opacity: 1; transform: translateX(0); }
         }
       `}</style>
+      {/* Bottom-left anchor: the top-right corner is occupied by the header controls,
+          and the newest toast should sit closest to the corner it enters from. */}
       <div
+        data-testid="toast-container"
         style={{
           position: 'fixed',
-          top: 68,
-          right: 16,
+          bottom: 16,
+          left: 16,
           zIndex: 1100,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'column-reverse',
           gap: 8,
           pointerEvents: 'auto',
         }}

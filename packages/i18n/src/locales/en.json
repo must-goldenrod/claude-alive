@@ -128,7 +128,12 @@
     "toggle": "Toggle browser notifications",
     "enable": "Enable browser notifications",
     "disable": "Disable browser notifications",
-    "denied": "Notifications blocked — allow in browser settings"
+    "denied": "Notifications blocked — allow in browser settings",
+    "unknownProject": "Unknown project",
+    "folder": "Folder",
+    "agent": "Agent",
+    "input": "Input",
+    "tool": "Tool"
   },
   "activity": {
     "title": "Recent Activity",
