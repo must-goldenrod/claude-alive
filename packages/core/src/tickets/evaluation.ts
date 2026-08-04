@@ -7,6 +7,7 @@
  * prompts — a one-shot, deterministic quality-improvement loop.
  */
 import type { Ticket, TicketFailureReason } from './types.js';
+import type { TicketEffort, TicketRunPreset } from './runProfile.js';
 
 export type EvalLabel = 'good' | 'bad' | 'unrated';
 
@@ -19,7 +20,11 @@ export interface TicketEvaluation {
   goal: string;
   /** Join key into the canonical session event log, when captured. */
   claudeSessionId?: string;
+  /** Exact model version that served the run. */
   model?: string;
+  /** Run profile the ticket was launched with — lets the dataset compare presets. */
+  preset?: TicketRunPreset;
+  effort?: TicketEffort;
   headline?: string;
   /** From the ticket's verification verdict, when it ran. */
   verdictPassed?: boolean;

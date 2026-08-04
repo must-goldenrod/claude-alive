@@ -8,6 +8,7 @@
  */
 import type { TicketLocation } from './location.js';
 import type { TicketDelegation } from './orchestration.js';
+import type { TicketEffort, TicketRunPreset } from './runProfile.js';
 
 /**
  * Internal lifecycle state. `queued`+`running`+`verifying` collapse to a single
@@ -82,12 +83,29 @@ export interface Ticket {
   headline?: string;
   /** Full result body (markdown), shown in the detail modal. */
   result?: string;
-  /** Model that ran the main agent (e.g. "claude-opus-4-8"), when captured. */
+  /**
+   * Exact model version that actually served the run (e.g. "claude-opus-4-8"),
+   * read back from the result stream. May differ from `requestedModel` — that one
+   * is a moving alias, and a fallback can substitute a different model entirely.
+   */
   model?: string;
   /** Whether extended thinking was used, when the runner can determine it. */
   thinking?: boolean;
-  /** Reasoning effort level, when available. */
-  effort?: string;
+  /**
+   * Effort the run was launched with. Snapshotted from the preset at creation, so
+   * it stays accurate even if the preset table is redefined later.
+   */
+  effort?: TicketEffort;
+  /** Run preset the human selected (fast/standard/deep). Absent = pre-feature ticket. */
+  preset?: TicketRunPreset;
+  /** Model alias requested at launch (e.g. "opus"), before the CLI resolved a version. */
+  requestedModel?: string;
+  /**
+   * Flags the executor could not pass because the target `claude` build does not
+   * support them. Recorded so a ticket never silently claims an effort it never ran
+   * with — an old remote CLI degrades to the default instead of failing the run.
+   */
+  unsupportedFlags?: string[];
   /** Token/cost/turn accounting, when the model reports it. */
   usage?: TicketUsage;
   verification?: TicketVerification;
@@ -126,6 +144,8 @@ export interface TicketCreateInput {
   cwd: string;
   location?: TicketLocation;
   orchestrated?: boolean;
+  /** Run preset. Omitted = the CLI's own defaults (matches pre-feature behaviour). */
+  preset?: TicketRunPreset;
 }
 
 /** States the UI renders as "in progress". */

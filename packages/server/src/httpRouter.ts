@@ -3,6 +3,7 @@ import { readdir } from 'node:fs/promises';
 import { resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { z } from 'zod';
+import { TICKET_RUN_PRESET_IDS } from '@claude-alive/core';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
 import { listClaudeSessions } from './claudeSessionIndex.js';
@@ -189,6 +190,9 @@ const TicketCreateBodySchema = z.object({
   cwd: z.string().min(1),
   location: TicketLocationSchema.optional(),
   orchestrated: z.boolean().optional(),
+  // Closed enum, never free-form model/effort strings: the values become CLI
+  // argv, so the allowlist lives at the boundary rather than downstream.
+  preset: z.enum(TICKET_RUN_PRESET_IDS).optional(),
 });
 
 const EvaluateBodySchema = z.object({

@@ -20,6 +20,11 @@ export { TICKET_ACTIVE_STATES, isTicketActive, addUsage } from './tickets/types.
 export { sshTargetDisplay, isRemoteLocation } from './tickets/location.js';
 export type { LocationKind, SshTarget, TicketLocation } from './tickets/location.js';
 export type { BackendId, BackendKind, BackendStatus, TicketDelegation } from './tickets/orchestration.js';
+export {
+  TICKET_RUN_PRESETS, TICKET_RUN_PRESET_IDS, TICKET_EFFORT_LEVELS,
+  DEFAULT_TICKET_RUN_PRESET, isTicketRunPreset, isTicketEffort, resolveRunProfile,
+} from './tickets/runProfile.js';
+export type { TicketRunPreset, TicketRunProfile, TicketEffort } from './tickets/runProfile.js';
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
   TicketTurn, TicketTurnRole, TicketTurnKind,

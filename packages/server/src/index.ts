@@ -42,6 +42,7 @@ import { createTicketStore } from './ticketStore.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
+import { createFlagSupportCache } from './agentFlags.js';
 import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
@@ -358,16 +359,21 @@ const delegateBinDir = dirname(delegateCmd);
 const localAllowedRoots = process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean);
 // Resolve the execution backend for a ticket's location: local child process, or
 // SSH to a remote host. Absent location = local.
+// One process-wide cache of which `--model`/`--effort` flags each target CLI
+// accepts. Executors are built per spawn, so without this every run would
+// re-probe (an extra SSH round-trip per remote ticket).
+const runFlagCache = createFlagSupportCache();
 const executorFor = (location: import('@claude-alive/core').TicketLocation | undefined) =>
-  resolveExecutor(location, { localAllowedRoots });
+  resolveExecutor(location, { localAllowedRoots, flagCache: runFlagCache });
 
 // The verifier runs at the SAME location as the main agent.
 const ticketVerifier = createVerifier({
-  run: ({ goal, cwd, location, orchestrated }) =>
+  run: ({ goal, cwd, location, orchestrated, flags }) =>
     executorFor(location).spawn({
       goal,
       cwd,
       permissionMode: 'bypassPermissions',
+      ...(flags && (flags.model || flags.effort) ? { run: flags } : {}),
       ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
     }).done,
 });
@@ -388,11 +394,33 @@ const ticketRunner = createTicketRunner({
       : orchestrated
         ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd)
         : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text);
+    // Run profile snapshotted on the ticket at creation. Read from the ticket (not
+    // re-resolved from the preset) so retries and decision replies reuse exactly
+    // what the first run used, even across a preset-table change.
+    const run = {
+      ...(ticket.requestedModel ? { model: ticket.requestedModel } : {}),
+      ...(ticket.effort ? { effort: ticket.effort } : {}),
+    };
     return executorFor(ticket.location).spawn({
       goal,
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
+      ...(run.model || run.effort ? { run } : {}),
+      // Record flags the target CLI could not accept, so the detail view shows
+      // "requested deep, ran with CLI defaults" instead of a silent downgrade.
+      onFlagsResolved: (resolved) => {
+        void ticketStore
+          .update(ticket.id, {
+            unsupportedFlags: resolved.dropped.length > 0 ? resolved.dropped : undefined,
+          })
+          .then((updated) => {
+            if (updated) broadcaster.broadcast({ type: 'ticket:update', ticket: updated });
+          })
+          .catch(() => {
+            /* recording capability info must never affect the run */
+          });
+      },
       // Only the orchestrator run gets the delegate tool + a ticket tag; the
       // verifier deliberately omits CA_TICKET_ID so its re-delegations aren't logged.
       ...(orchestrated ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } } : {}),

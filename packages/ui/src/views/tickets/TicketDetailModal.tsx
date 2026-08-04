@@ -65,7 +65,10 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   }, [onClose]);
 
   const meta: string[] = [formatStarted(ticket)];
+  // Prefer the exact version the run actually used; fall back to the requested
+  // alias while the ticket is still queued and nothing has reported back yet.
   if (ticket.model) meta.push(ticket.model);
+  else if (ticket.requestedModel) meta.push(ticket.requestedModel);
   if (ticket.thinking) meta.push('thinking');
   if (ticket.effort) meta.push(`effort:${ticket.effort}`);
 
@@ -321,9 +324,17 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
   const u = ticket.usage;
   const rows: [string, string][] = [];
   if (ticket.rounds && ticket.rounds > 1) rows.push([t('tickets.runRounds'), String(ticket.rounds)]);
+  if (ticket.preset) rows.push([t('tickets.runPreset'), t(`tickets.preset.${ticket.preset}`)]);
+  // Requested alias ('opus') and served version ('claude-opus-4-8') are separate
+  // rows: a fallback or an alias bump makes them differ, and that difference is
+  // exactly what makes a past ticket's cost/quality interpretable.
+  if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), ticket.requestedModel]);
   if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
   if (ticket.thinking) rows.push([t('tickets.runThinking'), 'on']);
+  if (ticket.unsupportedFlags && ticket.unsupportedFlags.length > 0) {
+    rows.push([t('tickets.runFlagsDropped'), ticket.unsupportedFlags.join(', ')]);
+  }
   if (u) {
     const tok = (n?: number) => formatTokens(n) ?? '—';
     if (u.inputTokens !== undefined) rows.push([t('tickets.runInput'), tok(u.inputTokens)]);

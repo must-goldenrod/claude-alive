@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Ticket, TicketEvaluation, EvalLabel, TicketLocation, WSServerMessage } from '@claude-alive/core';
+import type {
+  Ticket, TicketEvaluation, EvalLabel, TicketLocation, TicketRunPreset, WSServerMessage,
+} from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
 
 // Same origin convention as EfficioView: the server serves the UI and proxies in dev.
@@ -13,6 +15,7 @@ export type TicketCreateFn = (
   cwd: string,
   location?: TicketLocation,
   orchestrated?: boolean,
+  preset?: TicketRunPreset,
 ) => Promise<string | null>;
 
 /** Applies a human evaluation label; resolves the updated record or null on failure. */
@@ -86,7 +89,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     });
   }, [subscribeRaw]);
 
-  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation, orchestrated?: boolean): Promise<string | null> => {
+  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation, orchestrated?: boolean, preset?: TicketRunPreset): Promise<string | null> => {
     try {
       const res = await fetch(`${API_BASE}/api/tickets`, {
         method: 'POST',
@@ -96,6 +99,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
           cwd,
           ...(location && location.kind !== 'local' ? { location } : {}),
           ...(orchestrated ? { orchestrated: true } : {}),
+          ...(preset ? { preset } : {}),
         }),
       });
       if (!res.ok) {

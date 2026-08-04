@@ -4,8 +4,10 @@
  * behaviour tickets have always had, now behind the Executor interface.
  */
 import { existsSync, realpathSync } from 'node:fs';
-import { runHeadlessClaude } from '../headlessClaude.js';
+import { probeLocalClaudeHelp, runHeadlessClaude } from '../headlessClaude.js';
 import { isCwdAllowed } from '../ticketRunner.js';
+import { createFlagSupportCache, type FlagSupportCache } from '../agentFlags.js';
+import { spawnWithFlagGuard } from './flagGuard.js';
 import type { Executor, AgentSpawnRequest } from './types.js';
 
 export interface LocalExecutorOptions {
@@ -15,12 +17,18 @@ export interface LocalExecutorOptions {
   cwdExists?: (path: string) => boolean;
   /** Injectable for tests. Defaults to fs.realpathSync. */
   canonicalize?: (path: string) => string;
+  /** Injectable `claude --help` probe for run-flag capability detection. */
+  probeHelp?: () => Promise<string>;
+  /** Shared probe cache; a private one is created when omitted. */
+  flagCache?: FlagSupportCache;
 }
 
 export function createLocalExecutor(options: LocalExecutorOptions = {}): Executor {
   const cwdExists = options.cwdExists ?? existsSync;
   const canonicalize = options.canonicalize ?? ((p: string) => realpathSync(p));
   const allowedRoots = options.allowedRoots;
+  const probeHelp = options.probeHelp ?? probeLocalClaudeHelp;
+  const flagCache = options.flagCache ?? createFlagSupportCache();
 
   return {
     async validateCwd(cwd) {
@@ -37,13 +45,22 @@ export function createLocalExecutor(options: LocalExecutorOptions = {}): Executo
       return null;
     },
     spawn(req: AgentSpawnRequest) {
-      return runHeadlessClaude({
-        goal: req.goal,
-        cwd: req.cwd,
-        permissionMode: req.permissionMode,
-        resumeSessionId: req.resumeSessionId,
-        pathPrepend: req.pathPrepend,
-        extraEnv: req.extraEnv,
+      return spawnWithFlagGuard({
+        cacheKey: 'local',
+        cache: flagCache,
+        probe: probeHelp,
+        requested: req.run ?? {},
+        onResolved: req.onFlagsResolved,
+        spawnWith: (flags) =>
+          runHeadlessClaude({
+            goal: req.goal,
+            cwd: req.cwd,
+            permissionMode: req.permissionMode,
+            resumeSessionId: req.resumeSessionId,
+            pathPrepend: req.pathPrepend,
+            extraEnv: req.extraEnv,
+            flags,
+          }),
       });
     },
   };

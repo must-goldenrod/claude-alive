@@ -12,6 +12,8 @@
  */
 import { spawn } from 'node:child_process';
 import { consumeHeadless, type HeadlessProcessHandle, type HeadlessRunHandle } from '../headlessClaude.js';
+import { createFlagSupportCache, type FlagSupportCache } from '../agentFlags.js';
+import { spawnWithFlagGuard } from './flagGuard.js';
 import type { SshTarget } from '@claude-alive/core';
 import type { Executor, AgentSpawnRequest } from './types.js';
 
@@ -65,10 +67,24 @@ const REMOTE_PATH_PREFIX =
  * arg makes claude read the prompt from stdin (which the ssh process supplies),
  * so a multi-line goal never touches the remote shell's quoting.
  */
-export function buildRemoteCommand(cwd: string, permissionMode: string, resumeSessionId?: string): string {
+export function buildRemoteCommand(
+  cwd: string,
+  permissionMode: string,
+  resumeSessionId?: string,
+  run?: { model?: string; effort?: string },
+): string {
   const flags = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
   if (resumeSessionId) flags.push('--resume', shellQuote(resumeSessionId));
+  // Values are shell-quoted: they reach a remote shell, and only flags the remote
+  // CLI advertised in --help get this far (see flagGuard).
+  if (run?.model) flags.push('--model', shellQuote(run.model));
+  if (run?.effort) flags.push('--effort', shellQuote(run.effort));
   return `${REMOTE_PATH_PREFIX}cd ${shellQuote(cwd)} && claude ${flags.join(' ')}`;
+}
+
+/** Remote `claude --help`, for run-flag capability detection on the target host. */
+export function buildRemoteHelpCommand(): string {
+  return `${REMOTE_PATH_PREFIX}claude --help`;
 }
 
 function realSshSpawn(args: string[], stdin?: string): HeadlessProcessHandle {
@@ -104,8 +120,21 @@ function collect(proc: HeadlessProcessHandle): Promise<{ code: number | null; st
   });
 }
 
-export function createSshExecutor(target: SshTarget, options: { spawnProcess?: SshProcessSpawner } = {}): Executor {
+export function createSshExecutor(
+  target: SshTarget,
+  options: { spawnProcess?: SshProcessSpawner; flagCache?: FlagSupportCache } = {},
+): Executor {
   const doSpawn = options.spawnProcess ?? realSshSpawn;
+  const flagCache = options.flagCache ?? createFlagSupportCache();
+  // Per-host: two hosts can run different `claude` versions.
+  const cacheKey = `ssh:${target.user ? `${target.user}@` : ''}${target.host}:${target.port ?? 22}`;
+
+  /** Ask the remote CLI what it supports. Rejects → the cache treats it as "nothing". */
+  const probeRemoteHelp = async (): Promise<string> => {
+    const { stdout, stderr } = await collect(doSpawn([...sshBaseArgs(target), buildRemoteHelpCommand()]));
+    // Some builds print help on stderr; capability detection accepts either.
+    return `${stdout}\n${stderr}`;
+  };
 
   return {
     async validateCwd(cwd) {
@@ -122,9 +151,17 @@ export function createSshExecutor(target: SshTarget, options: { spawnProcess?: S
       return `remote cwd unavailable on ${target.host}: ${cwd} (${detail})`;
     },
     spawn(req: AgentSpawnRequest): HeadlessRunHandle {
-      const remote = buildRemoteCommand(req.cwd, req.permissionMode, req.resumeSessionId);
-      const proc = doSpawn([...sshBaseArgs(target), remote], req.goal);
-      return consumeHeadless(proc);
+      return spawnWithFlagGuard({
+        cacheKey,
+        cache: flagCache,
+        probe: probeRemoteHelp,
+        requested: req.run ?? {},
+        onResolved: req.onFlagsResolved,
+        spawnWith: (flags) => {
+          const remote = buildRemoteCommand(req.cwd, req.permissionMode, req.resumeSessionId, flags);
+          return consumeHeadless(doSpawn([...sshBaseArgs(target), remote], req.goal));
+        },
+      });
     },
   };
 }

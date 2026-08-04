@@ -557,6 +557,15 @@
     "noResult": "결과 없음",
     "orchestrate": "오케스트레이터로 실행",
     "orchestrateHint": "(서브에이전트에 위임 가능)",
+    "presetLabel": "실행 프로필",
+    "preset": {
+      "fast": "빠름",
+      "standard": "기본",
+      "deep": "심층"
+    },
+    "runPreset": "실행 프로필",
+    "runRequestedModel": "요청 모델",
+    "runFlagsDropped": "대상 CLI 미지원",
     "evaluatePrompt": "평가:",
     "runInfoLabel": "실행 정보",
     "delegationsLabel": "위임 내역 (서브 에이전트)",

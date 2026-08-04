@@ -557,6 +557,15 @@
     "noResult": "No result",
     "orchestrate": "Run as orchestrator",
     "orchestrateHint": "(may delegate to sub-agents)",
+    "presetLabel": "Run profile",
+    "preset": {
+      "fast": "Fast",
+      "standard": "Standard",
+      "deep": "Deep"
+    },
+    "runPreset": "Run profile",
+    "runRequestedModel": "Requested model",
+    "runFlagsDropped": "Unsupported on target",
     "evaluatePrompt": "Rate:",
     "runInfoLabel": "Run info",
     "delegationsLabel": "Delegations (sub-agents)",
