@@ -35,6 +35,12 @@ export interface AgentSpawnRequest {
    * Called once the executor has resolved capabilities, before the process starts.
    */
   onFlagsResolved?: (resolved: ResolvedFlags) => void;
+  /**
+   * Reports the agent's session id as soon as the stream announces it, so the
+   * caller can persist a resumable handle before the run ends. Without this the
+   * id is only known at exit, and a killed run leaves nothing to resume.
+   */
+  onSessionId?: (sessionId: string) => void;
 }
 
 export interface Executor {

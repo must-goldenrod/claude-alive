@@ -406,6 +406,10 @@ const ticketRunner = createTicketRunner({
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
+      // Persist the session id the moment the agent announces it. A ticket that
+      // is cancelled or dies mid-run then still carries a `claude --resume`
+      // handle instead of leaving spent tokens with nothing to inspect.
+      ...(opts?.onSessionId ? { onSessionId: opts.onSessionId } : {}),
       ...(run.model || run.effort ? { run } : {}),
       // Record flags the target CLI could not accept, so the detail view shows
       // "requested deep, ran with CLI defaults" instead of a silent downgrade.

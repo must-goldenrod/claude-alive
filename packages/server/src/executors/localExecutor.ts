@@ -8,6 +8,7 @@ import { probeLocalClaudeHelp, runHeadlessClaude } from '../headlessClaude.js';
 import { isCwdAllowed } from '../ticketRunner.js';
 import { createFlagSupportCache, type FlagSupportCache } from '../agentFlags.js';
 import { spawnWithFlagGuard } from './flagGuard.js';
+import { sessionIdReporter } from './sessionReporter.js';
 import type { Executor, AgentSpawnRequest } from './types.js';
 
 export interface LocalExecutorOptions {
@@ -60,6 +61,7 @@ export function createLocalExecutor(options: LocalExecutorOptions = {}): Executo
             pathPrepend: req.pathPrepend,
             extraEnv: req.extraEnv,
             flags,
+            ...(req.onSessionId ? { onEvent: sessionIdReporter(req.onSessionId) } : {}),
           }),
       });
     },

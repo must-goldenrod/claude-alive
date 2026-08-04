@@ -334,6 +334,11 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
   if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
   if (ticket.thinking) rows.push([t('tickets.runThinking'), 'on']);
+  // The resume handle. Recorded as soon as the agent announces it, so it is here
+  // even for a ticket that was cancelled or died mid-run — that is precisely when
+  // `claude --resume <id>` (or reading the session's transcript) is the only way
+  // back to work that has already been paid for.
+  if (ticket.claudeSessionId) rows.push([t('tickets.runSessionId'), ticket.claudeSessionId]);
   if (ticket.unsupportedFlags && ticket.unsupportedFlags.length > 0) {
     rows.push([t('tickets.runFlagsDropped'), ticket.unsupportedFlags.join(', ')]);
   }

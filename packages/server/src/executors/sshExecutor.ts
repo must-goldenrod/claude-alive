@@ -14,6 +14,7 @@ import { spawn } from 'node:child_process';
 import { consumeHeadless, type HeadlessProcessHandle, type HeadlessRunHandle } from '../headlessClaude.js';
 import { createFlagSupportCache, type FlagSupportCache } from '../agentFlags.js';
 import { spawnWithFlagGuard } from './flagGuard.js';
+import { sessionIdReporter } from './sessionReporter.js';
 import type { SshTarget } from '@claude-alive/core';
 import type { Executor, AgentSpawnRequest } from './types.js';
 
@@ -159,7 +160,10 @@ export function createSshExecutor(
         onResolved: req.onFlagsResolved,
         spawnWith: (flags) => {
           const remote = buildRemoteCommand(req.cwd, req.permissionMode, req.resumeSessionId, flags);
-          return consumeHeadless(doSpawn([...sshBaseArgs(target), remote], req.goal));
+          return consumeHeadless(
+            doSpawn([...sshBaseArgs(target), remote], req.goal),
+            req.onSessionId ? sessionIdReporter(req.onSessionId) : undefined,
+          );
         },
       });
     },

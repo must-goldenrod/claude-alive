@@ -573,6 +573,7 @@
     "runModel": "Model",
     "runEffort": "Effort",
     "runThinking": "Extended thinking",
+    "runSessionId": "Session ID",
     "runInput": "Input tokens",
     "runOutput": "Output tokens",
     "runCacheRead": "Cache read",

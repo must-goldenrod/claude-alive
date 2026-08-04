@@ -54,6 +54,13 @@ export interface SpawnMainOpts {
   prompt?: string;
   /** Claude session id to resume so the reply continues the same conversation. */
   resumeSessionId?: string;
+  /**
+   * Called as soon as the agent announces its session id — long before the run
+   * finishes. The runner persists it immediately so a cancelled, crashed, or
+   * server-restarted run still points at a resumable thread. Waiting for the
+   * final outcome would lose the id on exactly the runs that need it most.
+   */
+  onSessionId?: (sessionId: string) => void;
 }
 
 export interface TicketRunnerOptions {
@@ -73,7 +80,12 @@ export interface TicketRunnerOptions {
   onSettled?: (ticket: Ticket) => void | Promise<void>;
   /** Max tickets executing at once (§동시성). */
   concurrency?: number;
-  /** Per-ticket wallclock cap. */
+  /**
+   * Per-ticket wallclock cap. OMITTED = no cap, which is the default: a ticket
+   * may legitimately run for many hours, and an unattended kill destroys work
+   * that has already been paid for in tokens. Set only when a hard ceiling is
+   * wanted (tests do).
+   */
   timeoutMs?: number;
   /** Continuation prompt for a ticket whose run a server restart cut off (resumed via --resume). */
   resumePrompt?: string;
@@ -110,7 +122,6 @@ export interface TicketRunner {
 }
 
 const DEFAULT_CONCURRENCY = 3;
-const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_RESUME_PROMPT =
   '직전 작업이 서버 재시작으로 중단되었습니다. 지금까지의 맥락을 이어받아 목표를 끝까지 완료하세요.';
 
@@ -139,7 +150,7 @@ function isTerminal(t: Ticket | undefined): boolean {
 export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
   const { store, spawnMain, verify, broadcast, onSettled, validateCwd } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs;
   const resumePrompt = options.resumePrompt ?? DEFAULT_RESUME_PROMPT;
   const allowedRoots = options.allowedRoots;
   const canonicalize = options.canonicalize ?? ((p: string) => realpathSync(p));
@@ -189,10 +200,23 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     releaseSlot(id);
   }
 
-  /** Register a live agent run's handle + timeout, and route its completion. */
+  /**
+   * Persist the agent's session id the moment it is announced, so the thread is
+   * resumable no matter how the run ends. Idempotent: the same id arriving again
+   * (init event, then the final result) writes nothing.
+   */
+  async function noteSession(id: string, sessionId: string): Promise<void> {
+    if (!sessionId) return;
+    const cur = store.get(id);
+    if (!cur || cur.claudeSessionId === sessionId) return;
+    await apply(id, { claudeSessionId: sessionId });
+  }
+
+  /** Register a live agent run's handle (+ cap, when configured) and route its completion. */
   function attach(id: string, handle: RunnerHeadlessHandle): void {
     handles.set(id, handle);
-    timers.set(id, setTimer(() => void onTimeout(id), timeoutMs));
+    // No cap by default — see TicketRunnerOptions.timeoutMs.
+    if (timeoutMs !== undefined) timers.set(id, setTimer(() => void onTimeout(id), timeoutMs));
     handle.done.then(
       (outcome) => void onMainDone(id, outcome),
       (e) => void fail(id, 'error', String(e)),
@@ -251,7 +275,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
 
     let handle: RunnerHeadlessHandle;
     try {
-      handle = spawnMain(started);
+      handle = spawnMain(started, { onSessionId: (sid) => void noteSession(id, sid) });
     } catch (e) {
       await fail(id, 'error', `failed to spawn agent: ${String(e)}`);
       return;
@@ -275,7 +299,11 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     }
     let handle: RunnerHeadlessHandle;
     try {
-      handle = spawnMain(started, { prompt: resumePrompt, resumeSessionId: ticket.claudeSessionId });
+      handle = spawnMain(started, {
+        prompt: resumePrompt,
+        resumeSessionId: ticket.claudeSessionId,
+        onSessionId: (sid) => void noteSession(ticket.id, sid),
+      });
     } catch (e) {
       await fail(ticket.id, 'error', `failed to resume agent: ${String(e)}`);
       return;
@@ -457,7 +485,11 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       }
       let handle: RunnerHeadlessHandle;
       try {
-        handle = spawnMain(started, { prompt: answer, resumeSessionId: t.claudeSessionId });
+        handle = spawnMain(started, {
+          prompt: answer,
+          resumeSessionId: t.claudeSessionId,
+          onSessionId: (sid) => void noteSession(id, sid),
+        });
       } catch (e) {
         await fail(id, 'error', `failed to resume agent: ${String(e)}`);
         return store.get(id);

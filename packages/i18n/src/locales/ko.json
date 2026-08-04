@@ -573,6 +573,7 @@
     "runModel": "모델",
     "runEffort": "Effort",
     "runThinking": "확장 사고",
+    "runSessionId": "세션 ID",
     "runInput": "입력 토큰",
     "runOutput": "출력 토큰",
     "runCacheRead": "캐시 읽기",
