@@ -57,9 +57,9 @@ describe('createBackendRegistry', () => {
     { fetch: (async () => jsonResponse({ data: [{ id: 'm1' }, { id: 'm2' }] })) as typeof fetch },
   );
 
-  it('lists claude-local + ssh always, litellm only when configured', () => {
-    expect(createBackendRegistry({}).list().map((b) => b.id)).toEqual(['claude-local', 'ssh']);
-    expect(createBackendRegistry({ litellm }).list().map((b) => b.id)).toEqual(['claude-local', 'litellm', 'ssh']);
+  it('lists claude-local always and litellm only when configured; ssh is not a card', () => {
+    expect(createBackendRegistry({}).list().map((b) => b.id)).toEqual(['claude-local']);
+    expect(createBackendRegistry({ litellm }).list().map((b) => b.id)).toEqual(['claude-local', 'litellm']);
   });
 
   it('checks claude-local via findClaude', async () => {

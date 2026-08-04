@@ -3,8 +3,9 @@
  *
  * Lists the execution/delegation backends the user can connect and runs live
  * connectivity checks. `claude-local` is the local orchestrator; `litellm` is a
- * sub-agent delegation target; `ssh` is a remote location (checked per-host at
- * ticket time, so listed but not probed here).
+ * sub-agent delegation target. `ssh` is a remote location that is registered and
+ * checked per-host in the SSH hosts list, so it is not listed as a backend card
+ * (its `check` remains available for direct API callers).
  */
 import type { BackendId, BackendStatus } from '@claude-alive/core';
 import type { LitellmClient } from './litellmClient.js';
@@ -12,8 +13,6 @@ import type { LitellmClient } from './litellmClient.js';
 export interface BackendRegistryDeps {
   /** Present when LITELLM_KEY is configured. */
   litellm?: LitellmClient;
-  /** True when at least one SSH host is registered (presets are browser-side, so this is a hint). */
-  sshConfigured?: boolean;
   /** Resolve the local `claude` binary; returns null when not found. */
   findClaude?: () => string | null;
 }
@@ -39,7 +38,6 @@ export function createBackendRegistry(deps: BackendRegistryDeps): BackendRegistr
     list() {
       const items: BackendStatus[] = [base('claude-local')];
       if (deps.litellm) items.push(base('litellm'));
-      items.push({ ...base('ssh'), detail: 'register & check hosts below' });
       return items;
     },
 
