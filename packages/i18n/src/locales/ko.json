@@ -560,6 +560,7 @@
     "presetLabel": "실행 프로필",
     "preset": {
       "fast": "빠름",
+      "medium": "중간",
       "standard": "기본",
       "deep": "심층"
     },

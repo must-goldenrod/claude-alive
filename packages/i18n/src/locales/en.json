@@ -560,6 +560,7 @@
     "presetLabel": "Run profile",
     "preset": {
       "fast": "Fast",
+      "medium": "Medium",
       "standard": "Standard",
       "deep": "Deep"
     },

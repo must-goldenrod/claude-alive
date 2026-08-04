@@ -22,6 +22,7 @@ export type { LocationKind, SshTarget, TicketLocation } from './tickets/location
 export type { BackendId, BackendKind, BackendStatus, TicketDelegation } from './tickets/orchestration.js';
 export {
   TICKET_RUN_PRESETS, TICKET_RUN_PRESET_IDS, TICKET_EFFORT_LEVELS,
+  TICKET_MODEL_OPUS, TICKET_MODEL_SONNET, TICKET_MODEL_LABELS, modelDisplayName,
   DEFAULT_TICKET_RUN_PRESET, isTicketRunPreset, isTicketEffort, resolveRunProfile,
 } from './tickets/runProfile.js';
 export type { TicketRunPreset, TicketRunProfile, TicketEffort } from './tickets/runProfile.js';

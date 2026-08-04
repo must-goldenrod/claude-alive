@@ -246,15 +246,24 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
         <div style={{ display: 'flex', gap: 4, background: 'var(--bg-tertiary, #21262d)', padding: 3, borderRadius: 10 }}>
           {RUN_PRESET_IDS.map((id) => {
             const active = runPreset === id;
+            const preview = RUN_PRESET_PREVIEW[id];
             return (
               <button
                 key={id}
                 type="button"
                 onClick={() => setRunPreset(id)}
+                // The model line names the version on every option rather than
+                // only the selected one, so the cost ramp is legible without
+                // clicking through. The exact `--model` id stays one hover away.
+                title={`--model ${preview.model} --effort ${preview.effort}`}
                 style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
                   fontSize: 12,
                   fontWeight: active ? 600 : 500,
-                  padding: '5px 12px',
+                  padding: '4px 12px 5px',
                   borderRadius: 8,
                   border: 'none',
                   background: active ? 'var(--bg-secondary, #161b22)' : 'transparent',
@@ -262,21 +271,22 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
                   cursor: 'pointer',
                 }}
               >
-                {t(runPresetLabelKey(id))}
+                <span>{t(runPresetLabelKey(id))}</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: 10,
+                    fontWeight: 400,
+                    letterSpacing: -0.2,
+                    opacity: active ? 0.85 : 0.6,
+                  }}
+                >
+                  {preview.modelLabel} · {preview.effort}
+                </span>
               </button>
             );
           })}
         </div>
-        <span
-          style={{
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 11,
-            color: 'var(--text-secondary, #8b949e)',
-            opacity: 0.7,
-          }}
-        >
-          {RUN_PRESET_PREVIEW[runPreset].model} · {RUN_PRESET_PREVIEW[runPreset].effort}
-        </span>
       </div>
       {!isRemote && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary, #8b949e)', cursor: 'pointer', userSelect: 'none' }}>

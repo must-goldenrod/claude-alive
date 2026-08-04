@@ -65,8 +65,8 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   }, [onClose]);
 
   const meta: string[] = [formatStarted(ticket)];
-  // Prefer the exact version the run actually used; fall back to the requested
-  // alias while the ticket is still queued and nothing has reported back yet.
+  // Prefer the exact version the run actually reported; fall back to the
+  // requested id while the ticket is still queued and nothing has come back yet.
   if (ticket.model) meta.push(ticket.model);
   else if (ticket.requestedModel) meta.push(ticket.requestedModel);
   if (ticket.thinking) meta.push('thinking');
@@ -325,9 +325,11 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
   const rows: [string, string][] = [];
   if (ticket.rounds && ticket.rounds > 1) rows.push([t('tickets.runRounds'), String(ticket.rounds)]);
   if (ticket.preset) rows.push([t('tickets.runPreset'), t(`tickets.preset.${ticket.preset}`)]);
-  // Requested alias ('opus') and served version ('claude-opus-4-8') are separate
-  // rows: a fallback or an alias bump makes them differ, and that difference is
-  // exactly what makes a past ticket's cost/quality interpretable.
+  // Requested id and served version are separate rows even though presets now
+  // pin a full id: a `--fallback-model` hop, an unsupported `--model` on a remote
+  // host, or a server-side substitution still makes them differ, and that
+  // difference is exactly what makes a past ticket's cost/quality interpretable.
+  // Both stay raw here — the detail view is the record of what ran, not a label.
   if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), ticket.requestedModel]);
   if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
