@@ -132,6 +132,17 @@ npm uninstall -g claude-alive
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CLAUDE_ALIVE_PORT` | `3141` | Server port / 서버 포트 |
+| `LITELLM_KEY` | — | litellm gateway key; enables the orchestrator's `ca-delegate` sub-agent tool / 오케스트레이터 위임 도구 활성화 |
+| `LITELLM_BASE_URL` | `https://litellm.must.codes` | litellm gateway base URL / 게이트웨이 주소 |
+| `CA_DELEGATE_MODEL` | `gemini/gemini-3.1-flash-lite-preview` | Default delegation model / 기본 위임 모델 |
+
+`claude-alive start` runs the server detached, so it does **not** inherit your shell exports.
+Put the values above in `~/.claude-alive/.env` (`KEY=VALUE` per line, `chmod 600`); anything
+already present in the process env wins over the file.
+
+`claude-alive start`는 서버를 백그라운드로 띄우므로 셸의 `export`를 물려받지 않습니다.
+위 값들은 `~/.claude-alive/.env`에 `KEY=VALUE` 한 줄씩 넣어두세요 (권한 600). 이미 프로세스
+환경에 설정된 값이 파일보다 우선합니다.
 
 ---
 

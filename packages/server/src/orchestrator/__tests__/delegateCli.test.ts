@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runDelegateCli, DEFAULT_DELEGATE_MODEL } from '../delegateCli.js';
+import { runDelegateCli, resolveDelegateModel, DEFAULT_DELEGATE_MODEL } from '../delegateCli.js';
 
 const noStdin = async () => '';
 
@@ -58,5 +58,35 @@ describe('runDelegateCli', () => {
       appendLog: () => { logged = true; },
     });
     expect(logged).toBe(false);
+  });
+
+  // The gateway retires model ids; the pinned default went 400 "Invalid model
+  // name" and every delegation failed. CA_DELEGATE_MODEL fixes that without a
+  // rebuild, so it must reach the actual call.
+  it('uses CA_DELEGATE_MODEL over the compiled-in default', async () => {
+    let seenModel = '';
+    await runDelegateCli([], { CA_DELEGATE_MODEL: 'glm-5.2' }, async () => 'hi', {
+      chat: async (model) => { seenModel = model; return { content: 'ok' }; },
+    });
+    expect(seenModel).toBe('glm-5.2');
+  });
+
+  it('still lets an explicit --model win over CA_DELEGATE_MODEL', async () => {
+    let seenModel = '';
+    await runDelegateCli(['--model', 'kimi-k3', 'hi'], { CA_DELEGATE_MODEL: 'glm-5.2' }, noStdin, {
+      chat: async (model) => { seenModel = model; return { content: 'ok' }; },
+    });
+    expect(seenModel).toBe('kimi-k3');
+  });
+});
+
+describe('resolveDelegateModel', () => {
+  it('falls back to the default when the override is unset or blank', () => {
+    expect(resolveDelegateModel({})).toBe(DEFAULT_DELEGATE_MODEL);
+    expect(resolveDelegateModel({ CA_DELEGATE_MODEL: '   ' })).toBe(DEFAULT_DELEGATE_MODEL);
+  });
+
+  it('trims the override', () => {
+    expect(resolveDelegateModel({ CA_DELEGATE_MODEL: ' glm-5.2 ' })).toBe('glm-5.2');
   });
 });

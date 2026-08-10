@@ -46,15 +46,24 @@ import { createFlagSupportCache } from './agentFlags.js';
 import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
-import { ensureDelegateCli } from './orchestrator/delegateCli.js';
+import { ensureDelegateCli, resolveDelegateModel } from './orchestrator/delegateCli.js';
 import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
 import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
+import { loadServerEnv, SERVER_ENV_FILE } from './serverEnv.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+
+// The server usually runs detached (`claude-alive start`), so it never sees the
+// interactive shell's exports. Read ~/.claude-alive/.env first — everything
+// below (LITELLM_KEY, CA_DELEGATE_MODEL, the port) reads process.env directly.
+const envFromFile = loadServerEnv();
+if (envFromFile.length > 0) {
+  console.log(`[server] loaded ${envFromFile.join(', ')} from ${SERVER_ENV_FILE}`);
+}
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
@@ -351,8 +360,14 @@ await evalStore.load();
 // in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
 // Its dir is prepended to the agent PATH (main + verifier) so `command -v
 // ca-delegate` resolves — the verifier must know the delegation tool is real.
+// `null` when the delegation CLI is not present in this install — orchestrated
+// tickets then run as plain tickets rather than being handed a tool that fails.
 const delegateCmd = ensureDelegateCli();
-const delegateBinDir = dirname(delegateCmd);
+const delegateBinDir = delegateCmd ? dirname(delegateCmd) : null;
+const delegateModel = resolveDelegateModel(process.env);
+if (!delegateCmd) {
+  console.log('[server] ca-delegate not available in this install — tickets run without orchestration');
+}
 
 // Local cwd allowlist (colon-separated). Applies to LOCAL tickets only; remote
 // (ssh) tickets are gated by the loopback-only create route + host ownership.
@@ -374,7 +389,7 @@ const ticketVerifier = createVerifier({
       cwd,
       permissionMode: 'bypassPermissions',
       ...(flags && (flags.model || flags.effort) ? { run: flags } : {}),
-      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+      ...(orchestrated && delegateBinDir ? { pathPrepend: delegateBinDir } : {}),
     }).done,
 });
 const ticketRunner = createTicketRunner({
@@ -387,12 +402,13 @@ const ticketRunner = createTicketRunner({
     // Orchestrated tickets run with the orchestrator prompt + delegation tool.
     // Only for local execution (the ca-delegate CLI lives on the server host, so
     // an SSH-run agent couldn't call it — remote orchestration is a follow-up).
-    const orchestrated = Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh';
+    const orchestrated =
+      Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh' && delegateCmd !== null;
     const goal = opts?.prompt
       ? // Follow-up reply: wrap the raw answer and resume the same session.
         buildMainPrompt(opts.prompt)
-      : orchestrated
-        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd)
+      : orchestrated && delegateCmd
+        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd, delegateModel)
         : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text);
     // Run profile snapshotted on the ticket at creation. Read from the ticket (not
     // re-resolved from the preset) so retries and decision replies reuse exactly
@@ -427,7 +443,9 @@ const ticketRunner = createTicketRunner({
       },
       // Only the orchestrator run gets the delegate tool + a ticket tag; the
       // verifier deliberately omits CA_TICKET_ID so its re-delegations aren't logged.
-      ...(orchestrated ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } } : {}),
+      ...(orchestrated && delegateBinDir
+        ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } }
+        : {}),
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),

@@ -7,13 +7,24 @@
  * A shell wrapper is written to ~/.claude-alive/bin/ca-delegate at startup
  * (ensureDelegateCli); its absolute path is embedded in the orchestrator prompt.
  */
-import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, appendFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createLitellmClient } from './litellmClient.js';
+import { loadServerEnv } from '../serverEnv.js';
 
-export const DEFAULT_DELEGATE_MODEL = 'gemini/gemini-2.5-flash-lite';
+/**
+ * Fallback delegation model. The gateway's catalogue rotates (a pinned id that
+ * is retired answers HTTP 400 "Invalid model name"), so this is only the last
+ * resort — `CA_DELEGATE_MODEL` overrides it without a rebuild.
+ */
+export const DEFAULT_DELEGATE_MODEL = 'gemini/gemini-3.1-flash-lite-preview';
+
+/** The model ca-delegate uses when the caller passes no `--model`. */
+export function resolveDelegateModel(env: NodeJS.ProcessEnv): string {
+  return env.CA_DELEGATE_MODEL?.trim() || DEFAULT_DELEGATE_MODEL;
+}
 
 /** Where ca-delegate appends one JSON line per delegation (server reads by ticketId). */
 export const DELEGATION_LOG = join(homedir(), '.claude-alive', 'delegations.jsonl');
@@ -47,7 +58,7 @@ export async function runDelegateCli(
   readStdin: () => Promise<string>,
   deps: DelegateDeps = {},
 ): Promise<DelegateResult> {
-  let model = DEFAULT_DELEGATE_MODEL;
+  let model = resolveDelegateModel(env);
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--model') {
@@ -107,14 +118,28 @@ export async function runDelegateCli(
 
 /**
  * Write the `ca-delegate` wrapper into ~/.claude-alive/bin and return its
- * absolute path. The wrapper execs `node <this-module>` so the orchestrator can
- * call it directly. Idempotent.
+ * absolute path, or `null` when the CLI module it would exec is absent.
+ *
+ * The null case is real: this module is bundled INTO dist/server.js, so the
+ * sibling `dist/delegateCli.js` only exists when the packaging step emits it as
+ * its own entry. Writing the wrapper anyway produced a tool that every
+ * orchestrated ticket called and that always died with "Cannot find module" —
+ * so a missing target now removes the stale wrapper and disables orchestration
+ * instead of advertising a broken tool.
  */
-export function ensureDelegateCli(): string {
+export function ensureDelegateCli(): string | null {
   const binDir = join(homedir(), '.claude-alive', 'bin');
-  mkdirSync(binDir, { recursive: true });
   const wrapper = join(binDir, 'ca-delegate');
   const target = fileURLToPath(new URL('./delegateCli.js', import.meta.url));
+  if (!existsSync(target)) {
+    try {
+      rmSync(wrapper, { force: true });
+    } catch {
+      // best-effort cleanup; a leftover wrapper must not stop the server booting
+    }
+    return null;
+  }
+  mkdirSync(binDir, { recursive: true });
   writeFileSync(wrapper, `#!/bin/sh\nexec node ${JSON.stringify(target)} "$@"\n`, { mode: 0o755 });
   return wrapper;
 }
@@ -143,6 +168,10 @@ if (
   fileURLToPath(import.meta.url) === process.argv[1] &&
   import.meta.url.endsWith('delegateCli.js')
 ) {
+  // The agent that runs this tool inherits the server's env, which is a detached
+  // daemon's — so LITELLM_KEY may only exist in ~/.claude-alive/.env. Read it
+  // here too, so a delegation works even when the server booted without the key.
+  loadServerEnv();
   runDelegateCli(process.argv.slice(2), process.env, readAllStdin).then((r) => {
     if (r.stdout) process.stdout.write(r.stdout.endsWith('\n') ? r.stdout : r.stdout + '\n');
     if (r.stderr) process.stderr.write(r.stderr + '\n');
