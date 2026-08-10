@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildMainPrompt, buildOrchestratorPrompt, HEADLINE_INSTRUCTION } from '../ticketPrompt.js';
+import { DELEGATE_MODELS } from '../orchestrator/delegateModels.js';
 
 describe('buildMainPrompt', () => {
   it('appends the HEADLINE instruction to the goal', () => {
@@ -22,10 +23,20 @@ describe('buildMainPrompt', () => {
 describe('buildOrchestratorPrompt', () => {
   // A hardcoded model id in the prompt went stale against the gateway and every
   // delegation the agent tried came back HTTP 400. The caller now owns the id.
-  it('embeds the delegate command and the model it was given', () => {
+  it('embeds the delegate command and the default model it was given', () => {
     const out = buildOrchestratorPrompt('goal', '', '/bin/ca-delegate', 'glm-5.2');
-    expect(out).toContain('/bin/ca-delegate --model glm-5.2 "<하위 작업 프롬프트>"');
+    expect(out).toContain('/bin/ca-delegate --model <모델> "<하위 작업 프롬프트>"');
+    expect(out).toContain('모델을 생략하면 glm-5.2');
     expect(out).not.toContain('gemini-2.5-flash-lite');
+  });
+
+  // An orchestrator told about one model uses one model — the menu is what makes
+  // per-subtask routing (code → kimi, second opinion → grok) possible at all.
+  it('lists the whole model menu and the fallback contract', () => {
+    const out = buildOrchestratorPrompt('goal', '', '/bin/ca-delegate', 'glm-5.2');
+    for (const m of DELEGATE_MODELS) expect(out).toContain(m.id);
+    expect(out).toContain('--no-fallback');
+    expect(out).toContain('--list-models');
   });
 
   it('keeps the guide prefix and the HEADLINE suffix', () => {

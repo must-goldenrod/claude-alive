@@ -395,6 +395,11 @@ function Delegations({ delegations }: { delegations: TicketDelegation[] }) {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
               <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', color: 'var(--accent-blue, #58a6ff)' }}>
+                {/* A fallback took over (first choice rate-limited/retired): show both,
+                    so a substituted answer is never mistaken for the requested model. */}
+                {d.requestedModel && (
+                  <span style={{ color: 'var(--text-secondary, #8b949e)' }}>{d.requestedModel} → </span>
+                )}
                 {d.model}
               </span>
               {meta && (

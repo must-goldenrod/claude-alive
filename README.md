@@ -135,6 +135,8 @@ npm uninstall -g claude-alive
 | `LITELLM_KEY` | — | litellm gateway key; enables the orchestrator's `ca-delegate` sub-agent tool / 오케스트레이터 위임 도구 활성화 |
 | `LITELLM_BASE_URL` | `https://litellm.must.codes` | litellm gateway base URL / 게이트웨이 주소 |
 | `CA_DELEGATE_MODEL` | `gemini/gemini-3.1-flash-lite-preview` | Default delegation model / 기본 위임 모델 |
+| `CA_DELEGATE_FALLBACKS` | per-model table | Comma-separated fallback chain used for every model / 모든 모델에 적용할 대체 체인 |
+| `CA_DELEGATE_TIMEOUT_MS` | `180000` | Per-attempt timeout before falling back / 시도별 타임아웃 |
 
 `claude-alive start` runs the server detached, so it does **not** inherit your shell exports.
 Put the values above in `~/.claude-alive/.env` (`KEY=VALUE` per line, `chmod 600`); anything
@@ -143,6 +145,29 @@ already present in the process env wins over the file.
 `claude-alive start`는 서버를 백그라운드로 띄우므로 셸의 `export`를 물려받지 않습니다.
 위 값들은 `~/.claude-alive/.env`에 `KEY=VALUE` 한 줄씩 넣어두세요 (권한 600). 이미 프로세스
 환경에 설정된 값이 파일보다 우선합니다.
+
+**Sub-agent delegation / 서브에이전트 위임 (`ca-delegate`)**
+
+An orchestrated ticket delegates subtasks with `~/.claude-alive/bin/ca-delegate`. A model that is
+rate-limited (HTTP 429) or retired hands the subtask to the next model in its chain, and the
+rate-limit window it reported is remembered in `~/.claude-alive/delegate-cooldowns.json` so the
+next call skips it instead of spending a round-trip on a known-cold model.
+
+오케스트레이터 티켓은 `~/.claude-alive/bin/ca-delegate`로 하위 작업을 위임합니다. 한도 소진(429)이나
+폐기된 모델은 자동으로 체인의 다음 모델로 넘어가며, 응답에 적힌 재개 시각을
+`~/.claude-alive/delegate-cooldowns.json`에 기록해 다음 호출에서 건너뜁니다.
+
+```bash
+ca-delegate --list-models                  # catalogue + cooldown state / 모델 목록·쿨다운 상태
+ca-delegate --model kimi "<prompt>"        # alias or full id / 별칭 또는 전체 id
+ca-delegate --model grok,glm "<prompt>"    # explicit chain, in order / 명시적 체인
+ca-delegate --model grok --no-fallback "…" # pin one model (cross-checks) / 대체 금지(교차검증용)
+```
+
+stdout is the answer; stderr is a JSON line with the model that actually answered, its token
+usage, failed attempts, and any models skipped for cooldown.
+
+stdout은 답변, stderr는 실제로 답한 모델·토큰 사용량·실패 이력·쿨다운으로 건너뛴 모델이 담긴 JSON입니다.
 
 ---
 

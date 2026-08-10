@@ -6,6 +6,7 @@
  * byte-identical to the original inline prompt — no behaviour change for routes
  * with nothing learned yet.
  */
+import { describeDelegateModels } from './orchestrator/delegateModels.js';
 
 /**
  * The mandatory trailing instruction. The agent ends with exactly one of two
@@ -30,6 +31,10 @@ export function buildMainPrompt(goal: string, guideText = ''): string {
  *
  * `model` is passed in rather than hardcoded: the gateway retires model ids, and
  * a stale id baked into the prompt made every delegation fail with HTTP 400.
+ *
+ * The menu is listed in full because an orchestrator told about one model uses
+ * one model — the point of a dozen backends is picking per subtask (code → kimi,
+ * second opinion → grok, bulk extraction → flash-lite).
  */
 export function buildOrchestratorPrompt(
   goal: string,
@@ -41,7 +46,13 @@ export function buildOrchestratorPrompt(
   const orchestration =
     '너는 오케스트레이터다. 목표를 직접 수행하되, 무겁거나 병렬화 가능하거나 다른 관점이 필요한 ' +
     '하위 작업은 서브에이전트에 위임할 수 있다. 위임 방법(Bash로 실행):\n' +
-    `  ${delegateCmd} --model ${model} "<하위 작업 프롬프트>"\n` +
+    `  ${delegateCmd} --model <모델> "<하위 작업 프롬프트>"\n` +
+    '쓸 수 있는 모델 (별칭·전체 id 둘 다 인식):\n' +
+    `${describeDelegateModels()}\n` +
+    `모델을 생략하면 ${model}. 여러 개를 "a,b" 로 넘기면 앞에서부터 순서대로 시도한다.\n` +
+    '한도 소진(429)·오류가 나면 자동으로 다음 대체 모델로 넘어가며, 실제로 답한 모델은 stderr JSON의 ' +
+    '"model" 필드에 있다 — 교차검증처럼 특정 모델의 의견이어야 의미가 있는 경우엔 --no-fallback 을 붙여 대체를 막아라.\n' +
+    `  ${delegateCmd} --list-models   # 모델 목록과 현재 쿨다운 상태\n` +
     '서브에이전트의 답변이 stdout으로 반환된다. 여러 번/여러 모델로 위임하고 결과를 종합해 판단하라. ' +
     '위임이 불필요하면 직접 처리해도 된다.\n\n---\n';
   return `${prefix}${orchestration}목표: ${goal}${HEADLINE_INSTRUCTION}`;
