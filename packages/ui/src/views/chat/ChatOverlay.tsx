@@ -91,6 +91,11 @@ interface ChatOverlayProps {
   contentViewActive?: boolean;
   /** Pixel width of the visible left sidebar. Used to compute the list-view left inset. */
   listLeftInset?: number;
+  /**
+   * Left edge of the repo sidebar. Body-wide terminal modes start here so the
+   * sidebar stays reachable; collapsing the sidebar drops it back to 0.
+   */
+  leftInset?: number;
   /** Called whenever the set of SSH tabs changes. Enables App/Sidebar to show a presence indicator. */
   onSshSessionsChange?: (sessions: SshSessionInfo[]) => void;
   /**
@@ -175,8 +180,9 @@ function getListViewStyle(listLeftInset: number): React.CSSProperties {
   };
 }
 
-// Spread View occupies the full body area (below the header, full width — no sidebar inset).
-function getSpreadViewStyle(): React.CSSProperties {
+// Spread View occupies the body area below the header, starting past the repo
+// sidebar — covering it would put the tiles on top of the only way to switch runs.
+function getSpreadViewStyle(leftInset: number): React.CSSProperties {
   return {
     position: 'fixed',
     zIndex: 30,
@@ -187,8 +193,8 @@ function getSpreadViewStyle(): React.CSSProperties {
     borderTop: '1px solid var(--border-color)',
     overflow: 'hidden',
     top: HEADER_HEIGHT,
-    left: 0,
-    width: '100vw',
+    left: leftInset,
+    width: `calc(100vw - ${leftInset}px)`,
     height: `calc(100vh - ${HEADER_HEIGHT}px)`,
     borderRadius: 0,
     transform: 'none',
@@ -210,7 +216,12 @@ const OVERLAY_TRANSITION = [
   'opacity 720ms ease',
 ].join(', ');
 
-function getModeStyle(mode: TerminalMode, bottomHeight?: number, rightWidth?: number): React.CSSProperties {
+function getModeStyle(
+  mode: TerminalMode,
+  bottomHeight?: number,
+  rightWidth?: number,
+  leftInset = 0,
+): React.CSSProperties {
   const base: React.CSSProperties = {
     position: 'fixed',
     zIndex: 30,
@@ -239,7 +250,7 @@ function getModeStyle(mode: TerminalMode, bottomHeight?: number, rightWidth?: nu
       return {
         ...base,
         bottom: 0,
-        left: 0,
+        left: leftInset,
         right: 0,
         height: bottomHeight ?? '50vh',
         borderRadius: 0,
@@ -263,7 +274,7 @@ function getModeStyle(mode: TerminalMode, bottomHeight?: number, rightWidth?: nu
       return {
         ...base,
         top: HEADER_HEIGHT,
-        left: 0,
+        left: leftInset,
         right: 0,
         bottom: 0,
         borderRadius: 0,
@@ -322,7 +333,7 @@ const MODE_I18N: Record<TerminalMode, string> = {
   fullscreen: 'terminal.modeFullscreen',
 };
 
-export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds, connected = false, onAttach, spreadActive = false, onSelectSpreadTile }: ChatOverlayProps) {
+export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClose, terminalEventRef, projectPaths = [], listViewActive = false, contentViewActive = false, listLeftInset = 0, leftInset = 0, onSshSessionsChange, onChatClaudeSessionsChange, projectNames, waitingSessionIds, connected = false, onAttach, spreadActive = false, onSelectSpreadTile }: ChatOverlayProps) {
   const { t } = useTranslation();
   const isListView = listViewActive;
 
@@ -1020,7 +1031,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       onResizeRef.current?.(activeTabId, entry.term.cols, entry.term.rows);
     }, 1300);
     return () => clearTimeout(timer);
-  }, [listViewActive, listLeftInset, activeTabId, spreadActive]);
+  }, [listViewActive, listLeftInset, leftInset, activeTabId, spreadActive]);
 
   // Re-fit terminals when mode changes (container size changes).
   // Matches the 1260ms positional transition + 40ms buffer.
@@ -1259,8 +1270,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const layoutStyle = isListView
     ? getListViewStyle(listLeftInset)
     : spreadActive
-      ? getSpreadViewStyle()
-      : getModeStyle(mode, bottomHeight, rightWidth);
+      ? getSpreadViewStyle(leftInset)
+      : getModeStyle(mode, bottomHeight, rightWidth, leftInset);
   // In list/spread view with no open tabs, hide the terminal surface so the empty-state
   // rendered in the body shows through. Opening/resuming a tab brings the overlay back.
   const listViewEmpty = isListView && !hasTabs;

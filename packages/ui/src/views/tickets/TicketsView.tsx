@@ -18,11 +18,13 @@ interface TicketsViewProps {
   selection: Selection;
   /** Run records, used to decide which repo a ticket belongs to. */
   runs: readonly RunLocationRef[];
+  /** Left edge of the shell's content area; the to-do dock starts past it. */
+  leftInset: number;
 }
 
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
-export function TicketsView({ active, subscribeRaw, selection, runs }: TicketsViewProps) {
+export function TicketsView({ active, subscribeRaw, selection, runs, leftInset }: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -66,11 +68,12 @@ export function TicketsView({ active, subscribeRaw, selection, runs }: TicketsVi
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
-      {/* Detached To-do dock: fixed to the viewport's left edge so it floats
-          independently of the centered composer/board frame — it must not push
-          or reflow the existing layout. Lives inside TicketsView so it inherits
-          the view's display toggle (hidden on other tabs automatically). */}
-      <div style={{ position: 'fixed', top: 72, left: 24, width: 300, zIndex: 20 }}>
+      {/* Detached To-do dock: fixed so it floats independently of the centered
+          composer/board frame — it must not push or reflow the existing layout.
+          It starts past the repo sidebar rather than at the viewport edge, or it
+          would sit on top of it. Lives inside TicketsView so it inherits the
+          view's display toggle (hidden on other tabs automatically). */}
+      <div style={{ position: 'fixed', top: 72, left: leftInset + 24, width: 300, zIndex: 20 }}>
         <TodoList />
       </div>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
