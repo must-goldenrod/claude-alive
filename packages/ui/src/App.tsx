@@ -10,6 +10,7 @@ import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { RepoSidebar } from './components/RepoSidebar/RepoSidebar.tsx';
 import { useRunTree } from './hooks/useRunTree.ts';
+import { layoutInsets } from './state/layoutInsets.ts';
 import { loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
@@ -439,10 +440,11 @@ export default function App() {
 
   // In List view, terminal is always visible. In Animation view, follow chatOpen.
   const chatEffectivelyOpen = viewMode === 'list' || viewMode === 'spread' ? true : chatOpen;
-  // Left inset for the list-view terminal layout: matches the ProjectSidebar width when open.
-  // Keep in sync with ProjectSidebar's own width (300px in its component).
-  const SIDEBAR_WIDTH = 300;
-  const listLeftInset = leftPanelOpen ? SIDEBAR_WIDTH : 0;
+  // Left insets for everything positioned against the viewport. Both sidebars
+  // answer to the header's single left-panel toggle, so one flag drives all of
+  // them — see state/layoutInsets.ts for the widths.
+  const insets = layoutInsets(leftPanelOpen);
+  const listLeftInset = insets.list;
 
   // When Ticket Management deep-links "view the process in the session", we switch to
   // the session-management (archive) view and ask it to focus this Claude session id.
@@ -553,14 +555,16 @@ export default function App() {
         {/* Sidebar + views share one row. ChatOverlay stays a sibling of this
             row so its absolute coordinates against the outer box are unchanged. */}
         <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
-        <RepoSidebar
-          tree={runTree}
-          selection={selection}
-          onAction={dispatchSelection}
-          onNewRun={handleNewRun}
-          onCloseRun={(runId, outcome) => void closeRun(runId, outcome)}
-          onAbandonRun={(runId) => void abandonRun(runId)}
-        />
+        {leftPanelOpen && (
+          <RepoSidebar
+            tree={runTree}
+            selection={selection}
+            onAction={dispatchSelection}
+            onNewRun={handleNewRun}
+            onCloseRun={(runId, outcome) => void closeRun(runId, outcome)}
+            onAbandonRun={(runId) => void abandonRun(runId)}
+          />
+        )}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
         <ErrorBoundary>
           {/* Both views stay mounted. Only CSS display toggles — preserves game state, selected agent, list scroll, etc. */}
@@ -619,6 +623,7 @@ export default function App() {
                 subscribeRaw={subscribeRaw}
                 selection={selection}
                 runs={runTree.runs}
+                leftInset={insets.repo}
               />
             </Suspense>
           </div>
@@ -648,6 +653,7 @@ export default function App() {
           listViewActive={viewMode === 'list'}
           contentViewActive={viewMode === 'board'}
           listLeftInset={listLeftInset}
+          leftInset={insets.repo}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}
           projectNames={projectNames}
