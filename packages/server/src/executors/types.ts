@@ -9,6 +9,7 @@
  * plugs in here.
  */
 import type { HeadlessRunHandle } from '../headlessClaude.js';
+import type { ResolvedFlags } from '../agentFlags.js';
 
 export interface AgentSpawnRequest {
   /** Full prompt (already includes any learned guide + the HEADLINE instruction). */
@@ -23,6 +24,23 @@ export interface AgentSpawnRequest {
   pathPrepend?: string;
   /** Extra env vars for the agent process (e.g. CA_TICKET_ID for delegation tagging). */
   extraEnv?: Record<string, string>;
+  /**
+   * Requested model/effort for this run (resolved from the ticket's preset). The
+   * executor probes the target CLI and silently drops anything it cannot accept —
+   * an unsupported flag degrades the run, it never fails it.
+   */
+  run?: { model?: string; effort?: string };
+  /**
+   * Reports which requested flags actually reached the CLI and which were dropped.
+   * Called once the executor has resolved capabilities, before the process starts.
+   */
+  onFlagsResolved?: (resolved: ResolvedFlags) => void;
+  /**
+   * Reports the agent's session id as soon as the stream announces it, so the
+   * caller can persist a resumable handle before the run ends. Without this the
+   * id is only known at exit, and a killed run leaves nothing to resume.
+   */
+  onSessionId?: (sessionId: string) => void;
 }
 
 export interface Executor {

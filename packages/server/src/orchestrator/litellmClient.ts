@@ -34,9 +34,30 @@ export interface LitellmCheckResult {
   error?: string;
 }
 
+export interface LitellmChatOptions {
+  /** Abort the request after this many ms (a hung model must not block a delegation forever). */
+  timeoutMs?: number;
+}
+
 export interface LitellmClient {
   checkConnection(): Promise<LitellmCheckResult>;
-  chat(model: string, messages: LitellmMessage[]): Promise<LitellmChatResult>;
+  chat(model: string, messages: LitellmMessage[], opts?: LitellmChatOptions): Promise<LitellmChatResult>;
+}
+
+/**
+ * A non-2xx answer from the gateway, carrying the bits a caller needs to decide
+ * whether to retry on another model: the status and the raw body (429s state
+ * their own reset window in prose) plus `retry-after` when the gateway sends it.
+ */
+export class LitellmHttpError extends Error {
+  readonly name = 'LitellmHttpError';
+  constructor(
+    readonly status: number,
+    readonly body: string,
+    readonly retryAfter: string | null = null,
+  ) {
+    super(`litellm chat failed (HTTP ${status}): ${body.slice(0, 300)}`);
+  }
 }
 
 type FetchFn = typeof fetch;
@@ -63,15 +84,16 @@ export function createLitellmClient(config: LitellmConfig, deps: { fetch?: Fetch
       }
     },
 
-    async chat(model, messages) {
+    async chat(model, messages, opts = {}) {
       const res = await doFetch(`${base}/v1/chat/completions`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, messages }),
+        ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new Error(`litellm chat failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
+        throw new LitellmHttpError(res.status, text, res.headers?.get?.('retry-after') ?? null);
       }
       const body = (await res.json()) as {
         model?: string;

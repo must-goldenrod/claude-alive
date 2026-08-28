@@ -54,6 +54,8 @@ export function TicketDissection({ record, guideRefreshKey, onLabel, onReflect }
     try {
       await onLabel({ label, weight, note });
       flashSaved();
+    } catch {
+      // The parent owns recovery. A rejected mutation must not be presented as saved.
     } finally {
       setBusy(false);
     }
@@ -82,6 +84,7 @@ export function TicketDissection({ record, guideRefreshKey, onLabel, onReflect }
       {/* Meta stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
         <Stat label={t('ticketMgmt.detail.model')} value={record.model || '—'} mono />
+        <Stat label={t('ticketMgmt.detail.effort')} value={record.effort || '—'} mono />
         <Stat label={t('ticketMgmt.detail.completedAt')} value={fmtFull(record.completedAt)} />
         <Stat
           label={t('ticketMgmt.detail.verdict')}

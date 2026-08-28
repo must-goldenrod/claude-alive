@@ -113,6 +113,8 @@ export function createEvalStore(options: EvalStoreOptions = {}): EvalStore {
         goal: ticket.goal,
         claudeSessionId: ticket.claudeSessionId,
         model: ticket.model,
+        preset: ticket.preset,
+        effort: ticket.effort,
         headline: ticket.headline,
         verdictPassed: ticket.verification?.passed,
         failureReason: ticket.failureReason,

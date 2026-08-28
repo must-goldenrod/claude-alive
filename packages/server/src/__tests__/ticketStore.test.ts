@@ -38,6 +38,37 @@ describe('createTicketStore', () => {
     expect(onDisk[0].id).toBe('id-1');
   });
 
+  it('snapshots the run preset into concrete model/effort at creation', async () => {
+    const store = makeStore();
+    const t = await store.create({ goal: 'do X', cwd: '/repo', preset: 'deep' });
+    expect(t).toMatchObject({ preset: 'deep', requestedModel: 'claude-opus-5', effort: 'max' });
+
+    const onDisk = JSON.parse(await readFile(filePath, 'utf-8'));
+    expect(onDisk[0]).toMatchObject({ preset: 'deep', requestedModel: 'claude-opus-5', effort: 'max' });
+  });
+
+  it('snapshots the medium preset as the same model as standard, one effort step down', async () => {
+    const store = makeStore();
+    const t = await store.create({ goal: 'do X', cwd: '/repo', preset: 'medium' });
+    expect(t).toMatchObject({ preset: 'medium', requestedModel: 'claude-opus-5', effort: 'medium' });
+  });
+
+  it('leaves the run profile unset when no preset is given (CLI defaults)', async () => {
+    const store = makeStore();
+    const t = await store.create({ goal: 'do X', cwd: '/repo' });
+    expect(t.preset).toBeUndefined();
+    expect(t.requestedModel).toBeUndefined();
+    expect(t.effort).toBeUndefined();
+  });
+
+  it('keeps the snapshot on reload so a retry reuses the original profile', async () => {
+    const a = makeStore();
+    await a.create({ goal: 'g', cwd: '/r', preset: 'fast' });
+    const b = makeStore();
+    await b.load();
+    expect(b.list()[0]).toMatchObject({ preset: 'fast', requestedModel: 'claude-sonnet-5', effort: 'low' });
+  });
+
   it('reloads persisted tickets from disk', async () => {
     const a = makeStore();
     await a.create({ goal: 'g1', cwd: '/r' });

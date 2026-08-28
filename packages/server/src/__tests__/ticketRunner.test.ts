@@ -287,9 +287,29 @@ describe('TicketRunner lifecycle', () => {
     expect(store.list().every((t) => t.state === 'done')).toBe(true);
   });
 
-  it('times out a stuck ticket and kills the process', async () => {
+  it('runs without any wallclock cap by default — a long ticket is never killed', async () => {
+    // A ticket may legitimately run for a day. An unattended kill burns the
+    // tokens already spent and leaves nothing to resume, so no timer is armed
+    // unless a cap is explicitly configured.
+    const kill = vi.fn();
+    const setTimer = vi.fn(() => () => {});
+    const { runner } = makeRunner({
+      spawnMain: () => ({ kill, done: new Promise<MainOutcome>(() => {}) }), // never resolves
+      setTimer,
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'running');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(setTimer).not.toHaveBeenCalled();
+    expect(kill).not.toHaveBeenCalled();
+    expect(store.get(t.id)?.state).toBe('running');
+  });
+
+  it('still honours an explicitly configured cap', async () => {
     const kill = vi.fn();
     const { runner } = makeRunner({
+      timeoutMs: 60_000,
       spawnMain: () => ({ kill, done: new Promise<MainOutcome>(() => {}) }), // never resolves
       setTimer: (cb) => {
         const t = setTimeout(cb, 0);
@@ -301,6 +321,43 @@ describe('TicketRunner lifecycle', () => {
     await until(() => store.get(t.id)?.state === 'failed');
     expect(store.get(t.id)?.failureReason).toBe('timeout');
     expect(kill).toHaveBeenCalled();
+  });
+
+  it('records the Claude session id as soon as the agent reports it', async () => {
+    // Without this the id only lands when a round finishes cleanly, so a
+    // cancelled or crashed run leaves no thread to resume — the tokens are spent
+    // and the work is unreachable.
+    let emit: ((id: string) => void) | undefined;
+    const { runner } = makeRunner({
+      spawnMain: (_t, opts) => {
+        emit = opts?.onSessionId;
+        return { kill() {}, done: new Promise<MainOutcome>(() => {}) };
+      },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => !!emit);
+    emit!('sess-early');
+    await until(() => store.get(t.id)?.claudeSessionId === 'sess-early');
+    expect(store.get(t.id)?.state).toBe('running');
+  });
+
+  it('keeps the session id on a cancelled ticket so the thread stays resumable', async () => {
+    let emit: ((id: string) => void) | undefined;
+    const { runner } = makeRunner({
+      spawnMain: (_t, opts) => {
+        emit = opts?.onSessionId;
+        return { kill() {}, done: new Promise<MainOutcome>(() => {}) };
+      },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => !!emit);
+    emit!('sess-early');
+    await until(() => store.get(t.id)?.claudeSessionId === 'sess-early');
+    await runner.cancel(t.id);
+    expect(store.get(t.id)?.state).toBe('failed');
+    expect(store.get(t.id)?.claudeSessionId).toBe('sess-early');
   });
 
   it('cancels a queued ticket without ever spawning it', async () => {

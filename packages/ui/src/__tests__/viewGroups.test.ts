@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { VIEW_MODE_META, viewsInGroup, groupOf } from '../components/viewGroups.ts';
+import {
+  VIEW_MODE_META,
+  viewsInGroup,
+  groupOf,
+  normalizeViewMode,
+} from '../components/viewGroups.ts';
 
 describe('viewGroups', () => {
   it('places tickets alone in the primary group', () => {
@@ -7,22 +12,18 @@ describe('viewGroups', () => {
     expect(primary.map((m) => m.mode)).toEqual(['tickets']);
   });
 
-  it('groups observation/hands-on views under intervene, in order', () => {
-    expect(viewsInGroup('intervene').map((m) => m.mode)).toEqual([
+  it('groups live observation views under monitor, in order', () => {
+    expect(viewsInGroup('monitor').map((m) => m.mode)).toEqual([
       'animation',
       'list',
       'spread',
     ]);
   });
 
-  it('groups productivity views under tools, in order', () => {
+  it('groups analysis/productivity views under tools, board first', () => {
     expect(viewsInGroup('tools').map((m) => m.mode)).toEqual([
+      'board',
       'workspace',
-      'prompt',
-      'efficio',
-      'archive',
-      'ticketMgmt',
-      'backends',
     ]);
   });
 
@@ -42,5 +43,17 @@ describe('viewGroups', () => {
     for (const m of VIEW_MODE_META) {
       expect(m.labelKey).toMatch(/^viewMode\./);
     }
+  });
+
+  it.each(['prompt', 'efficio', 'archive', 'ticketMgmt', 'data'] as const)(
+    'normalizes legacy %s navigation to board',
+    (mode) => {
+      expect(normalizeViewMode(mode)).toBe('board');
+    },
+  );
+
+  it('preserves non-legacy navigation modes', () => {
+    expect(normalizeViewMode('tickets')).toBe('tickets');
+    expect(normalizeViewMode('spread')).toBe('spread');
   });
 });

@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TicketLocation } from '@claude-alive/core';
+import type { TicketLocation, TicketRunPreset } from '@claude-alive/core';
 import type { TicketCreateFn } from './useTickets.ts';
 import { FolderPicker } from './FolderPicker.tsx';
 import { RemoteFolderPicker } from './RemoteFolderPicker.tsx';
 import { loadPresets, SSH_PRESETS_CHANGED } from '../chat/sshPresets.ts';
+import { DEFAULT_RUN_PRESET, RUN_PRESET_IDS, RUN_PRESET_PREVIEW, runPresetLabelKey } from './runPresets.ts';
 
 interface NewTicketFormProps {
+  /**
+   * Working directory chosen elsewhere (the sidebar's per-worktree "+"). It
+   * seeds the folder picker so starting a run from a branch skips the picker.
+   */
+  presetCwd?: string;
   onCreate: TicketCreateFn;
 }
 
@@ -14,10 +20,16 @@ function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
 }
 
-export function NewTicketForm({ onCreate }: NewTicketFormProps) {
+export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
   const { t } = useTranslation();
   const [goal, setGoal] = useState('');
   const [cwd, setCwd] = useState('');
+
+  // A newly supplied preset wins over whatever the picker held; the user just
+  // asked for that worktree explicitly.
+  useEffect(() => {
+    if (presetCwd) setCwd(presetCwd);
+  }, [presetCwd]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [remotePickerOpen, setRemotePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -33,7 +45,12 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
     return () => window.removeEventListener(SSH_PRESETS_CHANGED, onChange);
   }, []);
   const [locId, setLocId] = useState('local');
-  const [orchestrated, setOrchestrated] = useState(false);
+  // Default ON: orchestrated runs are the normal way tickets are executed here,
+  // so the checkbox starts checked and stays a one-click opt-out.
+  const [orchestrated, setOrchestrated] = useState(true);
+  // Which model/effort the agent runs with. `standard` reproduces the behaviour
+  // tickets had before presets existed, so the default changes nothing.
+  const [runPreset, setRunPreset] = useState<TicketRunPreset>(DEFAULT_RUN_PRESET);
   const preset = sshHosts.find((p) => p.id === locId);
   const isRemote = Boolean(preset);
 
@@ -51,7 +68,7 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
     if (!canSubmit) return;
     setSubmitting(true);
     // Orchestrator mode delegates to sub-agents; only meaningful for local runs.
-    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote);
+    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote, runPreset);
     setSubmitting(false);
     if (err) {
       setError(err); // surface the server's specific reason (e.g. bad cwd)
@@ -234,6 +251,53 @@ export function NewTicketForm({ onCreate }: NewTicketFormProps) {
         >
           {submitting ? t('tickets.creating') : t('tickets.create')}
         </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)' }}>{t('tickets.presetLabel')}</span>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--bg-tertiary, #21262d)', padding: 3, borderRadius: 10 }}>
+          {RUN_PRESET_IDS.map((id) => {
+            const active = runPreset === id;
+            const preview = RUN_PRESET_PREVIEW[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setRunPreset(id)}
+                // The model line names the version on every option rather than
+                // only the selected one, so the cost ramp is legible without
+                // clicking through. The exact `--model` id stays one hover away.
+                title={`--model ${preview.model} --effort ${preview.effort}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                  fontSize: 12,
+                  fontWeight: active ? 600 : 500,
+                  padding: '4px 12px 5px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: active ? 'var(--bg-secondary, #161b22)' : 'transparent',
+                  color: active ? 'var(--accent-blue, #58a6ff)' : 'var(--text-secondary, #8b949e)',
+                  cursor: 'pointer',
+                }}
+              >
+                <span>{t(runPresetLabelKey(id))}</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono, monospace)',
+                    fontSize: 10,
+                    fontWeight: 400,
+                    letterSpacing: -0.2,
+                    opacity: active ? 0.85 : 0.6,
+                  }}
+                >
+                  {preview.modelLabel} · {preview.effort}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
       {!isRemote && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary, #8b949e)', cursor: 'pointer', userSelect: 'none' }}>

@@ -41,6 +41,60 @@ export const STATUS_COLOR: Record<DisplayStatus, string> = {
   failed: 'var(--accent-red, #f85149)',
 };
 
+/** One labeled choice parsed out of a decision question. */
+export interface DecisionOption {
+  /** The option's label, uppercased — e.g. "A" or "1". */
+  key: string;
+  /** The option's text, with the label and separator stripped. */
+  text: string;
+}
+
+/** A decision question split into its stem and (optional) labeled options. */
+export interface ParsedDecision {
+  /** The question stem shown above the options (may be empty). */
+  prompt: string;
+  /** Parsed options; empty when the question has no recognizable A/B/C list. */
+  options: DecisionOption[];
+}
+
+// A boundary char, then a single label (A–H or 1–9), an optional space, a
+// separator, and trailing whitespace: matches "A) ", "B: ", "1. ", "A ： ".
+const OPTION_MARKER = /(?:^|[\s([{/|,·•])([A-Ha-h]|[1-9])\s*[).:：）\]]\s+/g;
+
+/**
+ * Split a single-line decision question into its stem and labeled options.
+ * Recognizes lists like "… A) foo B) bar C) baz", "1. foo 2. bar", or
+ * "A: foo / B: bar". Requires at least two options that start at A/1 and run in
+ * order; otherwise returns the whole string as the prompt with no options, so an
+ * unparseable question still renders as plain text.
+ */
+export function parseDecisionOptions(question: string): ParsedDecision {
+  const raw = question.trim();
+  const marks: { key: string; markStart: number; textStart: number }[] = [];
+  OPTION_MARKER.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = OPTION_MARKER.exec(raw)) !== null) {
+    // Skip the leading boundary char (if any) so markStart points at the label.
+    const lead = m[0].length - m[0].replace(/^[\s([{/|,·•]+/, '').length;
+    marks.push({ key: m[1].toUpperCase(), markStart: m.index + lead, textStart: OPTION_MARKER.lastIndex });
+  }
+  if (marks.length < 2) return { prompt: raw, options: [] };
+
+  // Accept only a clean A,B,C… or 1,2,3… run starting at the first marker; this
+  // keeps stray "e.g." / "3.14" fragments from being mistaken for options.
+  const isAlpha = /[A-H]/.test(marks[0].key);
+  const expected = (i: number) => (isAlpha ? String.fromCharCode(65 + i) : String(i + 1));
+  const sequential = marks.every((mk, i) => mk.key === expected(i));
+  if (!sequential || marks[0].key !== (isAlpha ? 'A' : '1')) return { prompt: raw, options: [] };
+
+  const prompt = raw.slice(0, marks[0].markStart).replace(/[\s:：\-–—]+$/, '').trim();
+  const options: DecisionOption[] = marks.map((mk, i) => {
+    const end = i + 1 < marks.length ? marks[i + 1].markStart : raw.length;
+    return { key: mk.key, text: raw.slice(mk.textStart, end).trim().replace(/[\s,/|]+$/, '') };
+  });
+  return { prompt, options };
+}
+
 /** Project badge = the cwd's last path segment. */
 export function projectName(cwd: string): string {
   const parts = cwd.replace(/\/+$/, '').split('/');

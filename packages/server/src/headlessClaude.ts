@@ -22,6 +22,14 @@ export interface HeadlessProcessHandle {
   onExit(cb: (code: number | null) => void): void;
 }
 
+/** Model/effort flags for one run. Already filtered against the target's capabilities. */
+export interface HeadlessRunFlags {
+  /** `--model` value (alias or full id). Omitted = the CLI's configured default. */
+  model?: string;
+  /** `--effort` value. Omitted = the user's global `effortLevel` setting. */
+  effort?: string;
+}
+
 export interface HeadlessSpawnArgs {
   goal: string;
   cwd: string;
@@ -29,6 +37,8 @@ export interface HeadlessSpawnArgs {
   env: NodeJS.ProcessEnv;
   /** Resume a prior Claude session (`--resume <id>`) for follow-up turns. */
   resumeSessionId?: string;
+  /** Per-run model/effort selection (spec: ticket run presets). */
+  flags?: HeadlessRunFlags;
 }
 
 export interface HeadlessRunOptions {
@@ -47,6 +57,8 @@ export interface HeadlessRunOptions {
   pathPrepend?: string;
   /** Extra env vars for the agent process (e.g. CA_TICKET_ID for delegation tagging). */
   extraEnv?: Record<string, string>;
+  /** Per-run model/effort selection, pre-filtered against the CLI's capabilities. */
+  flags?: HeadlessRunFlags;
   /** Injectable spawn for tests. Production builds a real `claude` child process. */
   spawnProcess?: (args: HeadlessSpawnArgs) => HeadlessProcessHandle;
   /** Observe each classified stream event (activity is intentionally opaque). */
@@ -65,10 +77,22 @@ export interface HeadlessRunHandle {
   done: Promise<HeadlessOutcome>;
 }
 
-/** Build the argv for `claude`. `--verbose` is required for stream-json to emit per-turn events. */
-export function buildHeadlessArgs(goal: string, permissionMode: string, resumeSessionId?: string): string[] {
+/**
+ * Build the argv for `claude`. `--verbose` is required for stream-json to emit
+ * per-turn events. `flags` is appended only for values the caller has already
+ * confirmed the target CLI supports (see `agentFlags.ts`) — this function does no
+ * capability checking of its own.
+ */
+export function buildHeadlessArgs(
+  goal: string,
+  permissionMode: string,
+  resumeSessionId?: string,
+  flags?: HeadlessRunFlags,
+): string[] {
   const args = ['-p', goal, '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
   if (resumeSessionId) args.push('--resume', resumeSessionId);
+  if (flags?.model) args.push('--model', flags.model);
+  if (flags?.effort) args.push('--effort', flags.effort);
   return args;
 }
 
@@ -125,7 +149,8 @@ export function consumeHeadless(
 }
 
 function realSpawn(args: HeadlessSpawnArgs): HeadlessProcessHandle {
-  const child = spawn('claude', buildHeadlessArgs(args.goal, args.permissionMode, args.resumeSessionId), {
+  const argv = buildHeadlessArgs(args.goal, args.permissionMode, args.resumeSessionId, args.flags);
+  const child = spawn('claude', argv, {
     cwd: args.cwd,
     env: args.env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -153,6 +178,41 @@ export function runHeadlessClaude(options: HeadlessRunOptions): HeadlessRunHandl
     permissionMode,
     env,
     resumeSessionId: options.resumeSessionId,
+    flags: options.flags,
   });
   return consumeHeadless(proc, options.onEvent);
+}
+
+/** How long a capability probe may take before we assume "no support". */
+const PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * Read `claude --help` from the local CLI for capability detection. Resolves the
+ * help text, or rejects — callers route rejection to NO_FLAG_SUPPORT via the
+ * flag cache, so a missing/hanging `claude` degrades instead of throwing.
+ */
+export function probeLocalClaudeHelp(): Promise<string> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('claude', ['--help'], { env: cleanEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    let done = false;
+    const finish = (fn: () => void): void => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => {
+      finish(() => {
+        child.kill();
+        reject(new Error('claude --help timed out'));
+      });
+    }, PROBE_TIMEOUT_MS);
+    child.stdout.setEncoding('utf-8');
+    child.stdout.on('data', (c: string) => {
+      out += c;
+    });
+    child.on('error', (e) => finish(() => reject(e)));
+    child.on('exit', () => finish(() => resolvePromise(out)));
+  });
 }

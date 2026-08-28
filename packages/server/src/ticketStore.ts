@@ -11,6 +11,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { resolveRunProfile } from '@claude-alive/core';
 import type { Ticket, TicketCreateInput } from '@claude-alive/core';
 
 const DEFAULT_FILE = join(homedir(), '.claude-alive', 'tickets.json');
@@ -100,6 +101,9 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
     },
 
     async create(input) {
+      // Resolve the preset NOW and store the concrete flags alongside it, so a
+      // later change to the preset table never rewrites what an old ticket ran with.
+      const profile = resolveRunProfile(input.preset);
       const ticket: Ticket = {
         id: uuid(),
         seq: nextSeq++,
@@ -107,6 +111,8 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
         cwd: input.cwd,
         ...(input.location ? { location: input.location } : {}),
         ...(input.orchestrated ? { orchestrated: true } : {}),
+        ...(input.preset ? { preset: input.preset } : {}),
+        ...(profile ? { requestedModel: profile.model, effort: profile.effort } : {}),
         state: 'queued',
         createdAt: now(),
       };

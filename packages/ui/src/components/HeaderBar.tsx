@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ViewMode } from '../App.tsx';
 import type { SystemMetrics } from '../views/dashboard/hooks/useWebSocket.ts';
-import { viewsInGroup } from './viewGroups.ts';
+import { viewsInGroup, type ViewGroup } from './viewGroups.ts';
 import {
   currentPermission,
   notificationsEnabled as readNotificationsEnabled,
@@ -96,7 +96,7 @@ function MetricPill({ label, ratio, primary, secondary }: MetricPillProps) {
   );
 }
 
-/** A single segmented pill inside a nav group (intervene group). */
+/** A single segmented pill inside a nav group. */
 function NavPill({
   active,
   label,
@@ -133,120 +133,45 @@ function NavPill({
 }
 
 /**
- * The "도구/Tools" dropdown — productivity views (workspace/prompt/efficio/archive)
- * are managed separately from the ticket→intervene flow, so they collapse into a
- * single de-emphasised menu instead of taking header real estate. Closes on outside
- * click and Escape.
+ * A segmented group of nav pills. Rendered without a visible caption — the pill
+ * labels already say what each surface is, so the group name only exists for
+ * assistive tech via `aria-label`.
  */
-function ToolsMenu({
+function NavGroup({
+  group,
+  ariaLabel,
   viewMode,
   onSelect,
   t,
 }: {
+  group: ViewGroup;
+  ariaLabel: string;
   viewMode: ViewMode;
   onSelect: (mode: ViewMode) => void;
   t: (key: string) => string;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onEsc);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onEsc);
-    };
-  }, [open]);
-
-  const tools = viewsInGroup('tools');
-  const activeMeta = tools.find((m) => m.mode === viewMode);
-  const isActive = Boolean(activeMeta);
-
+  const views = viewsInGroup(group);
+  if (views.length === 0) return null;
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        style={{
-          padding: '6px 12px',
-          fontSize: 12,
-          fontWeight: 600,
-          fontFamily: 'inherit',
-          borderRadius: 8,
-          cursor: 'pointer',
-          border: '1px solid var(--border-color)',
-          color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-          background: isActive ? 'var(--bg-primary)' : 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          whiteSpace: 'nowrap',
-          transition: 'all 0.15s ease',
-        }}
-      >
-        <span>
-          {t('viewMode.groupTools')}
-          {activeMeta ? ` · ${t(activeMeta.labelKey)}` : ''}
-        </span>
-        <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
-      </button>
-      {open && (
-        <div
-          role="menu"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            minWidth: 168,
-            zIndex: 1100,
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 10,
-            padding: 4,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}
-        >
-          {tools.map((m) => {
-            const active = m.mode === viewMode;
-            return (
-              <button
-                key={m.mode}
-                role="menuitem"
-                onClick={() => {
-                  onSelect(m.mode);
-                  setOpen(false);
-                }}
-                style={{
-                  textAlign: 'left',
-                  padding: '7px 10px',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  fontFamily: 'inherit',
-                  border: 'none',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  background: active ? 'rgba(88,166,255,0.12)' : 'transparent',
-                }}
-              >
-                {t(m.labelKey)}
-              </button>
-            );
-          })}
-        </div>
-      )}
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      style={{
+        display: 'flex',
+        background: 'rgba(255, 255, 255, 0.04)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 8,
+        padding: 2,
+      }}
+    >
+      {views.map(({ mode, labelKey }) => (
+        <NavPill
+          key={mode}
+          active={viewMode === mode}
+          label={t(labelKey)}
+          onClick={() => onSelect(mode)}
+        />
+      ))}
     </div>
   );
 }
@@ -347,8 +272,8 @@ export function HeaderBar({
         />
       </div>
 
-      {/* View navigation — three tiers by usage frequency:
-          primary (ticket hub) · intervene (drop-in observation) · tools (managed separately). */}
+      {/* View navigation — three inline tiers, no dropdown and no group captions:
+          primary (ticket hub) · monitor (live observation) · tools (board + workspace). */}
       <div
         role="group"
         aria-label={t('viewMode.label')}
@@ -384,34 +309,25 @@ export function HeaderBar({
 
         <div style={{ width: 1, height: 22, background: 'var(--border-color)' }} />
 
-        {/* Tier 2 — Intervene: one click away for when a ticket needs a closer look.
-            The group label is intentionally not shown; the tablist keeps it as an
-            aria-label for screen readers only. */}
-        <div
-          role="tablist"
-          aria-label={t('viewMode.groupIntervene')}
-          style={{
-            display: 'flex',
-            background: 'rgba(255, 255, 255, 0.04)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 8,
-            padding: 2,
-          }}
-        >
-          {viewsInGroup('intervene').map(({ mode, labelKey }) => (
-            <NavPill
-              key={mode}
-              active={viewMode === mode}
-              label={t(labelKey)}
-              onClick={() => onViewModeChange(mode)}
-            />
-          ))}
-        </div>
+        {/* Tier 2 — Monitor: live observation surfaces. */}
+        <NavGroup
+          group="monitor"
+          ariaLabel={t('viewMode.groupMonitor')}
+          viewMode={viewMode}
+          onSelect={onViewModeChange}
+          t={t}
+        />
 
         <div style={{ width: 1, height: 22, background: 'var(--border-color)' }} />
 
-        {/* Tier 3 — Tools: productivity views, collapsed into a menu. */}
-        <ToolsMenu viewMode={viewMode} onSelect={onViewModeChange} t={t} />
+        {/* Tier 3 — Tools: analysis (board) + productivity (workspace). */}
+        <NavGroup
+          group="tools"
+          ariaLabel={t('viewMode.groupTools')}
+          viewMode={viewMode}
+          onSelect={onViewModeChange}
+          t={t}
+        />
       </div>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -9,10 +9,10 @@ VERSION=$(node -p "require('$ROOT/package.json').version")
 
 echo "Building claude-alive v$VERSION"
 echo ""
-echo "[1/5] Building all packages..."
+echo "[1/6] Building all packages..."
 pnpm build
 
-echo "[2/5] Cleaning npm-dist..."
+echo "[2/6] Cleaning npm-dist..."
 rm -rf "$OUT"
 mkdir -p "$OUT/dist" "$OUT/scripts" "$OUT/ui"
 
@@ -34,19 +34,29 @@ EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --ex
 # (../../server/dist/index.js) or alongside it as a sibling bundle (./server.js),
 # so a single source supports both `pnpm dev` link and the npm-published bundle.
 # Removes the prior duplication in npm/cli-entry.ts that caused PR #21 to leak.
-echo "[3/5] Bundling CLI..."
+echo "[3/6] Bundling CLI..."
 npx esbuild "$ROOT/packages/cli/src/index.ts" \
   --bundle --platform=node --format=esm \
   --target=node20 --outfile="$OUT/dist/cli.js" \
   $EXTERNAL_FLAGS
 
-echo "[4/5] Bundling server..."
+echo "[4/6] Bundling server..."
 npx esbuild "$ROOT/npm/server-entry.ts" \
   --bundle --platform=node --format=esm \
   --target=node20 --outfile="$OUT/dist/server.js" \
   $EXTERNAL_FLAGS
 
-echo "[5/5] Copying assets..."
+# The orchestrator's sub-agent tool. `ensureDelegateCli()` writes a
+# ~/.claude-alive/bin/ca-delegate wrapper that execs `node <dist>/delegateCli.js`
+# — a sibling of the server bundle. Without this entry that file never existed in
+# the published package and every delegation died with "Cannot find module".
+echo "[5/6] Bundling ca-delegate CLI..."
+npx esbuild "$ROOT/packages/server/src/orchestrator/delegateCli.ts" \
+  --bundle --platform=node --format=esm \
+  --target=node20 --outfile="$OUT/dist/delegateCli.js" \
+  $EXTERNAL_FLAGS
+
+echo "[6/6] Copying assets..."
 cp "$ROOT/packages/hooks/scripts/stream-event.sh" "$OUT/scripts/"
 cp -r "$ROOT/packages/ui/dist/." "$OUT/ui/"
 cp "$ROOT/LICENSE" "$OUT/"

@@ -17,7 +17,8 @@
     "tabs": {
       "sound": "Sound",
       "terminal": "Terminal",
-      "alerts": "Alerts"
+      "alerts": "Alerts",
+      "backend": "Backend"
     },
     "sound": {
       "completion": {
@@ -60,6 +61,12 @@
       "sustain": "Sustain time before firing",
       "seconds": "s",
       "soundEnabled": "Play sound on alert"
+    },
+    "backend": {
+      "checkOnStartup": "Check connections on startup",
+      "checkOnStartupHint": "Automatically verify saved backend connections each time the app loads.",
+      "alertOnFailure": "Alert when a connection fails",
+      "checkAll": "Check all"
     }
   },
   "alert": {
@@ -69,7 +76,12 @@
       "both": "High system load"
     },
     "message": "System resource usage has exceeded the configured threshold.",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "backend": {
+      "title": "Backend connection needs attention",
+      "message": "Some backends could not be reached. Check their connection.",
+      "recheck": "Re-check"
+    }
   },
   "agents": {
     "noAgentsYet": "No agents yet",
@@ -116,7 +128,12 @@
     "toggle": "Toggle browser notifications",
     "enable": "Enable browser notifications",
     "disable": "Disable browser notifications",
-    "denied": "Notifications blocked — allow in browser settings"
+    "denied": "Notifications blocked — allow in browser settings",
+    "unknownProject": "Unknown project",
+    "folder": "Folder",
+    "agent": "Agent",
+    "input": "Input",
+    "tool": "Tool"
   },
   "activity": {
     "title": "Recent Activity",
@@ -161,6 +178,13 @@
     "sessionCompleted": "Session completed",
     "viewAll": "View all →",
     "tokensShort": "tok"
+  },
+  "todo": {
+    "title": "To-do",
+    "placeholder": "Add a note, press Enter to save",
+    "empty": "No items yet",
+    "remove": "Remove",
+    "confirmRemove": "Remove this item?"
   },
   "efficio": {
     "title": "Efficio — Size-adjusted Waste",
@@ -373,7 +397,7 @@
   },
   "viewMode": {
     "label": "View mode",
-    "groupIntervene": "Intervene",
+    "groupMonitor": "Monitor",
     "groupTools": "Tools",
     "animation": "Animation",
     "list": "List",
@@ -383,9 +407,94 @@
     "spread": "Spread",
     "jarvis": "Jarvis",
     "workspace": "Workspaces",
+    "board": "Board",
+    "data": "Data",
     "archive": "Session Management",
     "ticketMgmt": "Ticket Management",
     "backends": "Backends"
+  },
+  "board": {
+    "tab": {
+      "work": "Work",
+      "cost": "Cost"
+    },
+    "subtab": {
+      "outcome": "Outcome",
+      "quality": "Quality",
+      "efficiency": "Efficiency",
+      "process": "Process"
+    },
+    "empty": {
+      "noSession": "No linked session",
+      "noData": "No data",
+      "pickTicket": "Select a ticket"
+    },
+    "pickRun": "Pick a run in the sidebar"
+  },
+  "data": {
+    "title": "LLM Usage Data",
+    "subtitle": "Token usage, per-model usage, call counts and cost from Claude Code transcripts (ccusage-style).",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "filter": {
+      "title": "Date range",
+      "from": "From",
+      "to": "To",
+      "preset": {
+        "all": "All",
+        "last7": "Last 7 days",
+        "last30": "Last 30 days",
+        "thisMonth": "This month"
+      },
+      "reset": "Reset filter",
+      "scoped": "Selected range",
+      "rangeDays": "Range total ({{count}} days)",
+      "dailyAvg": "Daily average",
+      "empty": "No usage data in the selected range.",
+      "invalid": "Start date is after end date. Pick a valid range."
+    },
+    "unreachable": {
+      "title": "Server unreachable",
+      "body": "Could not reach the server to load usage data."
+    },
+    "empty": {
+      "title": "No usage data yet",
+      "body": "Use Claude Code and your token/model usage will show up here."
+    },
+    "stat": {
+      "totalTokens": "Total tokens",
+      "totalCost": "Total cost",
+      "totalCalls": "Total calls",
+      "models": "Models",
+      "ticketsOnly": "tickets + delegations only",
+      "ccusageBased": "from transcripts (ccusage)",
+      "distinct": "distinct models",
+      "records": "{{count}} records",
+      "today": "Today",
+      "thisWeek": "This week",
+      "thisMonth": "This month"
+    },
+    "period": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month"
+    },
+    "chart": {
+      "tokensByPeriod": "Tokens over time",
+      "empty": "No data for this period."
+    },
+    "table": {
+      "title": "By model",
+      "model": "Model",
+      "input": "Input",
+      "output": "Output",
+      "cache": "Cache",
+      "total": "Total",
+      "cost": "Cost",
+      "calls": "Calls",
+      "share": "Share"
+    },
+    "footnote": "Parsed from Claude Code transcripts (~/.claude/projects), deduped per message and priced per model — the same method as ccusage. Calls = assistant messages."
   },
   "backends": {
     "title": "Backend connections",
@@ -424,11 +533,12 @@
     "creating": "Creating…",
     "empty": "None",
     "clearClosed": "Clear",
+    "clearClosedConfirm": "Delete all {{count}} closed tickets?",
     "retry": "Retry",
     "cancel": "Cancel",
     "delete": "Delete",
     "detail": "Details",
-    "intervene": "Inspect / intervene",
+    "intervene": "Inspect",
     "evaluateLabel": "Evaluation",
     "evalGood": "Good",
     "evalBad": "Bad",
@@ -448,12 +558,23 @@
     "noResult": "No result",
     "orchestrate": "Run as orchestrator",
     "orchestrateHint": "(may delegate to sub-agents)",
+    "presetLabel": "Run profile",
+    "preset": {
+      "fast": "Fast",
+      "medium": "Medium",
+      "standard": "Standard",
+      "deep": "Deep"
+    },
+    "runPreset": "Run profile",
+    "runRequestedModel": "Requested model",
+    "runFlagsDropped": "Unsupported on target",
     "evaluatePrompt": "Rate:",
     "runInfoLabel": "Run info",
     "delegationsLabel": "Delegations (sub-agents)",
     "runModel": "Model",
     "runEffort": "Effort",
     "runThinking": "Extended thinking",
+    "runSessionId": "Session ID",
     "runInput": "Input tokens",
     "runOutput": "Output tokens",
     "runCacheRead": "Cache read",
@@ -466,6 +587,7 @@
     "decisionLabel": "Decision needed",
     "decisionPending": "Waiting for your decision",
     "decisionAnswer": "Type your answer or decision…",
+    "decisionPickHint": "Click an option to fill the reply; edit it, then hit Send.",
     "answerCta": "Answer",
     "threadLabel": "Conversation",
     "threadUser": "You",
@@ -626,7 +748,20 @@
     "gitRepo": "git",
     "folder": "folder",
     "heuristic": "estimated",
-    "heuristicHint": "This state was inferred, not reported directly by the provider."
+    "heuristicHint": "This state was inferred, not reported directly by the provider.",
+    "headerTitle": "Intervention control tower",
+    "headerSubtitle": "What is running per machine and repo, and where you need to respond",
+    "pendingTotal": "{{count}} awaiting you",
+    "pendingNone": "Nothing awaiting you",
+    "showPendingOnly": "Awaiting only",
+    "showAll": "Show all",
+    "allClear": "No sessions are awaiting a response.",
+    "allClearHint": "Switch back to Show all to see every session.",
+    "lastActiveTitle": "Last active",
+    "lastActiveNow": "just now",
+    "lastActiveMin": "{{count}}m ago",
+    "lastActiveHour": "{{count}}h ago",
+    "lastActiveDay": "{{count}}d ago"
   },
   "conversation": {
     "selectPrompt": "Select a session to read its conversation.",
@@ -756,5 +891,21 @@
       "tokens": "Token usage",
       "lastPrompt": "Last prompt"
     }
+  },
+  "sidebar": {
+    "title": "Repositories",
+    "openSummary": "{{count}} open",
+    "oldest": "oldest {{age}}",
+    "showClosed": "{{count}} done",
+    "newRun": "New run",
+    "noRepos": "No repositories yet",
+    "detached": "detached"
+  },
+  "run": {
+    "open": "Open",
+    "close": "Close",
+    "abandon": "Abandon",
+    "outcomePlaceholder": "One line: what came of this",
+    "closedAt": "closed"
   }
 }

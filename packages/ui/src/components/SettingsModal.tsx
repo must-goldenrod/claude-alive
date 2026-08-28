@@ -10,6 +10,7 @@ import {
   type CursorStyle,
 } from '../services/settings';
 import { playTestSound } from '../services/sound';
+import { BackendsPanel } from '../views/backends/BackendsView';
 
 interface SettingsModalProps {
   open: boolean;
@@ -19,7 +20,7 @@ interface SettingsModalProps {
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const { t } = useTranslation();
   const settings = useSettings();
-  const [tab, setTab] = useState<'sound' | 'terminal' | 'alerts'>('sound');
+  const [tab, setTab] = useState<'sound' | 'terminal' | 'alerts' | 'backend'>('sound');
 
   useEffect(() => {
     if (!open) return;
@@ -110,6 +111,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             active={tab === 'alerts'}
             onClick={() => setTab('alerts')}
             label={t('settings.tabs.alerts', { defaultValue: 'Alerts' })}
+          />
+          <TabButton
+            active={tab === 'backend'}
+            onClick={() => setTab('backend')}
+            label={t('settings.tabs.backend', { defaultValue: 'Backend' })}
           />
         </div>
 
@@ -361,6 +367,32 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   setSettings(prev => ({ ...prev, alerts: { ...prev.alerts, sustainSeconds } }))
                 }
               />
+            </>
+          )}
+
+          {tab === 'backend' && (
+            <>
+              <ToggleRow
+                label={t('settings.backend.checkOnStartup', { defaultValue: 'Check connections on startup' })}
+                checked={settings.backend.checkOnStartup}
+                onChange={(checkOnStartup) =>
+                  setSettings(prev => ({ ...prev, backend: { ...prev.backend, checkOnStartup } }))
+                }
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: -10, lineHeight: 1.5 }}>
+                {t('settings.backend.checkOnStartupHint', {
+                  defaultValue: 'Automatically verify saved backend connections each time the app loads.',
+                })}
+              </div>
+              <ToggleRow
+                label={t('settings.backend.alertOnFailure', { defaultValue: 'Alert when a connection fails' })}
+                checked={settings.backend.alertOnFailure}
+                onChange={(alertOnFailure) =>
+                  setSettings(prev => ({ ...prev, backend: { ...prev.backend, alertOnFailure } }))
+                }
+              />
+              <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />
+              <BackendsPanel active={tab === 'backend'} />
             </>
           )}
         </div>

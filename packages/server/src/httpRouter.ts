@@ -3,8 +3,11 @@ import { readdir } from 'node:fs/promises';
 import { resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { z } from 'zod';
+import { TICKET_RUN_PRESET_IDS } from '@claude-alive/core';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
+import { handleRunRequest } from './runRoutes.js';
+import type { RunStore } from './runStore.js';
 import { listClaudeSessions } from './claudeSessionIndex.js';
 import type { EfficioReader } from './efficioReader.js';
 
@@ -69,6 +72,11 @@ export interface HttpRouterOptions {
   getStats: () => object;
   /** Durable archive of completed (terminated) sessions, newest first. */
   getCompletedArchive: () => unknown[];
+  /**
+   * ccusage-style LLM usage records parsed from raw Claude Code transcripts,
+   * for the Tools > Data dashboard. Absent when the feature is disabled.
+   */
+  getUsageRecords?: () => Promise<unknown[]>;
   /** Project-name persistence wiring. */
   getProjectNames: () => Record<string, string>;
   saveProjectName: (cwd: string, name: string) => Promise<void>;
@@ -109,6 +117,12 @@ export interface HttpRouterOptions {
    * Ticket dashboard wiring (spec 2026-07-21). Absent when the ticket subsystem
    * is disabled, in which case `/api/tickets*` routes 404.
    */
+  /**
+   * Run registry (spec 2026-08-28). Absent when the subsystem is disabled, in
+   * which case `/api/runs*` falls through to 404.
+   */
+  runs?: RunStore;
+
   tickets?: {
     list: () => unknown[];
     create: (input: {
@@ -184,6 +198,9 @@ const TicketCreateBodySchema = z.object({
   cwd: z.string().min(1),
   location: TicketLocationSchema.optional(),
   orchestrated: z.boolean().optional(),
+  // Closed enum, never free-form model/effort strings: the values become CLI
+  // argv, so the allowlist lives at the boundary rather than downstream.
+  preset: z.enum(TICKET_RUN_PRESET_IDS).optional(),
 });
 
 const EvaluateBodySchema = z.object({
@@ -265,6 +282,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     removeAgent,
     getStats,
     getCompletedArchive,
+    getUsageRecords,
     getProjectNames,
     saveProjectName,
     removeProjectName,
@@ -275,6 +293,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     sessionConversation,
     sessionTerminal,
     efficio,
+    runs,
     tickets,
     backends,
     sshBrowse,
@@ -396,6 +415,29 @@ export function createHttpServer(options: HttpRouterOptions) {
       const ok = removeAgent(deleteMatch[1]!);
       sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
       return;
+    }
+
+    // ── Run registry (spec 2026-08-28) ──────────────────────────────────────
+    // Same loopback restriction as tickets: closing a run writes to disk.
+    if (runs && url.pathname.startsWith('/api/runs')) {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Run API is restricted to loopback' }, req);
+        return;
+      }
+      let parsedBody: unknown = null;
+      if (req.method === 'POST') {
+        try {
+          parsedBody = JSON.parse(await readBody(req));
+        } catch {
+          sendJson(res, 400, { error: 'Invalid JSON' }, req);
+          return;
+        }
+      }
+      const runResult = await handleRunRequest(runs, req.method ?? 'GET', url.pathname, parsedBody);
+      if (runResult) {
+        sendJson(res, runResult.status, runResult.body, req);
+        return;
+      }
     }
 
     // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────
@@ -583,6 +625,23 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
+    // GET /api/usage — ccusage-style LLM usage records from raw transcripts,
+    // for the Tools > Data dashboard. Loopback-only: it reads the local user's
+    // Claude Code transcripts (prompt/response metadata lives alongside).
+    if (getUsageRecords && req.method === 'GET' && url.pathname === '/api/usage') {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Usage API is restricted to loopback' }, req);
+        return;
+      }
+      try {
+        const records = await getUsageRecords();
+        sendJson(res, 200, { records }, req);
+      } catch {
+        sendJson(res, 500, { error: 'Failed to read usage transcripts' }, req);
+      }
+      return;
+    }
+
     // GET /api/fs/browse?dir=/path — list directories for folder picker
     if (req.method === 'GET' && url.pathname === '/api/fs/browse') {
       try {
@@ -667,10 +726,15 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
-    // GET /api/efficio/profiles?last=60 — per-session 4-axis profiles + size (full dashboard)
+    // GET /api/efficio/profiles?last=60 or ?session_id=... — full dashboard or exact historical session.
     if (req.method === 'GET' && url.pathname === '/api/efficio/profiles') {
       const last = parseInt(url.searchParams.get('last') ?? '60', 10);
-      const profiles = efficio ? efficio.profiles(last) : { modelVersion: null, sessions: [] };
+      const sessionId = url.searchParams.get('session_id');
+      const profiles = efficio
+        ? sessionId === null
+          ? efficio.profiles(last)
+          : efficio.profile(sessionId)
+        : { modelVersion: null, sessions: [] };
       sendJson(res, 200, profiles, req);
       return;
     }

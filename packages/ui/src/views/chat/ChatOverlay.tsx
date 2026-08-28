@@ -377,9 +377,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const attachedRef = useRef<Set<string>>(new Set());
   // Live mirrors for use inside the stable terminal-event handler closure.
   const tabsRef = useRef<Tab[]>([]);
-  // Default OFF: skipping permissions launches an unsandboxed agent, so it must
-  // be a deliberate opt-in, never the default a new session inherits silently.
-  const skipPermissionsRef = useRef(false);
+  // Default ON per operator preference: new sessions start with
+  // --dangerously-skip-permissions checked, and it remains a one-click opt-out.
+  const skipPermissionsRef = useRef(true);
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState('');
@@ -395,7 +395,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   const [cwdTab, setCwdTab] = useState<'local' | 'ssh'>('local');
   const [claudeVariant, setClaudeVariant] = useState<'claude' | 'agents'>('claude');
   const [customPath, setCustomPath] = useState('');
-  const [skipPermissions, setSkipPermissions] = useState(false);
+  const [skipPermissions, setSkipPermissions] = useState(true);
   tabsRef.current = tabs;
   skipPermissionsRef.current = skipPermissions;
   const spreadActiveRef = useRef(spreadActive);

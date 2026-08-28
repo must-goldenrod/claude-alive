@@ -5,19 +5,24 @@ import { loadPresets, createPreset, deletePreset, buildSSHCommand, type SSHPrese
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
-interface BackendsViewProps {
+interface BackendsPanelProps {
+  /** Load + refresh the backend list when this becomes true (e.g. its tab opens). */
   active: boolean;
 }
 
 /**
- * Onboarding surface (spec §6): the backends the user connects for orchestration.
+ * Backend connection surface. Lives inside the Settings modal (backend tab).
  * Lists claude-local (orchestrator), litellm (sub-agent), and ssh (location),
- * each with a live "check connection" button.
+ * each with a live "check connection" button, plus a "check all" action.
+ *
+ * Renders as an embeddable stack (no full-height scroll wrapper) so the Settings
+ * modal body owns scrolling.
  */
-export function BackendsView({ active }: BackendsViewProps) {
+export function BackendsPanel({ active }: BackendsPanelProps) {
   const { t } = useTranslation();
   const [backends, setBackends] = useState<BackendStatus[]>([]);
   const [checking, setChecking] = useState<string | null>(null);
+  const [checkingAll, setCheckingAll] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -52,26 +57,65 @@ export function BackendsView({ active }: BackendsViewProps) {
     }
   }, []);
 
+  // Probe every connectable backend at once — the manual counterpart to the
+  // app's startup health check. SSH (location kind) is checked per-host below.
+  const checkAll = useCallback(async () => {
+    setCheckingAll(true);
+    try {
+      const targets = backends.filter((b) => b.kind !== 'location');
+      const updated = await Promise.all(
+        targets.map(async (b) => {
+          try {
+            const res = await fetch(`${API_BASE}/api/backends/${b.id}/check`, { method: 'POST' });
+            if (!res.ok) return null;
+            const { status } = (await res.json()) as { status: BackendStatus };
+            return status;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const byId = new Map(updated.filter((s): s is BackendStatus => s !== null).map((s) => [s.id, s]));
+      setBackends((prev) => prev.map((b) => byId.get(b.id) ?? b));
+    } finally {
+      setCheckingAll(false);
+    }
+  }, [backends]);
+
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text-primary, #e6edf3)' }}>
-            {t('backends.title')}
-          </h1>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.5 }}>
-            {t('backends.subtitle')}
-          </p>
-        </div>
-
-        {loading && backends.length === 0 ? (
-          <div style={{ fontSize: 13, opacity: 0.5 }}>{t('backends.loading')}</div>
-        ) : (
-          backends.map((b) => <BackendCard key={b.id} backend={b} checking={checking === b.id} onCheck={() => check(b.id)} t={t} />)
-        )}
-
-        <SshHosts t={t} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.5 }}>
+          {t('backends.subtitle')}
+        </p>
+        <button
+          type="button"
+          onClick={checkAll}
+          disabled={checkingAll || backends.length === 0}
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1px solid var(--accent-blue, #58a6ff)',
+            background: 'rgba(88,166,255,0.10)',
+            color: 'var(--accent-blue, #58a6ff)',
+            cursor: checkingAll ? 'wait' : 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {checkingAll ? t('backends.checking') : t('settings.backend.checkAll', { defaultValue: 'Check all' })}
+        </button>
       </div>
+
+      {loading && backends.length === 0 ? (
+        <div style={{ fontSize: 13, opacity: 0.5 }}>{t('backends.loading')}</div>
+      ) : (
+        backends.map((b) => <BackendCard key={b.id} backend={b} checking={checking === b.id || checkingAll} onCheck={() => check(b.id)} t={t} />)
+      )}
+
+      <SshHosts t={t} />
     </div>
   );
 }

@@ -120,3 +120,24 @@ export interface TokenUsage {
   apiCalls: number;
   model: string;
 }
+
+/**
+ * One normalized LLM usage event for the Tools > Data dashboard, sourced from
+ * Claude Code's raw JSONL transcripts (the same source `ccusage` reads) and
+ * priced per-model. Wire shape only — the server produces these and the UI
+ * folds them into a summary. Cache tokens combine read + creation into one
+ * bucket, matching the dashboard's display.
+ */
+export interface UsageRecordDTO {
+  /** Message timestamp, epoch ms. */
+  at: number;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** cacheRead + cacheCreation, combined. */
+  cacheTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  /** API calls this record represents (1 per assistant message). */
+  calls: number;
+}

@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./runs/repoId": {
+      "types": "./dist/runs/repoId.d.ts",
+      "default": "./dist/runs/repoId.js"
     }
   },
   "scripts": {

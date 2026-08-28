@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
@@ -6,31 +6,73 @@ import { useTickets } from './useTickets.ts';
 import { TicketCard } from './TicketCard.tsx';
 import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
+import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
+import { filterTicketsBySelection, type RunLocationRef } from './ticketFilter.ts';
+import type { Selection } from '../../state/selection.ts';
 
 interface TicketsViewProps {
   active: boolean;
   subscribeRaw: RawMessageSubscribe;
+  /** Sidebar filter. Narrows the board to one repo/worktree. */
+  selection: Selection;
+  /** Run records, used to decide which repo a ticket belongs to. */
+  runs: readonly RunLocationRef[];
 }
 
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
-export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
+export function TicketsView({ active, subscribeRaw, selection, runs }: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const [presetCwd, setPresetCwd] = useState<string | undefined>(undefined);
+
+  // The sidebar's per-worktree "+" routes here rather than opening a second
+  // composer, so there stays exactly one way to create a ticket.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { cwd?: string } | undefined;
+      if (typeof detail?.cwd === 'string') setPresetCwd(detail.cwd);
+    };
+    window.addEventListener('claude-alive:new-run', handler);
+    return () => window.removeEventListener('claude-alive:new-run', handler);
+  }, []);
+
+  const visible = useMemo(
+    () => filterTicketsBySelection(tickets, runs, selection),
+    [tickets, runs, selection],
+  );
+
   const grouped = useMemo(() => {
     const g: Record<DisplayStatus, Ticket[]> = { active: [], decision: [], complete: [], closed: [], failed: [] };
-    for (const ticket of tickets) g[displayStatus(ticket.state, evaluations[ticket.id])].push(ticket);
+    for (const ticket of visible) g[displayStatus(ticket.state, evaluations[ticket.id])].push(ticket);
     return g;
-  }, [tickets, evaluations]);
+  }, [visible, evaluations]);
 
   // Derive the open ticket from the live list so it reflects state changes.
   const selected = selectedId ? tickets.find((x) => x.id === selectedId) ?? null : null;
 
+  /** Sweep the whole closed lane in one click. Deletion is irreversible, so it
+   *  confirms with the exact count first; requests fire in parallel and the WS
+   *  broadcast reconciles the board. */
+  const clearClosed = useCallback(async () => {
+    const targets = grouped.closed;
+    if (targets.length === 0) return;
+    if (!window.confirm(t('tickets.clearClosedConfirm', { count: targets.length }))) return;
+    await Promise.all(targets.map((x) => deleteTicket(x.id)));
+  }, [grouped.closed, deleteTicket, t]);
+
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: 24, boxSizing: 'border-box' }}>
+      {/* Detached To-do dock: fixed to the viewport's left edge so it floats
+          independently of the centered composer/board frame — it must not push
+          or reflow the existing layout. Lives inside TicketsView so it inherits
+          the view's display toggle (hidden on other tabs automatically). */}
+      <div style={{ position: 'fixed', top: 72, left: 24, width: 300, zIndex: 20 }}>
+        <TodoList />
+      </div>
       <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Center-focused composer: a ChatGPT-style hero prompt over a
             half-width input, so the "what to solve" question leads the view
@@ -59,7 +101,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           >
             {t('tickets.heroPrompt')}
           </h1>
-          <NewTicketForm onCreate={createTicket} />
+          <NewTicketForm onCreate={createTicket} presetCwd={presetCwd} />
         </div>
 
         {/* Board region: a single bordered surface holds the four status lanes.
@@ -96,7 +138,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
                   status={col}
                   label={t(`tickets.columns.${col}`)}
                   count={grouped[col].length}
-                  onClear={col === 'closed' ? () => grouped.closed.forEach((x) => void deleteTicket(x.id)) : undefined}
+                  onClear={col === 'closed' ? clearClosed : undefined}
                 />
                 {grouped[col].length === 0 ? (
                   <div style={{ fontSize: 12, opacity: 0.35, padding: '10px 2px', textAlign: 'center' }}>{t('tickets.empty')}</div>

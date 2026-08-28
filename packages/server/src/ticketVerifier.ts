@@ -23,6 +23,8 @@ export interface VerifierOptions {
     cwd: string;
     location?: TicketLocation;
     orchestrated?: boolean;
+    /** Model/effort the ticket ran with; the gate inherits them (see `verify`). */
+    flags?: { model?: string; effort?: string };
   }) => Promise<HeadlessOutcome>;
 }
 
@@ -76,6 +78,9 @@ export function extractVerdict(text: string | null): TicketVerification | null {
 }
 
 export function createVerifier(options: VerifierOptions = {}): Verifier {
+  // The fallback runner deliberately passes no model/effort flags: it spawns
+  // `claude` directly, bypassing the executor's capability guard. Production
+  // injects `run` (executor-backed), which is where flags are safe to use.
   const run =
     options.run ??
     (({ goal, cwd }) => runHeadlessClaude({ goal, cwd, permissionMode: 'bypassPermissions' }).done);
@@ -87,6 +92,13 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
         cwd: ticket.cwd,
         location: ticket.location,
         orchestrated: ticket.orchestrated,
+        // The gate inherits the ticket's run profile. A verifier weaker than the
+        // agent it judges would quietly hollow out the completion gate, so a
+        // `deep` ticket is verified deeply and a `fast` one cheaply.
+        flags: {
+          ...(ticket.requestedModel ? { model: ticket.requestedModel } : {}),
+          ...(ticket.effort ? { effort: ticket.effort } : {}),
+        },
       });
       const verdict = extractVerdict(outcome.result?.result ?? null);
       if (!verdict) {

@@ -44,6 +44,8 @@ export interface EfficioReader {
   timeline(axis: string, last: number): EfficioTimeline;
   /** 최근 last개 세션의 4축 동시 프로파일 + 크기. 상세카드·산점도·분포·다축시계열 단일 데이터원. */
   profiles(last: number): EfficioProfiles;
+  /** 세션 ID가 정확히 일치하는 프로파일. 최신 목록 상한과 무관하게 과거 세션도 조회한다. */
+  profile(sessionId: string): EfficioProfiles;
 }
 
 const ALL_AXES: readonly EfficioAxisKey[] = ['w2', 'wc', 'bash', 'w3'];
@@ -147,6 +149,87 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
     }
   }
 
+  function readProfiles(
+    db: SqliteDatabase,
+    modelVersion: number,
+    options: { limit?: number; sessionId?: string },
+  ): EfficioSessionProfile[] {
+    const exact = options.sessionId !== undefined;
+    const units = db
+      .prepare(
+        `SELECT w.session_id AS sessionId,
+                COALESCE(w.ai_title, w.project, w.session_id) AS title,
+                w.project AS project,
+                w.ts_first AS tsFirst,
+                w.turns AS turns,
+                w.total_tokens AS totalTokens,
+                w.cache_creation AS cacheCreation,
+                w.cache_read AS cacheRead,
+                w.top_bash AS topBash,
+                w.top_edits AS topEdits
+           FROM work_units w
+           JOIN scores s ON s.session_id = w.session_id AND s.model_version = ?
+          ${exact ? 'WHERE w.session_id = ?' : ''}
+          GROUP BY w.session_id
+          ORDER BY w.ts_first DESC
+          ${exact ? '' : 'LIMIT ?'}`,
+      )
+      .all(
+        modelVersion,
+        exact ? options.sessionId : options.limit,
+      ) as unknown as Array<{
+      sessionId: string;
+      title: string;
+      project: string | null;
+      tsFirst: number;
+      turns: number;
+      totalTokens: number;
+      cacheCreation: number | null;
+      cacheRead: number | null;
+      topBash: string | null;
+      topEdits: string | null;
+    }>;
+
+    const scoreStmt = db.prepare(
+      `SELECT axis, actual, baseline, residual,
+              waste_percentile AS wastePercentile, is_zero AS isZero
+         FROM scores WHERE session_id = ? AND model_version = ?`,
+    );
+
+    const sessions: EfficioSessionProfile[] = units.map((u) => {
+      const scoreRows = scoreStmt.all(u.sessionId, modelVersion) as unknown as Array<{
+        axis: EfficioAxisKey;
+        actual: number | null;
+        baseline: number | null;
+        residual: number | null;
+        wastePercentile: number | null;
+        isZero: number | null;
+      }>;
+      const byAxis = new Map(scoreRows.map((r) => [r.axis, r]));
+      const empty = { actual: 0, baseline: 0, residual: 0, wastePercentile: 0, isZero: 0 };
+      const axes = Object.fromEntries(
+        ALL_AXES.map((k) => [k, toAxisScore(byAxis.get(k) ?? empty)]),
+      ) as Record<EfficioAxisKey, EfficioAxisScore>;
+      return {
+        sessionId: u.sessionId,
+        title: u.title,
+        project: u.project,
+        tsFirst: u.tsFirst,
+        turns: u.turns,
+        totalTokens: u.totalTokens,
+        cacheCreation: u.cacheCreation ?? 0,
+        cacheRead: u.cacheRead ?? 0,
+        axes,
+        topBash: parseRepeats(u.topBash),
+        topEdits: parseRepeats(u.topEdits),
+      };
+    });
+    if (!exact) {
+      sessions.reverse(); // 과거→현재(차트 좌→우)
+    }
+    return sessions;
+  }
+
   function profiles(last: number): EfficioProfiles {
     const limit = Math.min(Math.max(1, Math.trunc(last) || 50), MAX_TIMELINE);
     const db = open();
@@ -154,75 +237,10 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
     try {
       const model = db.prepare('SELECT MAX(id) AS v FROM reference_model').get() as { v: number | null };
       if (model?.v == null) return { modelVersion: null, sessions: [] };
-
-      // 최근 limit개 세션을 크기 메타와 함께. (이후 각 세션의 4축 점수를 JOIN으로 채움)
-      const units = db
-        .prepare(
-          `SELECT w.session_id AS sessionId,
-                  COALESCE(w.ai_title, w.project, w.session_id) AS title,
-                  w.project AS project,
-                  w.ts_first AS tsFirst,
-                  w.turns AS turns,
-                  w.total_tokens AS totalTokens,
-                  w.cache_creation AS cacheCreation,
-                  w.cache_read AS cacheRead,
-                  w.top_bash AS topBash,
-                  w.top_edits AS topEdits
-             FROM work_units w
-             JOIN scores s ON s.session_id = w.session_id AND s.model_version = ?
-            GROUP BY w.session_id
-            ORDER BY w.ts_first DESC
-            LIMIT ?`,
-        )
-        .all(model.v, limit) as unknown as Array<{
-        sessionId: string;
-        title: string;
-        project: string | null;
-        tsFirst: number;
-        turns: number;
-        totalTokens: number;
-        cacheCreation: number | null;
-        cacheRead: number | null;
-        topBash: string | null;
-        topEdits: string | null;
-      }>;
-
-      const scoreStmt = db.prepare(
-        `SELECT axis, actual, baseline, residual,
-                waste_percentile AS wastePercentile, is_zero AS isZero
-           FROM scores WHERE session_id = ? AND model_version = ?`,
-      );
-
-      const sessions: EfficioSessionProfile[] = units.map((u) => {
-        const scoreRows = scoreStmt.all(u.sessionId, model.v) as unknown as Array<{
-          axis: EfficioAxisKey;
-          actual: number | null;
-          baseline: number | null;
-          residual: number | null;
-          wastePercentile: number | null;
-          isZero: number | null;
-        }>;
-        const byAxis = new Map(scoreRows.map((r) => [r.axis, r]));
-        const empty = { actual: 0, baseline: 0, residual: 0, wastePercentile: 0, isZero: 0 };
-        const axes = Object.fromEntries(
-          ALL_AXES.map((k) => [k, toAxisScore(byAxis.get(k) ?? empty)]),
-        ) as Record<EfficioAxisKey, EfficioAxisScore>;
-        return {
-          sessionId: u.sessionId,
-          title: u.title,
-          project: u.project,
-          tsFirst: u.tsFirst,
-          turns: u.turns,
-          totalTokens: u.totalTokens,
-          cacheCreation: u.cacheCreation ?? 0,
-          cacheRead: u.cacheRead ?? 0,
-          axes,
-          topBash: parseRepeats(u.topBash),
-          topEdits: parseRepeats(u.topEdits),
-        };
-      });
-      sessions.reverse(); // 과거→현재(차트 좌→우)
-      return { modelVersion: model.v, sessions };
+      return {
+        modelVersion: model.v,
+        sessions: readProfiles(db, model.v, { limit }),
+      };
     } catch {
       return { modelVersion: null, sessions: [] };
     } finally {
@@ -230,5 +248,22 @@ export function createEfficioReader(dbPath: string = DEFAULT_EFFICIO_DB): Effici
     }
   }
 
-  return { dbPath, status, timeline, profiles };
+  function profile(sessionId: string): EfficioProfiles {
+    const db = open();
+    if (!db) return { modelVersion: null, sessions: [] };
+    try {
+      const model = db.prepare('SELECT MAX(id) AS v FROM reference_model').get() as { v: number | null };
+      if (model?.v == null) return { modelVersion: null, sessions: [] };
+      return {
+        modelVersion: model.v,
+        sessions: readProfiles(db, model.v, { sessionId }),
+      };
+    } catch {
+      return { modelVersion: null, sessions: [] };
+    } finally {
+      db.close();
+    }
+  }
+
+  return { dbPath, status, timeline, profiles, profile };
 }

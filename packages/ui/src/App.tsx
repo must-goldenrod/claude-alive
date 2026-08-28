@@ -1,16 +1,24 @@
-import { Component, lazy, Suspense, useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { Component, lazy, Suspense, useState, useRef, useCallback, useMemo, useEffect, useReducer } from 'react';
 import type { ReactNode, MutableRefObject } from 'react';
 import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
 import { HeaderBar } from './components/HeaderBar.tsx';
+import { normalizeViewMode } from './components/viewGroups.ts';
 import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
 import { playErrorSound, playResourceAlertSound, playWaitingSound, installAudioUnlock } from './services/sound.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
+import { RepoSidebar } from './components/RepoSidebar/RepoSidebar.tsx';
+import { useRunTree } from './hooks/useRunTree.ts';
+import { loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
+import { buildAlertContent } from './services/notificationContent.ts';
+import type { AlertContext, AlertKind } from './services/notificationContent.ts';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { ResourceAlert, type ResourceAlertData } from './components/ResourceAlert.tsx';
+import { BackendAlert, type BackendAlertData } from './components/BackendAlert.tsx';
+import { checkBackendHealth } from './services/backendHealth.ts';
 import { getSettings } from './services/settings.ts';
 
 const PixelOfficePage = lazy(() =>
@@ -21,31 +29,13 @@ const AgentListView = lazy(() =>
   import('./views/list/AgentListView.tsx').then(m => ({ default: m.AgentListView })),
 );
 
-const PromptView = lazy(() =>
-  import('./views/list/PromptView.tsx').then(m => ({ default: m.PromptView })),
-);
-
-const EfficioView = lazy(() =>
-  import('./views/efficio/EfficioView.tsx').then(m => ({ default: m.EfficioView })),
-);
 const TicketsView = lazy(() =>
   import('./views/tickets/TicketsView.tsx').then(m => ({ default: m.TicketsView })),
 );
 import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
+import { BoardView } from './views/board/BoardView.tsx';
 
-const BackendsView = lazy(() =>
-  import('./views/backends/BackendsView.tsx').then(m => ({ default: m.BackendsView })),
-);
-
-const ArchiveView = lazy(() =>
-  import('./views/archive/ArchiveView.tsx').then(m => ({ default: m.ArchiveView })),
-);
-
-const TicketMgmtView = lazy(() =>
-  import('./views/ticketmgmt/TicketMgmtView.tsx').then(m => ({ default: m.TicketMgmtView })),
-);
-
-export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'backends';
+export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data' | 'board';
 
 export type RawMessageSubscribe = (handler: (msg: WSServerMessage) => void) => () => void;
 
@@ -106,8 +96,12 @@ export default function App() {
   const rawSubscribersRef = useRef<Set<(msg: WSServerMessage) => void>>(new Set());
   const terminalHandlerRef: MutableRefObject<TerminalEventHandler | null> = useRef<TerminalEventHandler | null>(null);
 
-  // Snapshot of agents for label lookup in toasts (avoids useWebSocket callback identity churn)
-  const agentsSnapshotRef = useRef<Map<string, { displayName: string | null }>>(new Map());
+  // Snapshot of agents for notification content lookup (avoids useWebSocket callback identity
+  // churn). Carries everything a notification needs to describe the work: which root folder,
+  // which prompt, which agent — never the sessionId.
+  const agentsSnapshotRef = useRef<Map<string, AlertContext>>(new Map());
+  // cwd → user-defined project name, kept in a ref for the same reason.
+  const projectNamesRef = useRef<Record<string, string>>({});
 
   // Last broadcast state per session. Used to fire the decision-request sound only
   // on the *transition* into `waiting`, not on every `waiting` re-broadcast — the
@@ -119,6 +113,25 @@ export default function App() {
   // playback until the page has a user gesture, so event-driven notification
   // sounds stay silent on a dashboard that's only watched. This primes them.
   useEffect(() => installAudioUnlock(), []);
+
+  // Reload/close guard. An accidental Cmd-R tears down every xterm in the app
+  // plus the reconnect epoch, and even with session resume a reload interrupts
+  // whatever is live. This guard used to live inside ChatOverlay but was dropped
+  // when session persistence landed (commit d206c96 → 5d43fcb), which is why the
+  // prompt silently stopped appearing. It now lives at the app root so it fires
+  // on ANY refresh/close regardless of the active view, and can't be removed as a
+  // side effect of a terminal-only change. The browser shows its native "Leave
+  // site?" dialog — per spec the custom message is ignored, so no i18n string is
+  // needed. This is unconditional by design: the user must always be asked first.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Required for legacy browsers; modern ones display a generic message.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   // Project names (cwd → name) — single source of truth for project labels across sidebar/tabs/CLI.
   const [projectNames, setProjectNames] = useState<Record<string, string>>({});
@@ -154,18 +167,42 @@ export default function App() {
       prevStateRef.current.delete(msg.sessionId);
     }
     if (msg.type === 'agent:state') {
-      const label = agentsSnapshotRef.current.get(msg.sessionId)?.displayName || msg.sessionId.slice(0, 8);
+      const agent = agentsSnapshotRef.current.get(msg.sessionId);
       const prevState = prevStateRef.current.get(msg.sessionId);
       prevStateRef.current.set(msg.sessionId, msg.state);
-      if (msg.state === 'waiting') {
-        addToastRef.current('warning', label, 'notifications.needsPermission', `${msg.sessionId}:waiting`);
-        // Native notification (only fires if permission granted, enabled, and tab unfocused).
-        fireNotification({
-          title: i18n.t('notifications.needsPermission'),
-          body: msg.tool ? `${label} · ${msg.tool}` : label,
-          tag: `${msg.sessionId}:waiting`,
-          requireInteraction: true,
+
+      /**
+       * Describe the transition in terms a reader can act on — root folder, the prompt
+       * that started the work, the tool involved — and deliver it as an OS notification.
+       * The in-app toast is the fallback for when the native path is unavailable
+       * (permission not granted, notifications toggled off, unsupported browser), so the
+       * alert is never lost, and the same message never lands twice.
+       */
+      const notify = (
+        kind: AlertKind,
+        toastType: 'warning' | 'error' | 'success',
+        requireInteraction: boolean,
+      ) => {
+        const content = buildAlertContent(kind, {
+          ...agent,
+          // A user-defined project name (set in the sidebar) beats the cwd basename.
+          projectName: (agent?.cwd ? projectNamesRef.current[agent.cwd] : undefined) || agent?.projectName,
+          tool: msg.type === 'agent:state' ? msg.tool : null,
         });
+        const tag = `${msg.sessionId}:${kind}`;
+        const fired = fireNotification({
+          title: content.title,
+          body: content.body,
+          tag,
+          requireInteraction,
+        });
+        if (!fired) {
+          addToastRef.current(toastType, content, tag);
+        }
+      };
+
+      if (msg.state === 'waiting') {
+        notify('waiting', 'warning', true);
         // Audible cue so a decision request is noticed even when the dashboard
         // is in the background. Fire only on the transition into `waiting` — the
         // state is sticky and re-broadcasts on later tool events, which would
@@ -174,13 +211,7 @@ export default function App() {
           playWaitingSound(msg.sessionId);
         }
       } else if (msg.state === 'error') {
-        addToastRef.current('error', label, 'notifications.errorOccurred', `${msg.sessionId}:error`);
-        fireNotification({
-          title: i18n.t('notifications.errorOccurred'),
-          body: msg.tool ? `${label} · ${msg.tool}` : label,
-          tag: `${msg.sessionId}:error`,
-          requireInteraction: true,
-        });
+        notify('error', 'error', true);
         playErrorSound(msg.sessionId);
       } else if (
         (msg.state === 'idle' || msg.state === 'done') &&
@@ -191,13 +222,7 @@ export default function App() {
         // notification always agree on what "done" means. Unlike waiting/error
         // this is informational, so the native notification does not require
         // interaction — it auto-dismisses.
-        addToastRef.current('success', label, 'notifications.taskCompleted', `${msg.sessionId}:done`);
-        fireNotification({
-          title: i18n.t('notifications.taskCompleted'),
-          body: label,
-          tag: `${msg.sessionId}:done`,
-          requireInteraction: false,
-        });
+        notify('done', 'success', false);
       }
     }
     // Fan out to view-level subscribers
@@ -262,12 +287,57 @@ export default function App() {
     breachStartRef.current = null;
   }, []);
 
-  // Keep the snapshot ref in sync for the toast-label lookup
+  // Backend connection guard. On startup (once), verify the saved backend
+  // connections and, if any fail, raise a modal alert mirroring the resource
+  // alert. The check honours the persisted `backend.checkOnStartup` /
+  // `alertOnFailure` toggles so the previous session's setup carries over.
+  const [backendAlert, setBackendAlert] = useState<BackendAlertData | null>(null);
+  const [backendRechecking, setBackendRechecking] = useState(false);
+  const backendCheckedRef = useRef(false);
+
+  useEffect(() => {
+    if (backendCheckedRef.current) return;
+    if (!getSettings().backend.checkOnStartup) return;
+    backendCheckedRef.current = true;
+    let cancelled = false;
+    void checkBackendHealth()
+      .then((failures) => {
+        if (cancelled) return;
+        if (failures.length > 0 && getSettings().backend.alertOnFailure) {
+          setBackendAlert({ failures });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleBackendRecheck = useCallback(() => {
+    setBackendRechecking(true);
+    void checkBackendHealth()
+      .then((failures) => {
+        setBackendAlert(failures.length > 0 ? { failures } : null);
+      })
+      .catch(() => {})
+      .finally(() => setBackendRechecking(false));
+  }, []);
+
+  // Keep the snapshot ref in sync for notification content lookup
   agentsSnapshotRef.current = useMemo(() => {
-    const m = new Map<string, { displayName: string | null }>();
-    for (const [sid, a] of agents) m.set(sid, { displayName: a.displayName });
+    const m = new Map<string, AlertContext>();
+    for (const [sid, a] of agents) {
+      m.set(sid, {
+        displayName: a.displayName,
+        cwd: a.cwd,
+        projectName: a.projectName,
+        lastPrompt: a.lastPrompt,
+      });
+    }
     return m;
   }, [agents]);
+
+  projectNamesRef.current = projectNames;
 
   // Set of Claude session IDs currently in the `waiting` state. Recomputed on every agent
   // map change; the identity is stable when nothing changed (empty stays empty), so the
@@ -387,9 +457,10 @@ export default function App() {
   // Remember the view we entered Spread from, so promoting a tile returns there.
   const prevViewRef = useRef<ViewMode>('tickets');
   const handleViewModeChange = useCallback((mode: ViewMode) => {
+    const normalizedMode = normalizeViewMode(mode);
     setViewMode((prev) => {
-      if (mode === 'spread' && prev !== 'spread') prevViewRef.current = prev;
-      return mode;
+      if (normalizedMode === 'spread' && prev !== 'spread') prevViewRef.current = prev;
+      return normalizedMode;
     });
   }, []);
   // Spread tile click → return to the prior (non-spread) view and focus that terminal.
@@ -415,8 +486,8 @@ export default function App() {
     };
     const onCreate = () => setChatOpen(true);
     const onResume = () => setChatOpen(true);
-    // Cross-surface view navigation (e.g. CompletionLog's "view all" → Archive,
-    // or Ticket Management's "view the process" → session management with a target).
+    // Cross-surface navigation. Legacy content modes normalize to Board while
+    // preserving a target session for the later process-tab focus handoff.
     const onNavigate = (event: Event) => {
       const detail = (event as CustomEvent).detail as { mode?: ViewMode; sessionId?: string } | undefined;
       if (detail?.sessionId !== undefined) setArchiveFocusSessionId(detail.sessionId);
@@ -432,6 +503,27 @@ export default function App() {
       window.removeEventListener('terminal:resumeExternal', onResume);
       window.removeEventListener('claude-alive:navigate', onNavigate);
     };
+  }, [handleViewModeChange]);
+
+  // ── Shared repo/worktree/run selection (spec 2026-08-28) ──────────────────
+  // Owned by the shell so every view reads one filter and one focused run.
+  const [selection, dispatchSelection] = useReducer(
+    selectionReducer,
+    undefined,
+    () => loadSelection(window.localStorage),
+  );
+
+  useEffect(() => {
+    saveSelection(window.localStorage, selection);
+  }, [selection]);
+
+  const { tree: runTree } = useRunTree(true, subscribeRaw);
+
+  const handleNewRun = useCallback((worktree: { path: string }) => {
+    // Reuse the ticket composer instead of adding a second creation path; it
+    // listens for this event and prefills the cwd.
+    window.dispatchEvent(new CustomEvent('claude-alive:new-run', { detail: { cwd: worktree.path } }));
+    handleViewModeChange('tickets');
   }, [handleViewModeChange]);
 
   return (
@@ -451,7 +543,23 @@ export default function App() {
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ResourceAlert alert={resourceAlert} onDismiss={handleResourceAlertDismiss} />
+      <BackendAlert
+        alert={backendAlert}
+        onDismiss={() => setBackendAlert(null)}
+        onRecheck={handleBackendRecheck}
+        rechecking={backendRechecking}
+      />
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 56, position: 'relative' }}>
+        {/* Sidebar + views share one row. ChatOverlay stays a sibling of this
+            row so its absolute coordinates against the outer box are unchanged. */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+        <RepoSidebar
+          tree={runTree}
+          selection={selection}
+          onAction={dispatchSelection}
+          onNewRun={handleNewRun}
+        />
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
         <ErrorBoundary>
           {/* Both views stay mounted. Only CSS display toggles — preserves game state, selected agent, list scroll, etc. */}
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'animation' ? 'block' : 'none' }}>
@@ -487,29 +595,14 @@ export default function App() {
               />
             </Suspense>
           </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'prompt' ? 'block' : 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'board' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
-              <PromptView active={viewMode === 'prompt'} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'efficio' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <EfficioView active={viewMode === 'efficio'} subscribeRaw={subscribeRaw} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'archive' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <ArchiveView active={viewMode === 'archive'} focusSessionId={archiveFocusSessionId} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'ticketMgmt' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <TicketMgmtView active={viewMode === 'ticketMgmt'} />
-            </Suspense>
-          </div>
-          <div style={{ position: 'absolute', inset: 0, display: viewMode === 'backends' ? 'block' : 'none' }}>
-            <Suspense fallback={null}>
-              <BackendsView active={viewMode === 'backends'} />
+              <BoardView
+                active={viewMode === 'board'}
+                subscribeRaw={subscribeRaw}
+                focusedRunId={selection.runId}
+                focusSessionId={archiveFocusSessionId}
+              />
             </Suspense>
           </div>
           {/* Spread view body: empty-state hint, shown only when there are no open terminals.
@@ -519,7 +612,12 @@ export default function App() {
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'tickets' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
-              <TicketsView active={viewMode === 'tickets'} subscribeRaw={subscribeRaw} />
+              <TicketsView
+                active={viewMode === 'tickets'}
+                subscribeRaw={subscribeRaw}
+                selection={selection}
+                runs={runTree.runs}
+              />
             </Suspense>
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
@@ -529,6 +627,8 @@ export default function App() {
             </div>
           </div>
         </ErrorBoundary>
+        </div>
+        </div>
 
         {/* App-level ChatOverlay — the DOM never relocates. When viewMode switches, the
             overlay animates between its floating-mode coordinates and the list-view layout
@@ -544,7 +644,7 @@ export default function App() {
           terminalEventRef={terminalHandlerRef}
           projectPaths={projectPaths}
           listViewActive={viewMode === 'list'}
-          contentViewActive={viewMode === 'prompt' || viewMode === 'efficio' || viewMode === 'archive' || viewMode === 'ticketMgmt' || viewMode === 'backends'}
+          contentViewActive={viewMode === 'board'}
           listLeftInset={listLeftInset}
           onSshSessionsChange={handleSshSessionsChange}
           onChatClaudeSessionsChange={handleChatClaudeSessionsChange}

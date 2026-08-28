@@ -1,5 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
-import type { HookEventPayload } from '@claude-alive/core';
+import type { HookEventPayload, Ticket } from '@claude-alive/core';
+import { isRemoteLocation, sshTargetDisplay } from '@claude-alive/core';
 import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
@@ -29,6 +30,7 @@ import {
   updateArchivedTokenUsage,
   getCompletedArchive,
 } from './completedStore.js';
+import { createUsageRecordsCache } from './usage/jsonlUsage.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
@@ -38,21 +40,34 @@ import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
 import { createTicketStore } from './ticketStore.js';
+import { createRunStore } from './runStore.js';
+import { resolveCwd } from './gitResolver.js';
+import { ticketToUpsert } from './runAdapters/ticketRuns.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
+import { createFlagSupportCache } from './agentFlags.js';
 import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
-import { ensureDelegateCli } from './orchestrator/delegateCli.js';
+import { ensureDelegateCli, resolveDelegateModel } from './orchestrator/delegateCli.js';
 import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
 import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
+import { loadServerEnv, SERVER_ENV_FILE } from './serverEnv.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
 import { dirname, join, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+
+// The server usually runs detached (`claude-alive start`), so it never sees the
+// interactive shell's exports. Read ~/.claude-alive/.env first — everything
+// below (LITELLM_KEY, CA_DELEGATE_MODEL, the port) reads process.env directly.
+const envFromFile = loadServerEnv();
+if (envFromFile.length > 0) {
+  console.log(`[server] loaded ${envFromFile.join(', ')} from ${SERVER_ENV_FILE}`);
+}
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
 
@@ -120,6 +135,10 @@ try {
 } catch {
   // Directory creation failure surfaces below when the database fails to open.
 }
+// ccusage-style usage parser over ~/.claude/projects transcripts, cached with a
+// short TTL (the scan touches hundreds of files). Backs GET /api/usage.
+const usageRecordsCache = createUsageRecordsCache();
+
 const execFileAsync = promisify(execFile);
 /**
  * Coalesce catalog change signals: a busy session emits several events per
@@ -339,31 +358,70 @@ function removeAgent(sessionId: string): boolean {
 // are initialised — same pattern as TerminalManager's `send`.
 const ticketStore = createTicketStore();
 await ticketStore.load();
+
+// ── Run registry (spec 2026-08-28) ───────────────────────────────────────────
+// One hierarchy (repo → worktree → run) over work that is otherwise split
+// across tickets, terminals and agent sessions.
+const runStore = createRunStore({ file: join(homedir(), '.claude-alive', 'runs.json') });
+await runStore.load();
+
+/** Mirror one ticket into the run registry, resolving its repo/worktree first. */
+async function mirrorTicket(ticket: Ticket): Promise<void> {
+  try {
+    const location = await resolveCwd(ticket.cwd, {
+      locationKey:
+        ticket.location && isRemoteLocation(ticket.location) && ticket.location.ssh
+          ? `ssh:${sshTargetDisplay(ticket.location.ssh)}`
+          : undefined,
+    });
+    runStore.upsert(ticketToUpsert(ticket, location));
+  } catch (err) {
+    // A run that cannot be placed is not worth failing a ticket over.
+    console.warn('[runs] failed to mirror ticket', ticket.id, err);
+  }
+}
+
+// Backfill every ticket that predates the registry so the sidebar is populated
+// on first boot rather than only after the next ticket changes state.
+for (const ticket of ticketStore.list()) {
+  await mirrorTicket(ticket);
+}
 const evalStore = createEvalStore();
 await evalStore.load();
 // Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
 // in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
 // Its dir is prepended to the agent PATH (main + verifier) so `command -v
 // ca-delegate` resolves — the verifier must know the delegation tool is real.
+// `null` when the delegation CLI is not present in this install — orchestrated
+// tickets then run as plain tickets rather than being handed a tool that fails.
 const delegateCmd = ensureDelegateCli();
-const delegateBinDir = dirname(delegateCmd);
+const delegateBinDir = delegateCmd ? dirname(delegateCmd) : null;
+const delegateModel = resolveDelegateModel(process.env);
+if (!delegateCmd) {
+  console.log('[server] ca-delegate not available in this install — tickets run without orchestration');
+}
 
 // Local cwd allowlist (colon-separated). Applies to LOCAL tickets only; remote
 // (ssh) tickets are gated by the loopback-only create route + host ownership.
 const localAllowedRoots = process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filter(Boolean);
 // Resolve the execution backend for a ticket's location: local child process, or
 // SSH to a remote host. Absent location = local.
+// One process-wide cache of which `--model`/`--effort` flags each target CLI
+// accepts. Executors are built per spawn, so without this every run would
+// re-probe (an extra SSH round-trip per remote ticket).
+const runFlagCache = createFlagSupportCache();
 const executorFor = (location: import('@claude-alive/core').TicketLocation | undefined) =>
-  resolveExecutor(location, { localAllowedRoots });
+  resolveExecutor(location, { localAllowedRoots, flagCache: runFlagCache });
 
 // The verifier runs at the SAME location as the main agent.
 const ticketVerifier = createVerifier({
-  run: ({ goal, cwd, location, orchestrated }) =>
+  run: ({ goal, cwd, location, orchestrated, flags }) =>
     executorFor(location).spawn({
       goal,
       cwd,
       permissionMode: 'bypassPermissions',
-      ...(orchestrated ? { pathPrepend: delegateBinDir } : {}),
+      ...(flags && (flags.model || flags.effort) ? { run: flags } : {}),
+      ...(orchestrated && delegateBinDir ? { pathPrepend: delegateBinDir } : {}),
     }).done,
 });
 const ticketRunner = createTicketRunner({
@@ -376,27 +434,59 @@ const ticketRunner = createTicketRunner({
     // Orchestrated tickets run with the orchestrator prompt + delegation tool.
     // Only for local execution (the ca-delegate CLI lives on the server host, so
     // an SSH-run agent couldn't call it — remote orchestration is a follow-up).
-    const orchestrated = Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh';
+    const orchestrated =
+      Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh' && delegateCmd !== null;
     const goal = opts?.prompt
       ? // Follow-up reply: wrap the raw answer and resume the same session.
         buildMainPrompt(opts.prompt)
-      : orchestrated
-        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd)
+      : orchestrated && delegateCmd
+        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd, delegateModel)
         : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text);
+    // Run profile snapshotted on the ticket at creation. Read from the ticket (not
+    // re-resolved from the preset) so retries and decision replies reuse exactly
+    // what the first run used, even across a preset-table change.
+    const run = {
+      ...(ticket.requestedModel ? { model: ticket.requestedModel } : {}),
+      ...(ticket.effort ? { effort: ticket.effort } : {}),
+    };
     return executorFor(ticket.location).spawn({
       goal,
       cwd: ticket.cwd,
       permissionMode: 'bypassPermissions',
       resumeSessionId: opts?.resumeSessionId,
+      // Persist the session id the moment the agent announces it. A ticket that
+      // is cancelled or dies mid-run then still carries a `claude --resume`
+      // handle instead of leaving spent tokens with nothing to inspect.
+      ...(opts?.onSessionId ? { onSessionId: opts.onSessionId } : {}),
+      ...(run.model || run.effort ? { run } : {}),
+      // Record flags the target CLI could not accept, so the detail view shows
+      // "requested deep, ran with CLI defaults" instead of a silent downgrade.
+      onFlagsResolved: (resolved) => {
+        void ticketStore
+          .update(ticket.id, {
+            unsupportedFlags: resolved.dropped.length > 0 ? resolved.dropped : undefined,
+          })
+          .then((updated) => {
+            if (updated) broadcaster.broadcast({ type: 'ticket:update', ticket: updated });
+          })
+          .catch(() => {
+            /* recording capability info must never affect the run */
+          });
+      },
       // Only the orchestrator run gets the delegate tool + a ticket tag; the
       // verifier deliberately omits CA_TICKET_ID so its re-delegations aren't logged.
-      ...(orchestrated ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } } : {}),
+      ...(orchestrated && delegateBinDir
+        ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } }
+        : {}),
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   // Location-aware cwd validation (local fs, or remote `ssh test -d`).
   validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),
-  broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
+  broadcast: (ticket) => {
+    broadcaster.broadcast({ type: 'ticket:update', ticket });
+    void mirrorTicket(ticket);
+  },
   // Record an evaluation whenever a ticket settles; broadcast it so clients update.
   onSettled: async (ticket) => {
     // Attach the orchestrator's sub-agent delegations (which models did what).
@@ -449,6 +539,7 @@ const backendRegistry = createBackendRegistry({
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
+  runs: runStore,
   tickets: {
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
@@ -504,6 +595,7 @@ const httpServer = createHttpServer({
   removeAgent,
   getStats: () => store.getStats(),
   getCompletedArchive,
+  getUsageRecords: () => usageRecordsCache.get(),
   getProjectNames,
   saveProjectName,
   removeProjectName,
@@ -574,6 +666,7 @@ const TOUCH_THROTTLE_MS = 15_000;
 
 const broadcaster = new WSBroadcaster({
   getSnapshot,
+  getRunTree: () => runStore.tree(),
   onClientMessage: (ws, msg) => {
     if (msg.type === 'terminal:spawn') {
       // Idempotent: a spawn for a tab we already own is treated as a reattach.

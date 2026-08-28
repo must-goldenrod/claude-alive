@@ -1,22 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CompletedSession } from '@claude-alive/core';
+import {
+  ARCHIVE_STATE_COLOR,
+  ArchiveSessionDetail,
+  formatArchiveDuration,
+} from './ArchiveSessionDetail.tsx';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
-
-/** Colour per final state — mirrors the sidebar's STATE_COLORS so a ticket reads
- * the same everywhere. Only terminal-ish states realistically appear here. */
-const STATE_COLOR: Record<string, string> = {
-  done: 'var(--accent-teal)',
-  idle: 'var(--text-secondary)',
-  error: 'var(--accent-red)',
-  waiting: 'var(--accent-amber)',
-  active: 'var(--accent-green)',
-  listening: 'var(--accent-blue)',
-  spawning: 'var(--accent-purple)',
-  despawning: 'var(--state-despawning)',
-  removed: 'var(--state-removed)',
-};
 
 interface ArchiveViewProps {
   active: boolean;
@@ -31,30 +22,11 @@ function startOfDay(ts: number): number {
   return d.getTime();
 }
 
-function fmtDuration(ms: number | undefined): string {
-  if (ms == null || ms < 0) return '—';
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  const h = Math.floor(m / 60);
-  return `${h}h ${m % 60}m`;
-}
-
 function fmtClock(ts: number): string {
   try {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   } catch {
     return '';
-  }
-}
-
-function fmtFull(ts: number | undefined): string {
-  if (ts == null) return '—';
-  try {
-    return new Date(ts).toLocaleString();
-  } catch {
-    return String(ts);
   }
 }
 
@@ -215,7 +187,7 @@ export function ArchiveView({ active, focusSessionId }: ArchiveViewProps) {
                 </div>
                 {g.items.map(({ row, idx }) => {
                   const isSel = idx === selectedIdx;
-                  const color = STATE_COLOR[row.finalState ?? 'done'] ?? 'var(--text-secondary)';
+                  const color = ARCHIVE_STATE_COLOR[row.finalState ?? 'done'] ?? 'var(--text-secondary)';
                   return (
                     <button
                       key={`${row.sessionId}-${row.completedAt}`}
@@ -251,7 +223,7 @@ export function ArchiveView({ active, focusSessionId }: ArchiveViewProps) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 16 }}>
                         <span style={{ fontSize: 10, color, fontWeight: 600 }}>{t(`states.${row.finalState ?? 'done'}`, { defaultValue: row.finalState ?? '' })}</span>
                         <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.5 }}>·</span>
-                        <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{fmtDuration(row.durationMs)}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{formatArchiveDuration(row.durationMs)}</span>
                         {row.tokenUsage && (
                           <>
                             <span style={{ fontSize: 10, color: 'var(--text-secondary)', opacity: 0.5 }}>·</span>
@@ -280,87 +252,9 @@ export function ArchiveView({ active, focusSessionId }: ArchiveViewProps) {
         {!selected ? (
           <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{t('archive.detail.empty')}</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 820 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ width: 12, height: 12, borderRadius: '50%', background: STATE_COLOR[selected.finalState ?? 'done'] ?? 'var(--text-secondary)' }} />
-              <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>
-                {selected.displayName || selected.projectName || t('agents.generalAgent')}
-              </span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: STATE_COLOR[selected.finalState ?? 'done'] ?? 'var(--text-secondary)' }}>
-                {t(`states.${selected.finalState ?? 'done'}`, { defaultValue: selected.finalState ?? '' })}
-              </span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-              <Stat label={t('archive.detail.completedAt')} value={fmtFull(selected.completedAt)} />
-              <Stat label={t('archive.detail.startedAt')} value={fmtFull(selected.createdAt)} />
-              <Stat label={t('archive.detail.duration')} value={fmtDuration(selected.durationMs)} />
-              <Stat label={t('archive.detail.events')} value={selected.totalEvents != null ? String(selected.totalEvents) : '—'} />
-              <Stat label={t('archive.detail.toolCalls')} value={selected.toolCallCount != null ? String(selected.toolCallCount) : '—'} />
-            </div>
-
-            <Field label={t('archive.detail.project')}>
-              <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{selected.projectName || '—'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{selected.cwd || '—'}</div>
-            </Field>
-
-            <Field label={t('archive.detail.session')}>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>{selected.sessionId}</div>
-            </Field>
-
-            {selected.toolsUsed && selected.toolsUsed.length > 0 && (
-              <Field label={t('archive.detail.tools')}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {selected.toolsUsed.map((tool) => (
-                    <span key={tool} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: 'var(--bg-card)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                      {tool}
-                    </span>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {selected.tokenUsage && (
-              <Field label={t('archive.detail.tokens')}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
-                  <Stat label="input" value={selected.tokenUsage.inputTokens.toLocaleString()} mono />
-                  <Stat label="output" value={selected.tokenUsage.outputTokens.toLocaleString()} mono />
-                  <Stat label="cache r/w" value={`${selected.tokenUsage.cacheReadTokens.toLocaleString()} / ${selected.tokenUsage.cacheCreationTokens.toLocaleString()}`} mono />
-                  <Stat label="total" value={selected.tokenUsage.totalTokens.toLocaleString()} mono />
-                  <Stat label="api calls" value={String(selected.tokenUsage.apiCalls)} mono />
-                  <Stat label="model" value={selected.tokenUsage.model || '—'} mono />
-                </div>
-              </Field>
-            )}
-
-            {selected.lastPrompt && (
-              <Field label={t('archive.detail.lastPrompt')}>
-                <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                  {selected.lastPrompt}
-                </pre>
-              </Field>
-            )}
-          </div>
+          <ArchiveSessionDetail session={selected} />
         )}
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-secondary)' }}>
-      <div style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: mono ? 'var(--font-mono)' : undefined, wordBreak: 'break-word' }}>{value}</div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>{label}</div>
-      <div style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: 14, background: 'var(--bg-secondary)' }}>{children}</div>
     </div>
   );
 }

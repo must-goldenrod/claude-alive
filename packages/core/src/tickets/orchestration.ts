@@ -27,8 +27,14 @@ export interface BackendStatus {
  * orchestrator's own model.
  */
 export interface TicketDelegation {
-  /** Sub-agent model id, e.g. "gemini/gemini-2.5-flash-lite". */
+  /** Sub-agent model that actually answered, e.g. "gemini/gemini-3.6-flash". */
   model: string;
+  /**
+   * The model the orchestrator asked for, present only when a fallback took
+   * over (the first choice was rate-limited or retired). Makes a substituted
+   * answer visible instead of silent.
+   */
+  requestedModel?: string;
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
