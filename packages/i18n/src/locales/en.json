@@ -890,5 +890,21 @@
       "tokens": "Token usage",
       "lastPrompt": "Last prompt"
     }
+  },
+  "sidebar": {
+    "title": "Repositories",
+    "openSummary": "{{count}} open",
+    "oldest": "oldest {{age}}",
+    "showClosed": "{{count}} done",
+    "newRun": "New run",
+    "noRepos": "No repositories yet",
+    "detached": "detached"
+  },
+  "run": {
+    "open": "Open",
+    "close": "Close",
+    "abandon": "Abandon",
+    "outcomePlaceholder": "One line: what came of this",
+    "closedAt": "closed"
   }
 }

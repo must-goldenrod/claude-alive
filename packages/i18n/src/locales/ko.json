@@ -889,5 +889,21 @@
       "tokens": "토큰 사용량",
       "lastPrompt": "마지막 프롬프트"
     }
+  },
+  "sidebar": {
+    "title": "레포지토리",
+    "openSummary": "미종결 {{count}}건",
+    "oldest": "가장 오래된 것 {{age}}",
+    "showClosed": "완료 {{count}}개",
+    "newRun": "새 런",
+    "noRepos": "아직 레포지토리가 없습니다",
+    "detached": "detached"
+  },
+  "run": {
+    "open": "열기",
+    "close": "닫기",
+    "abandon": "포기",
+    "outcomePlaceholder": "한 줄로: 무엇이 되었는지",
+    "closedAt": "닫힘"
   }
 }
