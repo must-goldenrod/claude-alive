@@ -1,5 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
-import type { HookEventPayload } from '@claude-alive/core';
+import type { HookEventPayload, Ticket } from '@claude-alive/core';
+import { isRemoteLocation, sshTargetDisplay } from '@claude-alive/core';
 import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
@@ -39,6 +40,9 @@ import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
 import { createTicketStore } from './ticketStore.js';
+import { createRunStore } from './runStore.js';
+import { resolveCwd } from './gitResolver.js';
+import { ticketToUpsert } from './runAdapters/ticketRuns.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
@@ -354,6 +358,34 @@ function removeAgent(sessionId: string): boolean {
 // are initialised — same pattern as TerminalManager's `send`.
 const ticketStore = createTicketStore();
 await ticketStore.load();
+
+// ── Run registry (spec 2026-08-28) ───────────────────────────────────────────
+// One hierarchy (repo → worktree → run) over work that is otherwise split
+// across tickets, terminals and agent sessions.
+const runStore = createRunStore({ file: join(homedir(), '.claude-alive', 'runs.json') });
+await runStore.load();
+
+/** Mirror one ticket into the run registry, resolving its repo/worktree first. */
+async function mirrorTicket(ticket: Ticket): Promise<void> {
+  try {
+    const location = await resolveCwd(ticket.cwd, {
+      locationKey:
+        ticket.location && isRemoteLocation(ticket.location) && ticket.location.ssh
+          ? `ssh:${sshTargetDisplay(ticket.location.ssh)}`
+          : undefined,
+    });
+    runStore.upsert(ticketToUpsert(ticket, location));
+  } catch (err) {
+    // A run that cannot be placed is not worth failing a ticket over.
+    console.warn('[runs] failed to mirror ticket', ticket.id, err);
+  }
+}
+
+// Backfill every ticket that predates the registry so the sidebar is populated
+// on first boot rather than only after the next ticket changes state.
+for (const ticket of ticketStore.list()) {
+  await mirrorTicket(ticket);
+}
 const evalStore = createEvalStore();
 await evalStore.load();
 // Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
@@ -451,7 +483,10 @@ const ticketRunner = createTicketRunner({
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
   // Location-aware cwd validation (local fs, or remote `ssh test -d`).
   validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),
-  broadcast: (ticket) => broadcaster.broadcast({ type: 'ticket:update', ticket }),
+  broadcast: (ticket) => {
+    broadcaster.broadcast({ type: 'ticket:update', ticket });
+    void mirrorTicket(ticket);
+  },
   // Record an evaluation whenever a ticket settles; broadcast it so clients update.
   onSettled: async (ticket) => {
     // Attach the orchestrator's sub-agent delegations (which models did what).
@@ -504,6 +539,7 @@ const backendRegistry = createBackendRegistry({
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
+  runs: runStore,
   tickets: {
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
@@ -630,6 +666,7 @@ const TOUCH_THROTTLE_MS = 15_000;
 
 const broadcaster = new WSBroadcaster({
   getSnapshot,
+  getRunTree: () => runStore.tree(),
   onClientMessage: (ws, msg) => {
     if (msg.type === 'terminal:spawn') {
       // Idempotent: a spawn for a tab we already own is treated as a reattach.

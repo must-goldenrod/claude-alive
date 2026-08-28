@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { TICKET_RUN_PRESET_IDS } from '@claude-alive/core';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
+import { handleRunRequest } from './runRoutes.js';
+import type { RunStore } from './runStore.js';
 import { listClaudeSessions } from './claudeSessionIndex.js';
 import type { EfficioReader } from './efficioReader.js';
 
@@ -115,6 +117,12 @@ export interface HttpRouterOptions {
    * Ticket dashboard wiring (spec 2026-07-21). Absent when the ticket subsystem
    * is disabled, in which case `/api/tickets*` routes 404.
    */
+  /**
+   * Run registry (spec 2026-08-28). Absent when the subsystem is disabled, in
+   * which case `/api/runs*` falls through to 404.
+   */
+  runs?: RunStore;
+
   tickets?: {
     list: () => unknown[];
     create: (input: {
@@ -285,6 +293,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     sessionConversation,
     sessionTerminal,
     efficio,
+    runs,
     tickets,
     backends,
     sshBrowse,
@@ -406,6 +415,29 @@ export function createHttpServer(options: HttpRouterOptions) {
       const ok = removeAgent(deleteMatch[1]!);
       sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Agent not found' }, req);
       return;
+    }
+
+    // ── Run registry (spec 2026-08-28) ──────────────────────────────────────
+    // Same loopback restriction as tickets: closing a run writes to disk.
+    if (runs && url.pathname.startsWith('/api/runs')) {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Run API is restricted to loopback' }, req);
+        return;
+      }
+      let parsedBody: unknown = null;
+      if (req.method === 'POST') {
+        try {
+          parsedBody = JSON.parse(await readBody(req));
+        } catch {
+          sendJson(res, 400, { error: 'Invalid JSON' }, req);
+          return;
+        }
+      }
+      const runResult = await handleRunRequest(runs, req.method ?? 'GET', url.pathname, parsedBody);
+      if (runResult) {
+        sendJson(res, runResult.status, runResult.body, req);
+        return;
+      }
     }
 
     // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────

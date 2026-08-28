@@ -1,13 +1,18 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { WSServerMessage, WSClientMessage } from '@claude-alive/core';
+import type { RunTree, WSServerMessage, WSClientMessage } from '@claude-alive/core';
 import { parseClientMessage } from './wsClientSchema.js';
 
 const MAX_CLIENTS = 50;
 
 export interface WSBroadcasterOptions {
   getSnapshot: () => { agents: unknown[]; recentEvents: unknown[]; completedSessions: unknown[]; stats: unknown; resumableSessions: unknown[] };
+  /**
+   * Run registry snapshot, sent alongside the agent snapshot on connect. Absent
+   * when the run subsystem is off; clients then just never see a `run:snapshot`.
+   */
+  getRunTree?: () => RunTree;
   maxClients?: number;
   onClientMessage?: (ws: WebSocket, msg: WSClientMessage) => void;
   onClientDisconnect?: (ws: WebSocket) => void;
@@ -18,12 +23,14 @@ export class WSBroadcaster {
   private clients = new Set<WebSocket>();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private getSnapshot: WSBroadcasterOptions['getSnapshot'];
+  private getRunTree?: WSBroadcasterOptions['getRunTree'];
   private maxClients: number;
   private onClientMessage?: WSBroadcasterOptions['onClientMessage'];
   private onClientDisconnect?: WSBroadcasterOptions['onClientDisconnect'];
 
   constructor(options: WSBroadcasterOptions) {
     this.getSnapshot = options.getSnapshot;
+    this.getRunTree = options.getRunTree;
     this.maxClients = options.maxClients ?? MAX_CLIENTS;
     this.onClientMessage = options.onClientMessage;
     this.onClientDisconnect = options.onClientDisconnect;
@@ -38,6 +45,7 @@ export class WSBroadcaster {
       console.log(`[ws] client connected (${this.clients.size} total)`);
 
       this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
+      this.sendRunTree(ws);
 
       ws.on('message', (raw) => {
         const msg = parseClientMessage(raw.toString());
@@ -51,6 +59,7 @@ export class WSBroadcaster {
           this.send(ws, { type: 'system:heartbeat', timestamp: Date.now() });
         } else if (msg.type === 'request:snapshot') {
           this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
+          this.sendRunTree(ws);
         } else {
           this.onClientMessage?.(ws, msg);
         }
@@ -75,6 +84,12 @@ export class WSBroadcaster {
     this.heartbeatInterval = setInterval(() => {
       this.broadcast({ type: 'system:heartbeat', timestamp: Date.now() });
     }, 30_000);
+  }
+
+  /** Send the run tree when the registry is wired; a no-op otherwise. */
+  private sendRunTree(ws: WebSocket): void {
+    const tree = this.getRunTree?.();
+    if (tree) this.send(ws, { type: 'run:snapshot', tree });
   }
 
   broadcast(message: WSServerMessage): void {

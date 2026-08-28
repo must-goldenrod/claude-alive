@@ -3,6 +3,7 @@ import type { AgentStats, EventLogEntry } from '../state/sessionStore.js';
 import type { EfficioStatus } from '../efficio/types.js';
 import type { Ticket } from '../tickets/types.js';
 import type { TicketEvaluation } from '../tickets/evaluation.js';
+import type { Run, RunTree } from '../runs/types.js';
 
 export type TerminalMode = 'claude' | 'shell';
 export type TerminalSource = 'local' | 'ssh';
@@ -74,7 +75,10 @@ export type WSServerMessage =
   // Carries the whole ticket so the client merges without a refetch.
   | { type: 'ticket:update'; ticket: Ticket }
   // An evaluation record was created (ticket settled) or a human label was applied.
-  | { type: 'evaluation:update'; evaluation: TicketEvaluation };
+  | { type: 'evaluation:update'; evaluation: TicketEvaluation }
+  // Repo->worktree->run tree. Sent once on connect; live changes ride on run:update.
+  | { type: 'run:snapshot'; tree: RunTree }
+  | { type: 'run:update'; run: Run };
 
 export type WSClientMessage =
   | { type: 'ping' }
