@@ -18,9 +18,28 @@ class FakeNotification {
   close() {}
 }
 
+/**
+ * This environment's `localStorage` is a bare object without the Storage
+ * methods, so the service's reads/writes throw instead of returning a value.
+ * A minimal in-memory store makes the preference actually readable under test.
+ */
+function installMemoryStorage(): Map<string, string> {
+  const bag = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => bag.get(k) ?? null,
+    setItem: (k: string, v: string) => { bag.set(k, String(v)); },
+    removeItem: (k: string) => { bag.delete(k); },
+    clear: () => bag.clear(),
+    key: (i: number) => [...bag.keys()][i] ?? null,
+    get length() { return bag.size; },
+  });
+  return bag;
+}
+
 describe('fireNotification', () => {
   beforeEach(() => {
     constructed.length = 0;
+    installMemoryStorage();
     localStorage.setItem('claude-alive:notifications-enabled', '1');
     FakeNotification.permission = 'granted';
     vi.stubGlobal('Notification', FakeNotification);

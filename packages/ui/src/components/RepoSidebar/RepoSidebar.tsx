@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Run, RunTree, Worktree } from '@claude-alive/core';
-import { Badge, EmptyState, StatusDot, space, text, type BadgeTone } from '../ui/index.ts';
+import { Badge, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, type BadgeTone } from '../ui/index.ts';
 import type { Selection, SelectionAction } from '../../state/selection.ts';
 import { RunCard } from '../RunCard.tsx';
+import { dispatchOpenRun } from '../../state/openRun.ts';
 import { buildTree, oldestOpenAge, type RepoNode, type WorktreeNode } from './runTree.ts';
 
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
@@ -122,6 +123,7 @@ function RepoRow({
           color: 'var(--text-primary)', fontSize: text.base, fontWeight: 600, cursor: 'pointer',
         }}
       >
+        <HierarchyIcon level="repo" color="var(--accent-purple)" />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.repo.name ?? node.repo.root}
         </span>
@@ -181,6 +183,7 @@ function WorktreeRow({
           color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: text.sm, cursor: 'pointer',
         }}
       >
+        <HierarchyIcon level="branch" color="var(--accent-teal)" />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.worktree.branch || t('sidebar.detached')}
         </span>
@@ -219,6 +222,7 @@ function WorktreeRow({
           }}
         >
           <StatusDot tone={STATE_TONE[run.state]} pulse={run.state === 'running'} />
+          <HierarchyIcon level={run.kind} color={toneColor[STATE_TONE[run.state]]} size={12} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {run.meta?.seq !== undefined ? `#${run.meta.seq} ` : ''}{run.title}
           </span>
@@ -229,7 +233,7 @@ function WorktreeRow({
             <div style={{ marginLeft: space[3], marginTop: space[1], marginBottom: space[2] }}>
               <RunCard
                 run={run}
-                onOpen={(target) => onAction({ type: 'focusRun', run: target })}
+                onOpen={dispatchOpenRun}
                 onClose={onCloseRun}
                 onAbandon={onAbandonRun}
               />

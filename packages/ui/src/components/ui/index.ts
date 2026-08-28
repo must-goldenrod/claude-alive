@@ -3,5 +3,7 @@ export { Badge } from './Badge.tsx';
 export { Button } from './Button.tsx';
 export { StatusDot } from './StatusDot.tsx';
 export { EmptyState } from './EmptyState.tsx';
+export { HierarchyIcon } from './HierarchyIcon.tsx';
+export type { HierarchyLevel } from './HierarchyIcon.tsx';
 export { space, radius, text, toneColor } from './tokens.ts';
 export type { BadgeTone } from './tokens.ts';
