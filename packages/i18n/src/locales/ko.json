@@ -911,6 +911,9 @@
       "waiting": "확인 필요",
       "closed": "완료",
       "abandoned": "치움"
-    }
+    },
+    "touched": "변경 파일 {{count}}개",
+    "touchedMore": "외 {{count}}개",
+    "verified": "검증"
   }
 }

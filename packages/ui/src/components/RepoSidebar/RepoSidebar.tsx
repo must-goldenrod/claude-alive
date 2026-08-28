@@ -5,7 +5,7 @@ import { Badge, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, ty
 import type { Selection, SelectionAction } from '../../state/selection.ts';
 import { RunCard } from '../RunCard.tsx';
 import { dispatchOpenRun } from '../../state/openRun.ts';
-import { buildTree, oldestOpenAge, type RepoNode, type WorktreeNode } from './runTree.ts';
+import { buildTree, oldestOpenAge, openCostUsd, type RepoNode, type WorktreeNode } from './runTree.ts';
 
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
   running: 'blue',
@@ -38,6 +38,7 @@ export function RepoSidebar({
   const nodes = buildTree(tree, selection);
   const openCount = nodes.reduce((sum, n) => sum + n.openCount, 0);
   const oldest = oldestOpenAge(tree, Date.now());
+  const spend = openCostUsd(tree);
 
   return (
     <nav
@@ -67,11 +68,10 @@ export function RepoSidebar({
         }}
       >
         <span>{t('sidebar.openSummary', { count: openCount })}</span>
-        {oldest !== null && (
-          <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: text.xs, opacity: 0.7 }}>
-            {t('sidebar.oldest', { age: formatAge(oldest) })}
-          </span>
-        )}
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: space[2], alignItems: 'baseline', fontFamily: 'var(--font-mono)', fontSize: text.xs, opacity: 0.75 }}>
+          {spend > 0 && <span data-testid="open-spend">${spend.toFixed(2)}</span>}
+          {oldest !== null && <span>{t('sidebar.oldest', { age: formatAge(oldest) })}</span>}
+        </span>
       </button>
 
       {nodes.length === 0 ? (

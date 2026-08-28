@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { Repository, Run, RunKind, RunMeta, RunState, RunTree, Worktree } from '@claude-alive/core';
+import { mergeTouchedFiles } from '@claude-alive/core';
 import type { ResolvedLocation } from './gitResolver.js';
 
 export interface RunUpsert {
@@ -20,6 +21,8 @@ export interface RunStore {
   tree(): RunTree;
   upsert(input: RunUpsert): Run;
   close(runId: string, outcome: string): Run | null;
+  /** Record a file this run wrote to. No-op for an unknown run or a repeat path. */
+  recordTouchedFile(runId: string, path: string): Run | null;
   abandon(runId: string): Run | null;
   subscribe(fn: (run: Run) => void): () => void;
   flush(): Promise<void>;
@@ -119,8 +122,22 @@ export function createRunStore({ file }: { file: string }): RunStore {
       };
       if (prior?.outcome !== undefined) next.outcome = prior.outcome;
       if (prior?.closedAt !== undefined) next.closedAt = prior.closedAt;
+      if (prior?.touchedFiles !== undefined) next.touchedFiles = prior.touchedFiles;
 
       runs.set(next.runId, next);
+      emit(next);
+      return next;
+    },
+
+    recordTouchedFile(runId, path) {
+      const prior = runs.get(runId);
+      if (!prior) return null;
+      const touchedFiles = mergeTouchedFiles(prior.touchedFiles, path);
+      // Unchanged list = a duplicate or a full list; skip the write and the
+      // broadcast rather than churning every client on a repeated edit.
+      if (touchedFiles === prior.touchedFiles) return prior;
+      const next: Run = { ...prior, touchedFiles };
+      runs.set(runId, next);
       emit(next);
       return next;
     },

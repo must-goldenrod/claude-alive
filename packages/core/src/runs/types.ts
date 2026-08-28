@@ -55,6 +55,11 @@ export interface Run {
   startedAt: number;
   closedAt?: number;
   meta?: RunMeta;
+  /**
+   * Absolute paths this run wrote to, in first-touched order. Accumulated from
+   * `PostToolUse`; absent on runs that predate the feature or wrote nothing.
+   */
+  touchedFiles?: string[];
 }
 
 /** What the whole tree looks like over the wire. */

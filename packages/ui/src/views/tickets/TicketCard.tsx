@@ -16,6 +16,7 @@ import {
   type DisplayStatus,
 } from './ticketDisplay.ts';
 import type { EvaluateFn } from './useTickets.ts';
+import { failureLine } from './failureLine.ts';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -41,9 +42,7 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
       : status === 'decision'
         ? ticket.decisionQuestion ?? t('tickets.decisionPending')
         : status === 'failed'
-          ? ticket.failureReason
-            ? t(`tickets.failureReason.${ticket.failureReason}`)
-            : t('tickets.status.failed')
+          ? failureLine(ticket, t)
           : oneLineSummary(ticket) ?? t('tickets.noResult');
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();

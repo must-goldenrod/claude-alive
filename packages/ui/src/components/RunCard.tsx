@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import type { Run } from '@claude-alive/core';
 import { Badge, Button, HierarchyIcon, Panel, space, text, type BadgeTone } from './ui/index.ts';
 
+/** How many changed files the card lists before summarising the rest. */
+const TOUCHED_PREVIEW = 5;
+
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
   running: 'blue', waiting: 'amber', closed: 'neutral', abandoned: 'neutral',
 };
@@ -109,6 +112,46 @@ export function RunCard({ run, onOpen, onClose, onAbandon }: RunCardProps) {
         </div>
       )}
 
+      {/* What the run actually did to the repo. A one-line conclusion says
+          whether it worked; this says what it touched — the question a summary
+          can never answer. */}
+      {run.touchedFiles && run.touchedFiles.length > 0 && (
+        <div style={{ marginTop: space[3] }}>
+          <div
+            data-testid="touched-count"
+            style={{
+              fontFamily: 'var(--font-mono)', fontSize: text.xs, fontWeight: 700,
+              letterSpacing: '0.04em', color: 'var(--text-secondary)', marginBottom: space[1],
+            }}
+          >
+            {t('run.touched', { count: run.touchedFiles.length })}
+          </div>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {run.touchedFiles.slice(0, TOUCHED_PREVIEW).map((path) => (
+              <li
+                key={path}
+                title={path}
+                style={{
+                  fontFamily: 'var(--font-mono)', fontSize: text.xs,
+                  color: 'var(--text-primary)', overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'rtl', textAlign: 'left',
+                }}
+              >
+                {basename(path)}
+              </li>
+            ))}
+          </ul>
+          {run.touchedFiles.length > TOUCHED_PREVIEW && (
+            <div
+              data-testid="touched-more"
+              style={{ fontFamily: 'var(--font-mono)', fontSize: text.xs, color: 'var(--text-secondary)', opacity: 0.7, marginTop: 2 }}
+            >
+              {t('run.touchedMore', { count: run.touchedFiles.length - TOUCHED_PREVIEW })}
+            </div>
+          )}
+        </div>
+      )}
+
       {metaLine.length > 0 && (
         <div
           style={{
@@ -170,6 +213,11 @@ export function RunCard({ run, onOpen, onClose, onAbandon }: RunCardProps) {
       )}
     </Panel>
   );
+}
+
+/** Just the file name — the full path is the row's title attribute. */
+function basename(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? path;
 }
 
 /** `claude-opus-4-8` → `opus`. The family is what anyone actually reads here. */

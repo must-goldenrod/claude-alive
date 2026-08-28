@@ -912,6 +912,9 @@
       "waiting": "Needs you",
       "closed": "Done",
       "abandoned": "Cleared"
-    }
+    },
+    "touched": "{{count}} files changed",
+    "touchedMore": "+{{count}} more",
+    "verified": "Verifier"
   }
 }

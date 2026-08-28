@@ -66,6 +66,18 @@ function compareRepos(a: RepoNode, b: RepoNode): number {
   return (a.repo.name ?? a.repo.root).localeCompare(b.repo.name ?? b.repo.root);
 }
 
+/**
+ * What the still-open runs have cost so far.
+ *
+ * Cost has only ever been visible after the fact, in the analytics tab. The
+ * number that changes behaviour is the one for work happening right now.
+ */
+export function openCostUsd(tree: RunTree): number {
+  return tree.runs
+    .filter(isOpen)
+    .reduce((sum, run) => sum + (run.meta?.costUsd ?? 0), 0);
+}
+
 /** Age of the longest-open run, for the sidebar's summary line. */
 export function oldestOpenAge(tree: RunTree, now: number): number | null {
   const open = tree.runs.filter(isOpen);

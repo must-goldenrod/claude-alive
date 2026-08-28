@@ -190,3 +190,16 @@ html, body, #root {
     box-shadow: 0 0 10px rgba(248, 81, 73, 0.75) !important;
   }
 }
+
+/* Keyboard focus. Inline styles dominate the views, so there is nowhere per
+   component to put this — a single global rule is the only place it survives.
+   :focus-visible keeps it off mouse clicks. */
+:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* The UA's default ring would otherwise double up with the one above. */
+:focus:not(:focus-visible) {
+  outline: none;
+}

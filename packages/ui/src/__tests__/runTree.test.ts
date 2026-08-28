@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Repository, Run, RunTree, Worktree } from '@claude-alive/core';
-import { buildTree, oldestOpenAge } from '../components/RepoSidebar/runTree.ts';
+import { buildTree, oldestOpenAge, openCostUsd } from '../components/RepoSidebar/runTree.ts';
 import { EMPTY_SELECTION } from '../state/selection.ts';
 
 const repo = (repoId: string, name: string): Repository =>
@@ -74,5 +74,29 @@ describe('oldestOpenAge', () => {
   it('returns null when nothing is open', () => {
     const tree: RunTree = { ...TREE, runs: [run('c', 'w2', 'r1', { state: 'closed' })] };
     expect(oldestOpenAge(tree, 5000)).toBeNull();
+  });
+});
+
+describe('openCostUsd', () => {
+  const withCost = (runId: string, state: Run['state'], costUsd?: number): Run =>
+    ({ ...run(runId, 'w1', 'r1', { state }), meta: costUsd === undefined ? undefined : { costUsd } });
+
+  it('sums only the runs still open', () => {
+    const tree: RunTree = { ...TREE, runs: [
+      withCost('a', 'running', 0.4),
+      withCost('b', 'waiting', 0.25),
+      withCost('c', 'closed', 9),
+      withCost('d', 'abandoned', 9),
+    ] };
+    expect(openCostUsd(tree)).toBeCloseTo(0.65, 5);
+  });
+
+  it('treats a run with no reported cost as zero', () => {
+    const tree: RunTree = { ...TREE, runs: [withCost('a', 'running'), withCost('b', 'running', 0.1)] };
+    expect(openCostUsd(tree)).toBeCloseTo(0.1, 5);
+  });
+
+  it('is zero when nothing is open', () => {
+    expect(openCostUsd({ ...TREE, runs: [withCost('c', 'closed', 5)] })).toBe(0);
   });
 });
