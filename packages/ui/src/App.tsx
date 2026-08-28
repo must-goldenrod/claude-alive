@@ -10,7 +10,7 @@ import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
 import { RepoSidebar } from './components/RepoSidebar/RepoSidebar.tsx';
 import { useRunTree } from './hooks/useRunTree.ts';
-import { EMPTY_SELECTION, loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
+import { loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
 import { buildAlertContent } from './services/notificationContent.ts';
