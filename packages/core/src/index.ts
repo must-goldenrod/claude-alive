@@ -35,6 +35,10 @@ export {
   DEFAULT_EVAL_WEIGHT, MIN_EVAL_WEIGHT, MAX_EVAL_WEIGHT,
 } from './tickets/evaluation.js';
 export type { EvalLabel, TicketEvaluation, RouteGuide } from './tickets/evaluation.js';
+export { RUN_OPEN_STATES, isRunOpen } from './runs/types.js';
+export type {
+  RunKind, RunState, RunMeta, Run, Repository, Worktree, RunTree,
+} from './runs/types.js';
 export * from './canonical/index.js';
 export { augmentPath } from './env/path.js';
 export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';
