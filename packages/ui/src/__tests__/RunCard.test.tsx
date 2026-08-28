@@ -107,4 +107,25 @@ describe('RunCard', () => {
     fireEvent.click(screen.getByTestId('run-close'));
     expect(screen.getByTestId('run-outcome-submit').closest('button')).toBeDisabled();
   });
+  it('lists the files the run wrote to, by name', () => {
+    setup({ ...RUN, touchedFiles: ['/r/proj/packages/ui/src/App.tsx', '/r/proj/README.md'] });
+    expect(screen.getByText('App.tsx')).toBeInTheDocument();
+    expect(screen.getByText('README.md')).toBeInTheDocument();
+  });
+
+  it('counts the changed files so the total reads without expanding', () => {
+    setup({ ...RUN, touchedFiles: ['/a.ts', '/b.ts', '/c.ts'] });
+    expect(screen.getByTestId('touched-count')).toHaveTextContent('3');
+  });
+
+  it('caps the visible list and says how many more there are', () => {
+    const files = Array.from({ length: 9 }, (_, i) => `/f${i}.ts`);
+    setup({ ...RUN, touchedFiles: files });
+    expect(screen.getByTestId('touched-more')).toHaveTextContent('4');
+  });
+
+  it('shows no file section when the run wrote nothing', () => {
+    setup();
+    expect(screen.queryByTestId('touched-count')).not.toBeInTheDocument();
+  });
 });

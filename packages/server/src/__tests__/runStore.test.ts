@@ -112,4 +112,29 @@ describe('runStore', () => {
     await fresh.load();
     expect(fresh.tree().runs).toEqual([]);
   });
+  it('records a touched file and broadcasts it', () => {
+    upsert();
+    const next = store.recordTouchedFile('run-1', '/r/proj/a.ts');
+    expect(next?.touchedFiles).toEqual(['/r/proj/a.ts']);
+  });
+
+  it('does not re-broadcast a path it already has', () => {
+    upsert();
+    const seen = vi.fn();
+    store.recordTouchedFile('run-1', '/r/proj/a.ts');
+    store.subscribe(seen);
+    store.recordTouchedFile('run-1', '/r/proj/a.ts');
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('keeps touched files across a later adapter report', () => {
+    upsert();
+    store.recordTouchedFile('run-1', '/r/proj/a.ts');
+    upsert({ title: '갱신' });
+    expect(store.tree().runs[0]?.touchedFiles).toEqual(['/r/proj/a.ts']);
+  });
+
+  it('recording on an unknown run returns null', () => {
+    expect(store.recordTouchedFile('nope', '/a')).toBeNull();
+  });
 });

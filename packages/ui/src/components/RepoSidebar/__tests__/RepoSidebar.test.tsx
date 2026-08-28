@@ -119,4 +119,19 @@ describe('RepoSidebar', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onCloseRun).toHaveBeenCalledWith('ticket:t1', '확장 완료');
   });
+  it('shows what the open runs have cost so far', () => {
+    const tree = {
+      ...TREE,
+      runs: TREE.runs.map((r) =>
+        r.runId === 'ticket:t1' ? { ...r, meta: { ...r.meta, costUsd: 1.5 } } : r,
+      ),
+    };
+    setup({ tree });
+    expect(screen.getByTestId('open-spend')).toHaveTextContent('$1.50');
+  });
+
+  it('omits the spend figure when nothing has cost anything', () => {
+    setup();
+    expect(screen.queryByTestId('open-spend')).not.toBeInTheDocument();
+  });
 });

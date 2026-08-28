@@ -1,6 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload, Ticket } from '@claude-alive/core';
-import { isRemoteLocation, sshTargetDisplay } from '@claude-alive/core';
+import { isRemoteLocation, sshTargetDisplay, editedPathFrom } from '@claude-alive/core';
 import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
@@ -43,6 +43,8 @@ import { createTicketStore } from './ticketStore.js';
 import { createRunStore } from './runStore.js';
 import { resolveCwd } from './gitResolver.js';
 import { ticketToUpsert } from './runAdapters/ticketRuns.js';
+import { runIdForSession } from './runAttribution.js';
+import { isAllowedWsOrigin } from './wsOrigin.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
@@ -224,6 +226,22 @@ function broadcastResumable(): void {
   broadcaster.broadcast({ type: 'sessions:resumable', sessions: getResumableSessions() });
 }
 
+/**
+ * Attribute a write-tool call to its run. Silent when the tool wrote nothing or
+ * no run claims the session: a hook event must never fail an agent.
+ */
+function recordEditedFile(payload: HookEventPayload): void {
+  if (payload.event !== 'PostToolUse') return;
+  const path = editedPathFrom(payload.data.tool_name ?? payload.tool, payload.data.tool_input);
+  if (!path) return;
+  const runId = runIdForSession(
+    runStore.tree().runs,
+    payload.session_id,
+    (sessionId) => ticketStore.list().find((t) => t.claudeSessionId === sessionId)?.id,
+  );
+  if (runId) runStore.recordTouchedFile(runId, path);
+}
+
 function onEvent(payload: HookEventPayload): void {
   // Fan the same hook payload into the prompt-quality pipeline. Errors
   // there are isolated inside `ingest` (fail-open) so the UI broadcast
@@ -231,6 +249,10 @@ function onEvent(payload: HookEventPayload): void {
   promptSubsystem?.ingest(payload);
   // v2 dual-write: queued and error-isolated, never blocks the legacy path below.
   void canonicalPipeline.ingest(payload);
+
+  // Record what the agent actually wrote. This is the only place the file path
+  // is available — the run stores a conclusion, never the edits behind it.
+  recordEditedFile(payload);
 
   const agent = store.processEvent(payload);
   if (!agent) return;
@@ -776,11 +798,18 @@ runStore.subscribe((run) => {
 
 httpServer.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '/', `http://${req.headers.host}`);
-  if (pathname === '/ws') {
-    broadcaster.handleUpgrade(req, socket, head);
-  } else {
+  if (pathname !== '/ws') {
     socket.destroy();
+    return;
   }
+  // Loopback binding keeps the network out, not the browser: without this any
+  // page the user visits could open this socket and read every session.
+  if (!isAllowedWsOrigin(req.headers.origin, PORT)) {
+    console.warn(`[ws] rejected upgrade from origin ${req.headers.origin}`);
+    socket.destroy();
+    return;
+  }
+  broadcaster.handleUpgrade(req, socket, head);
 });
 
 // Host CPU/RAM metrics poller. 2s cadence is smooth for a header indicator without

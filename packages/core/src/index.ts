@@ -36,6 +36,7 @@ export {
 } from './tickets/evaluation.js';
 export type { EvalLabel, TicketEvaluation, RouteGuide } from './tickets/evaluation.js';
 export { RUN_OPEN_STATES, isRunOpen } from './runs/types.js';
+export { editedPathFrom, mergeTouchedFiles, MAX_TOUCHED_FILES } from './runs/touchedFiles.js';
 export type {
   RunKind, RunState, RunMeta, Run, Repository, Worktree, RunTree,
 } from './runs/types.js';
