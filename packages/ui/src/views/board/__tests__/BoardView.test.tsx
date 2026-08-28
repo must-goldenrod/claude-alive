@@ -22,7 +22,7 @@ afterEach(cleanup);
 
 describe('BoardView', () => {
   it('renders work and cost top tabs, work active by default', () => {
-    render(<BoardView active subscribeRaw={noopSub} />);
+    render(<BoardView active subscribeRaw={noopSub} focusedRunId={null} />);
     const workTab = screen.getByRole('tab', { name: /work|작업/i });
     const costTab = screen.getByRole('tab', { name: /cost|비용/i });
     expect(workTab).toHaveAttribute('aria-selected', 'true');
@@ -42,7 +42,7 @@ describe('BoardView', () => {
   });
 
   it('switches to cost tab on click', () => {
-    render(<BoardView active subscribeRaw={noopSub} />);
+    render(<BoardView active subscribeRaw={noopSub} focusedRunId={null} />);
     fireEvent.click(screen.getByRole('tab', { name: /cost|비용/i }));
     expect(screen.getByRole('tab', { name: /cost|비용/i })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('work-view')).toHaveAttribute('data-active', 'false');
@@ -50,7 +50,7 @@ describe('BoardView', () => {
   });
 
   it('moves and activates top tabs with wrapping arrow-key navigation', () => {
-    render(<BoardView active subscribeRaw={noopSub} />);
+    render(<BoardView active subscribeRaw={noopSub} focusedRunId={null} />);
     const workTab = screen.getByRole('tab', { name: /work|작업/i });
     const costTab = screen.getByRole('tab', { name: /cost|비용/i });
 

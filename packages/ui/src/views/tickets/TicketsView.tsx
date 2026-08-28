@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
@@ -8,24 +8,48 @@ import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
 import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
+import { filterTicketsBySelection, type RunLocationRef } from './ticketFilter.ts';
+import type { Selection } from '../../state/selection.ts';
 
 interface TicketsViewProps {
   active: boolean;
   subscribeRaw: RawMessageSubscribe;
+  /** Sidebar filter. Narrows the board to one repo/worktree. */
+  selection: Selection;
+  /** Run records, used to decide which repo a ticket belongs to. */
+  runs: readonly RunLocationRef[];
 }
 
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
-export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
+export function TicketsView({ active, subscribeRaw, selection, runs }: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const [presetCwd, setPresetCwd] = useState<string | undefined>(undefined);
+
+  // The sidebar's per-worktree "+" routes here rather than opening a second
+  // composer, so there stays exactly one way to create a ticket.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { cwd?: string } | undefined;
+      if (typeof detail?.cwd === 'string') setPresetCwd(detail.cwd);
+    };
+    window.addEventListener('claude-alive:new-run', handler);
+    return () => window.removeEventListener('claude-alive:new-run', handler);
+  }, []);
+
+  const visible = useMemo(
+    () => filterTicketsBySelection(tickets, runs, selection),
+    [tickets, runs, selection],
+  );
+
   const grouped = useMemo(() => {
     const g: Record<DisplayStatus, Ticket[]> = { active: [], decision: [], complete: [], closed: [], failed: [] };
-    for (const ticket of tickets) g[displayStatus(ticket.state, evaluations[ticket.id])].push(ticket);
+    for (const ticket of visible) g[displayStatus(ticket.state, evaluations[ticket.id])].push(ticket);
     return g;
-  }, [tickets, evaluations]);
+  }, [visible, evaluations]);
 
   // Derive the open ticket from the live list so it reflects state changes.
   const selected = selectedId ? tickets.find((x) => x.id === selectedId) ?? null : null;
@@ -77,7 +101,7 @@ export function TicketsView({ active, subscribeRaw }: TicketsViewProps) {
           >
             {t('tickets.heroPrompt')}
           </h1>
-          <NewTicketForm onCreate={createTicket} />
+          <NewTicketForm onCreate={createTicket} presetCwd={presetCwd} />
         </div>
 
         {/* Board region: a single bordered surface holds the four status lanes.

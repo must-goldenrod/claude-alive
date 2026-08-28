@@ -8,6 +8,11 @@ import { loadPresets, SSH_PRESETS_CHANGED } from '../chat/sshPresets.ts';
 import { DEFAULT_RUN_PRESET, RUN_PRESET_IDS, RUN_PRESET_PREVIEW, runPresetLabelKey } from './runPresets.ts';
 
 interface NewTicketFormProps {
+  /**
+   * Working directory chosen elsewhere (the sidebar's per-worktree "+"). It
+   * seeds the folder picker so starting a run from a branch skips the picker.
+   */
+  presetCwd?: string;
   onCreate: TicketCreateFn;
 }
 
@@ -15,10 +20,16 @@ function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
 }
 
-export function NewTicketForm({ onCreate }: NewTicketFormProps) {
+export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
   const { t } = useTranslation();
   const [goal, setGoal] = useState('');
   const [cwd, setCwd] = useState('');
+
+  // A newly supplied preset wins over whatever the picker held; the user just
+  // asked for that worktree explicitly.
+  useEffect(() => {
+    if (presetCwd) setCwd(presetCwd);
+  }, [presetCwd]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [remotePickerOpen, setRemotePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);

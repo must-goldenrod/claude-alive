@@ -192,8 +192,8 @@ describe('WorkTab', () => {
       rec({ ticketId: 'without-session', headline: 'Sessionless ticket' }),
     ]);
 
-    render(<WorkTab active />);
-    fireEvent.click(await screen.findByText('Sessionless ticket'));
+    render(<WorkTab active focusedRunId="ticket:without-session" />);
+    await screen.findByText('Sessionless ticket');
 
     for (const name of [/quality|품질/i, /efficiency|효율/i, /process|과정/i]) {
       fireEvent.click(screen.getByRole('tab', { name }));
@@ -211,8 +211,8 @@ describe('WorkTab', () => {
       }),
     ]);
 
-    render(<WorkTab active />);
-    fireEvent.click(await screen.findByText('Linked ticket'));
+    render(<WorkTab active focusedRunId="ticket:linked" />);
+    await screen.findByText('Linked ticket');
     expect(screen.getByText('Linked outcome')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /quality|품질/i }));
@@ -226,8 +226,8 @@ describe('WorkTab', () => {
       rec({ ticketId: 'keyboard', headline: 'Keyboard ticket' }),
     ]);
 
-    render(<WorkTab active />);
-    fireEvent.click(await screen.findByText('Keyboard ticket'));
+    render(<WorkTab active focusedRunId="ticket:keyboard" />);
+    await screen.findByText('Keyboard ticket');
     const outcomeTab = screen.getByRole('tab', { name: /outcome|성과/i });
     const qualityTab = screen.getByRole('tab', { name: /quality|품질/i });
     const efficiencyTab = screen.getByRole('tab', { name: /efficiency|효율/i });
@@ -274,8 +274,8 @@ describe('WorkTab', () => {
       reflected: true,
     });
 
-    render(<WorkTab active />);
-    fireEvent.click(await screen.findByText('Action ticket'));
+    render(<WorkTab active focusedRunId="ticket:actions" />);
+    await screen.findByText('Action ticket');
     await waitFor(() => expect(ticketApi.fetchGuide).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('button', { name: /^bad|나쁨$/i }));
     await waitFor(() => {
@@ -285,11 +285,6 @@ describe('WorkTab', () => {
         note: '',
       });
     });
-    await waitFor(() => {
-      const ticketRow = screen.getByRole('button', { name: /action ticket/i });
-      expect(within(ticketRow).getByRole('img', { name: /^bad|나쁨$/i })).toBeInTheDocument();
-    });
-
     fireEvent.click(screen.getByRole('button', { name: /reflect into bias|편향에 반영/i }));
     await waitFor(() => {
       expect(ticketApi.setReflected).toHaveBeenCalledWith('actions', true);
@@ -305,14 +300,12 @@ describe('WorkTab', () => {
       .mockResolvedValueOnce([initial]);
     ticketApi.setLabel.mockRejectedValue(new Error('rejected'));
 
-    render(<WorkTab active />);
-    fireEvent.click(await screen.findByText('Failed label ticket'));
+    render(<WorkTab active focusedRunId="ticket:failed-label" />);
+    await screen.findByText('Failed label ticket');
     fireEvent.click(screen.getByRole('button', { name: /^bad|나쁨$/i }));
 
     await waitFor(() => expect(ticketApi.fetchRecords).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(/^saved$|^저장됨$/i)).not.toBeInTheDocument();
-    const ticketRow = screen.getByRole('button', { name: /failed label ticket/i });
-    expect(within(ticketRow).getByRole('img', { name: /^good|좋음$/i })).toBeInTheDocument();
   });
 
   it('remounts ticket-local mutation state and does not refresh B guide for late A reflect', async () => {
@@ -322,12 +315,12 @@ describe('WorkTab', () => {
     ticketApi.fetchRecords.mockResolvedValue([ticketA, ticketB]);
     ticketApi.setReflected.mockReturnValue(reflectA.promise);
 
-    render(<WorkTab active />);
-    fireEvent.click(await screen.findByText('Ticket A'));
+    const view = render(<WorkTab active focusedRunId="ticket:a" />);
+    await screen.findByText('Ticket A');
     await waitFor(() => expect(ticketApi.fetchGuide).toHaveBeenCalledWith('/proj/a'));
     fireEvent.click(screen.getByRole('button', { name: /reflect into bias|편향에 반영/i }));
 
-    fireEvent.click(screen.getByText('Ticket B'));
+    view.rerender(<WorkTab active focusedRunId="ticket:b" />);
     await waitFor(() => expect(ticketApi.fetchGuide).toHaveBeenCalledWith('/proj/b'));
     const ticketBReflect = screen.getByRole('button', {
       name: /reflect into bias|편향에 반영/i,
@@ -345,10 +338,10 @@ describe('WorkTab', () => {
   it('fetches only while active and clears its refresh timer on cleanup', async () => {
     ticketApi.fetchRecords.mockResolvedValue([]);
     const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
-    const view = render(<WorkTab active={false} />);
+    const view = render(<WorkTab active={false} focusedRunId={null} />);
     expect(ticketApi.fetchRecords).not.toHaveBeenCalled();
 
-    view.rerender(<WorkTab active />);
+    view.rerender(<WorkTab active focusedRunId={null} />);
     await waitFor(() => expect(ticketApi.fetchRecords).toHaveBeenCalledTimes(1));
     const cleanupCountBeforeUnmount = clearIntervalSpy.mock.calls.length;
     view.unmount();
@@ -357,7 +350,7 @@ describe('WorkTab', () => {
 
   it('shows the translated unreachable state when loading fails', async () => {
     ticketApi.fetchRecords.mockRejectedValue(new Error('offline'));
-    render(<WorkTab active />);
+    render(<WorkTab active focusedRunId={null} />);
     expect(
       await screen.findByText(
         /could not reach the server to load ticket records|티켓 기록을 불러오기 위해 서버에 연결하지 못했습니다/i,
@@ -373,7 +366,7 @@ describe('WorkTab', () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
 
-    render(<WorkTab active />);
+    render(<WorkTab active focusedRunId="ticket:new" />);
     expect(ticketApi.fetchRecords).toHaveBeenCalledTimes(1);
     act(() => {
       vi.advanceTimersByTime(10000);
@@ -400,18 +393,18 @@ describe('WorkTab', () => {
     ticketApi.fetchRecords
       .mockReturnValueOnce(staleSuccess.promise)
       .mockReturnValueOnce(staleFailure.promise);
-    const view = render(<WorkTab active />);
+    const view = render(<WorkTab active focusedRunId={null} />);
 
-    view.rerender(<WorkTab active={false} />);
+    view.rerender(<WorkTab active={false} focusedRunId={null} />);
     await act(async () => {
       staleSuccess.resolve([rec({ ticketId: 'stale', headline: 'Inactive result' })]);
       await staleSuccess.promise;
     });
     expect(screen.queryByText('Inactive result')).not.toBeInTheDocument();
 
-    view.rerender(<WorkTab active />);
+    view.rerender(<WorkTab active focusedRunId={null} />);
     expect(ticketApi.fetchRecords).toHaveBeenCalledTimes(2);
-    view.rerender(<WorkTab active={false} />);
+    view.rerender(<WorkTab active={false} focusedRunId={null} />);
     await act(async () => {
       staleFailure.reject(new Error('late failure'));
       try {

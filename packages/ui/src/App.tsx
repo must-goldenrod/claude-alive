@@ -600,6 +600,7 @@ export default function App() {
               <BoardView
                 active={viewMode === 'board'}
                 subscribeRaw={subscribeRaw}
+                focusedRunId={selection.runId}
                 focusSessionId={archiveFocusSessionId}
               />
             </Suspense>
@@ -611,7 +612,12 @@ export default function App() {
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'tickets' ? 'block' : 'none' }}>
             <Suspense fallback={null}>
-              <TicketsView active={viewMode === 'tickets'} subscribeRaw={subscribeRaw} />
+              <TicketsView
+                active={viewMode === 'tickets'}
+                subscribeRaw={subscribeRaw}
+                selection={selection}
+                runs={runTree.runs}
+              />
             </Suspense>
           </div>
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'spread' ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', padding: 24 }}>

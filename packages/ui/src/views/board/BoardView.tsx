@@ -11,9 +11,11 @@ interface BoardViewProps {
   active: boolean;
   subscribeRaw: RawMessageSubscribe;
   focusSessionId?: string | null;
+  /** Run focused in the shared sidebar; the work tab renders its detail. */
+  focusedRunId: string | null;
 }
 
-export function BoardView({ active }: BoardViewProps) {
+export function BoardView({ active, focusedRunId }: BoardViewProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TopTab>('work');
 
@@ -73,7 +75,7 @@ export function BoardView({ active }: BoardViewProps) {
           hidden={tab !== 'work'}
           style={{ display: tab === 'work' ? 'block' : 'none', height: '100%' }}
         >
-          <WorkTab active={active && tab === 'work'} />
+          <WorkTab active={active && tab === 'work'} focusedRunId={focusedRunId} />
         </div>
         <div
           id="board-panel-cost"

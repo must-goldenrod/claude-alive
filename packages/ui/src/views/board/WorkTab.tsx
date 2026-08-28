@@ -8,18 +8,24 @@ import {
   type EvalLabel,
 } from '../ticketmgmt/api.ts';
 import { TicketDetailTabs } from './TicketDetailTabs.tsx';
-import { TicketList } from './TicketList.tsx';
 import { EmptyState } from './panels/EmptyState.tsx';
 
 interface WorkTabProps {
   active: boolean;
+  /**
+   * Run focused in the shared sidebar, e.g. `ticket:t-1`. The board no longer
+   * carries its own ticket list — that was a duplicate of the sidebar — so the
+   * detail it renders is whatever the sidebar points at.
+   */
+  focusedRunId: string | null;
 }
 
-export function WorkTab({ active }: WorkTabProps) {
+const TICKET_RUN_PREFIX = 'ticket:';
+
+export function WorkTab({ active, focusedRunId }: WorkTabProps) {
   const { t } = useTranslation();
   const [records, setRecords] = useState<TicketEvaluation[] | null>(null);
   const [reachable, setReachable] = useState<boolean | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [guideRefreshKey, setGuideRefreshKey] = useState(0);
   const refreshGenerationRef = useRef(0);
   const refreshEnabledRef = useRef(false);
@@ -66,10 +72,15 @@ export function WorkTab({ active }: WorkTabProps) {
     };
   }, [active, refresh]);
 
-  const handleSelect = useCallback((ticketId: string) => {
-    selectedIdRef.current = ticketId;
-    setSelectedId(ticketId);
-  }, []);
+  // Only ticket runs have an evaluation record; a terminal or agent run focused
+  // in the sidebar simply has no board detail to show.
+  const selectedId = focusedRunId?.startsWith(TICKET_RUN_PREFIX)
+    ? focusedRunId.slice(TICKET_RUN_PREFIX.length)
+    : null;
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const selected = useMemo(
     () =>
@@ -128,38 +139,19 @@ export function WorkTab({ active }: WorkTabProps) {
     return <EmptyState message={t('ticketMgmt.unreachable.body')} />;
   }
 
+  if (!selectedId) {
+    return <EmptyState message={t('board.pickRun')} />;
+  }
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        height: '100%',
-        width: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          width: 440,
-          minWidth: 300,
-          maxWidth: '50%',
-          borderRight: '1px solid var(--border-color)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          background: 'var(--bg-secondary)',
-        }}
-      >
-        <TicketList records={records} selectedId={selectedId} onSelect={handleSelect} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <TicketDetailTabs
-          record={selected}
-          sessionId={selected?.claudeSessionId ?? null}
-          guideRefreshKey={guideRefreshKey}
-          onLabel={handleLabel}
-          onReflect={handleReflect}
-        />
-      </div>
+    <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>
+      <TicketDetailTabs
+        record={selected}
+        sessionId={selected?.claudeSessionId ?? null}
+        guideRefreshKey={guideRefreshKey}
+        onLabel={handleLabel}
+        onReflect={handleReflect}
+      />
     </div>
   );
 }

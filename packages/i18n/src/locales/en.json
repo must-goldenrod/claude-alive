@@ -428,7 +428,8 @@
       "noSession": "No linked session",
       "noData": "No data",
       "pickTicket": "Select a ticket"
-    }
+    },
+    "pickRun": "Pick a run in the sidebar"
   },
   "data": {
     "title": "LLM Usage Data",
