@@ -1,0 +1,81 @@
+import '@testing-library/jest-dom/vitest';
+import '@claude-alive/i18n';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Run } from '@claude-alive/core';
+import { RunCard } from '../components/RunCard.tsx';
+
+const RUN: Run = {
+  runId: 'ticket:t1', repoId: 'r1', worktreeId: 'w1', kind: 'ticket', sourceId: 't1',
+  title: '위임 모델 확장', state: 'waiting', startedAt: 1000,
+  meta: { seq: 12, headline: '12종 등록 완료', model: 'claude-opus-4-8', costUsd: 0.42 },
+};
+
+afterEach(cleanup);
+
+function setup(run: Run = RUN) {
+  const onOpen = vi.fn();
+  const onClose = vi.fn();
+  const onAbandon = vi.fn();
+  render(<RunCard run={run} onOpen={onOpen} onClose={onClose} onAbandon={onAbandon} />);
+  return { onOpen, onClose, onAbandon };
+}
+
+describe('RunCard', () => {
+  it('shows the sequence number, title and headline', () => {
+    setup();
+    expect(screen.getByText(/#12/)).toBeInTheDocument();
+    expect(screen.getByText('위임 모델 확장')).toBeInTheDocument();
+    expect(screen.getByText('12종 등록 완료')).toBeInTheDocument();
+  });
+
+  it('prefills the close input with the headline', () => {
+    setup();
+    fireEvent.click(screen.getByTestId('run-close'));
+    expect(screen.getByTestId('run-outcome')).toHaveValue('12종 등록 완료');
+  });
+
+  it('submits the outcome on Enter', () => {
+    const { onClose } = setup();
+    fireEvent.click(screen.getByTestId('run-close'));
+    const input = screen.getByTestId('run-outcome');
+    fireEvent.change(input, { target: { value: '폴백 검증까지 완료' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onClose).toHaveBeenCalledWith('ticket:t1', '폴백 검증까지 완료');
+  });
+
+  it('ignores Enter while an IME composition is in flight', () => {
+    const { onClose } = setup();
+    fireEvent.click(screen.getByTestId('run-close'));
+    const input = screen.getByTestId('run-outcome');
+    fireEvent.change(input, { target: { value: '한글' } });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true } as unknown as KeyboardEventInit);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('refuses to submit an empty outcome', () => {
+    const { onClose } = setup({ ...RUN, meta: { seq: 12 } });
+    fireEvent.click(screen.getByTestId('run-close'));
+    fireEvent.keyDown(screen.getByTestId('run-outcome'), { key: 'Enter' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('abandon needs no outcome', () => {
+    const { onAbandon } = setup();
+    fireEvent.click(screen.getByTestId('run-close'));
+    fireEvent.click(screen.getByTestId('run-abandon'));
+    expect(onAbandon).toHaveBeenCalledWith('ticket:t1');
+  });
+
+  it('a closed run shows its outcome and offers no close button', () => {
+    setup({ ...RUN, state: 'closed', outcome: '기록됨', closedAt: 2000 });
+    expect(screen.getByText('기록됨')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-close')).not.toBeInTheDocument();
+  });
+
+  it('open dispatches with the whole run', () => {
+    const { onOpen } = setup();
+    fireEvent.click(screen.getByTestId('run-open'));
+    expect(onOpen).toHaveBeenCalledWith(RUN);
+  });
+});
