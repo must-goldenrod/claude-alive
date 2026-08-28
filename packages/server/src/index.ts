@@ -767,6 +767,13 @@ const broadcaster = new WSBroadcaster({
   },
 });
 
+// Push every run change to connected clients. Without this the sidebar would
+// only be correct at connect time — a ticket finishing, or someone closing a
+// run in another tab, would not reach anyone until a reload.
+runStore.subscribe((run) => {
+  broadcaster.broadcast({ type: 'run:update', run });
+});
+
 httpServer.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '/', `http://${req.headers.host}`);
   if (pathname === '/ws') {

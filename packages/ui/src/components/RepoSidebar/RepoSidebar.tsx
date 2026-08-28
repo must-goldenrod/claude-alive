@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Run, RunTree, Worktree } from '@claude-alive/core';
 import { Badge, EmptyState, StatusDot, space, text, type BadgeTone } from '../ui/index.ts';
 import type { Selection, SelectionAction } from '../../state/selection.ts';
+import { RunCard } from '../RunCard.tsx';
 import { buildTree, oldestOpenAge, type RepoNode, type WorktreeNode } from './runTree.ts';
 
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
@@ -17,6 +18,10 @@ interface RepoSidebarProps {
   selection: Selection;
   onAction: (action: SelectionAction) => void;
   onNewRun: (worktree: Worktree) => void;
+  /** File the focused run away with a one-line result. */
+  onCloseRun: (runId: string, outcome: string) => void;
+  /** File the focused run away without a result. */
+  onAbandonRun: (runId: string) => void;
 }
 
 /**
@@ -25,7 +30,9 @@ interface RepoSidebarProps {
  * It owns no data of its own; it renders whatever `buildTree` produced and
  * reports clicks upward as selection actions.
  */
-export function RepoSidebar({ tree, selection, onAction, onNewRun }: RepoSidebarProps) {
+export function RepoSidebar({
+  tree, selection, onAction, onNewRun, onCloseRun, onAbandonRun,
+}: RepoSidebarProps) {
   const { t } = useTranslation();
   const nodes = buildTree(tree, selection);
   const openCount = nodes.reduce((sum, n) => sum + n.openCount, 0);
@@ -78,6 +85,8 @@ export function RepoSidebar({ tree, selection, onAction, onNewRun }: RepoSidebar
             selection={selection}
             onAction={onAction}
             onNewRun={onNewRun}
+            onCloseRun={onCloseRun}
+            onAbandonRun={onAbandonRun}
           />
         ))
       )}
@@ -86,12 +95,14 @@ export function RepoSidebar({ tree, selection, onAction, onNewRun }: RepoSidebar
 }
 
 function RepoRow({
-  node, selection, onAction, onNewRun,
+  node, selection, onAction, onNewRun, onCloseRun, onAbandonRun,
 }: {
   node: RepoNode;
   selection: Selection;
   onAction: (a: SelectionAction) => void;
   onNewRun: (w: Worktree) => void;
+  onCloseRun: (runId: string, outcome: string) => void;
+  onAbandonRun: (runId: string) => void;
 }) {
   const selected = selection.repoId === node.repo.repoId;
   const select = () => onAction({ type: 'selectRepo', repoId: node.repo.repoId });
@@ -126,6 +137,8 @@ function RepoRow({
           selection={selection}
           onAction={onAction}
           onNewRun={onNewRun}
+          onCloseRun={onCloseRun}
+          onAbandonRun={onAbandonRun}
         />
       ))}
     </div>
@@ -133,12 +146,14 @@ function RepoRow({
 }
 
 function WorktreeRow({
-  node, selection, onAction, onNewRun,
+  node, selection, onAction, onNewRun, onCloseRun, onAbandonRun,
 }: {
   node: WorktreeNode;
   selection: Selection;
   onAction: (a: SelectionAction) => void;
   onNewRun: (w: Worktree) => void;
+  onCloseRun: (runId: string, outcome: string) => void;
+  onAbandonRun: (runId: string) => void;
 }) {
   const { t } = useTranslation();
   const [showClosed, setShowClosed] = useState(false);
@@ -187,8 +202,8 @@ function WorktreeRow({
       </div>
 
       {shown.map((run) => (
-        <div
-          key={run.runId}
+        <div key={run.runId}>
+          <div
           role="button"
           tabIndex={0}
           data-testid={`run-row-${run.runId}`}
@@ -207,6 +222,19 @@ function WorktreeRow({
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {run.meta?.seq !== undefined ? `#${run.meta.seq} ` : ''}{run.title}
           </span>
+          </div>
+          {/* The focused run expands in place. Closing lives here rather than in
+              one view so a run can be filed away from wherever you noticed it. */}
+          {selection.runId === run.runId && (
+            <div style={{ marginLeft: space[3], marginTop: space[1], marginBottom: space[2] }}>
+              <RunCard
+                run={run}
+                onOpen={(target) => onAction({ type: 'focusRun', run: target })}
+                onClose={onCloseRun}
+                onAbandon={onAbandonRun}
+              />
+            </div>
+          )}
         </div>
       ))}
 

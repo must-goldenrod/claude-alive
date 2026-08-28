@@ -517,7 +517,7 @@ export default function App() {
     saveSelection(window.localStorage, selection);
   }, [selection]);
 
-  const { tree: runTree } = useRunTree(true, subscribeRaw);
+  const { tree: runTree, closeRun, abandonRun } = useRunTree(true, subscribeRaw);
 
   const handleNewRun = useCallback((worktree: { path: string }) => {
     // Reuse the ticket composer instead of adding a second creation path; it
@@ -558,6 +558,8 @@ export default function App() {
           selection={selection}
           onAction={dispatchSelection}
           onNewRun={handleNewRun}
+          onCloseRun={(runId, outcome) => void closeRun(runId, outcome)}
+          onAbandonRun={(runId) => void abandonRun(runId)}
         />
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
         <ErrorBoundary>

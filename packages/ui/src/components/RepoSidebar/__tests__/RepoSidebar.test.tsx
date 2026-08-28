@@ -23,10 +23,20 @@ const TREE: RunTree = {
 function setup(overrides: Partial<Parameters<typeof RepoSidebar>[0]> = {}) {
   const onAction = vi.fn();
   const onNewRun = vi.fn();
+  const onCloseRun = vi.fn();
+  const onAbandonRun = vi.fn();
   render(
-    <RepoSidebar tree={TREE} selection={EMPTY_SELECTION} onAction={onAction} onNewRun={onNewRun} {...overrides} />,
+    <RepoSidebar
+      tree={TREE}
+      selection={EMPTY_SELECTION}
+      onAction={onAction}
+      onNewRun={onNewRun}
+      onCloseRun={onCloseRun}
+      onAbandonRun={onAbandonRun}
+      {...overrides}
+    />,
   );
-  return { onAction, onNewRun };
+  return { onAction, onNewRun, onCloseRun, onAbandonRun };
 }
 
 afterEach(cleanup);
@@ -88,5 +98,25 @@ describe('RepoSidebar', () => {
   it('marks the selected repository', () => {
     setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1' } });
     expect(screen.getByTestId('repo-row-r1')).toHaveAttribute('data-selected', 'true');
+  });
+  it('shows no run card while nothing is focused', () => {
+    setup();
+    expect(screen.queryByTestId('run-close')).not.toBeInTheDocument();
+  });
+
+  it('renders the focused run card so closing is reachable from any view', () => {
+    setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1', worktreeId: 'w1', runId: 'ticket:t1' } });
+    expect(screen.getByTestId('run-close')).toBeInTheDocument();
+  });
+
+  it('closing the focused run reports the run id and the typed outcome', () => {
+    const { onCloseRun } = setup({
+      selection: { ...EMPTY_SELECTION, repoId: 'r1', worktreeId: 'w1', runId: 'ticket:t1' },
+    });
+    fireEvent.click(screen.getByTestId('run-close'));
+    const input = screen.getByTestId('run-outcome');
+    fireEvent.change(input, { target: { value: '확장 완료' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onCloseRun).toHaveBeenCalledWith('ticket:t1', '확장 완료');
   });
 });
