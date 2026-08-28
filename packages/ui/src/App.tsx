@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { Component, lazy, Suspense, useState, useRef, useCallback, useMemo, useEffect, useReducer } from 'react';
 import type { ReactNode, MutableRefObject } from 'react';
 import type { WSServerMessage } from '@claude-alive/core';
 import i18n from '@claude-alive/i18n';
@@ -8,6 +8,9 @@ import { useWebSocket } from './views/dashboard/hooks/useWebSocket.ts';
 import { playErrorSound, playResourceAlertSound, playWaitingSound, installAudioUnlock } from './services/sound.ts';
 import { ChatOverlay } from './views/chat/ChatOverlay.tsx';
 import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOverlay.tsx';
+import { RepoSidebar } from './components/RepoSidebar/RepoSidebar.tsx';
+import { useRunTree } from './hooks/useRunTree.ts';
+import { EMPTY_SELECTION, loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
 import { buildAlertContent } from './services/notificationContent.ts';
@@ -502,6 +505,27 @@ export default function App() {
     };
   }, [handleViewModeChange]);
 
+  // ── Shared repo/worktree/run selection (spec 2026-08-28) ──────────────────
+  // Owned by the shell so every view reads one filter and one focused run.
+  const [selection, dispatchSelection] = useReducer(
+    selectionReducer,
+    undefined,
+    () => loadSelection(window.localStorage),
+  );
+
+  useEffect(() => {
+    saveSelection(window.localStorage, selection);
+  }, [selection]);
+
+  const { tree: runTree } = useRunTree(true, subscribeRaw);
+
+  const handleNewRun = useCallback((worktree: { path: string }) => {
+    // Reuse the ticket composer instead of adding a second creation path; it
+    // listens for this event and prefills the cwd.
+    window.dispatchEvent(new CustomEvent('claude-alive:new-run', { detail: { cwd: worktree.path } }));
+    handleViewModeChange('tickets');
+  }, [handleViewModeChange]);
+
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
@@ -526,6 +550,16 @@ export default function App() {
         rechecking={backendRechecking}
       />
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', marginTop: 56, position: 'relative' }}>
+        {/* Sidebar + views share one row. ChatOverlay stays a sibling of this
+            row so its absolute coordinates against the outer box are unchanged. */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
+        <RepoSidebar
+          tree={runTree}
+          selection={selection}
+          onAction={dispatchSelection}
+          onNewRun={handleNewRun}
+        />
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
         <ErrorBoundary>
           {/* Both views stay mounted. Only CSS display toggles — preserves game state, selected agent, list scroll, etc. */}
           <div style={{ position: 'absolute', inset: 0, display: viewMode === 'animation' ? 'block' : 'none' }}>
@@ -587,6 +621,8 @@ export default function App() {
             </div>
           </div>
         </ErrorBoundary>
+        </div>
+        </div>
 
         {/* App-level ChatOverlay — the DOM never relocates. When viewMode switches, the
             overlay animates between its floating-mode coordinates and the list-view layout
