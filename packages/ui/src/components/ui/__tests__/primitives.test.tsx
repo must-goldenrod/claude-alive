@@ -15,6 +15,13 @@ describe('primitives', () => {
     expect(screen.getByText('7')).toHaveStyle({ color: 'var(--accent-green)' });
   });
 
+  it('Badge never shrinks below its content', () => {
+    // It sits in flex rows next to a growing title; without these the pill gets
+    // squeezed narrower than the number it contains.
+    render(<Badge tone="blue">128</Badge>);
+    expect(screen.getByText('128')).toHaveStyle({ flexShrink: '0', whiteSpace: 'nowrap' });
+  });
+
   it('Button fires onClick and blocks it when disabled', () => {
     const onClick = vi.fn();
     const { rerender } = render(<Button onClick={onClick}>go</Button>);

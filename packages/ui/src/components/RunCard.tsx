@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Run } from '@claude-alive/core';
-import { Badge, Button, Panel, StatusDot, space, text, type BadgeTone } from './ui/index.ts';
+import { Badge, Button, HierarchyIcon, Panel, space, text, type BadgeTone } from './ui/index.ts';
 
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
   running: 'blue', waiting: 'amber', closed: 'neutral', abandoned: 'neutral',
@@ -15,8 +15,12 @@ interface RunCardProps {
 }
 
 /**
- * One run, whatever its kind. Tickets, terminals and agent sessions all reach
- * here as the same shape, so closing work looks the same everywhere.
+ * One run, whatever its kind, in a 280px column.
+ *
+ * The card answers three questions in order: what state is this in, what was it
+ * for, and what came of it. Everything else (model, cost, elapsed) is one muted
+ * line at the bottom — useful when you look for it, never competing for
+ * attention with the answer.
  */
 export function RunCard({ run, onOpen, onClose, onAbandon }: RunCardProps) {
   const { t } = useTranslation();
@@ -37,44 +41,90 @@ export function RunCard({ run, onOpen, onClose, onAbandon }: RunCardProps) {
     setClosing(false);
   }
 
-  const metaLine = [run.meta?.model, formatDuration(run.meta?.durationMs), formatCost(run.meta?.costUsd)]
+  const result = run.outcome ?? run.meta?.headline;
+  const metaLine = [
+    shortModel(run.meta?.model),
+    formatDuration(run.meta?.durationMs),
+    formatCost(run.meta?.costUsd),
+  ]
     .filter((x): x is string => Boolean(x))
     .join(' · ');
 
   return (
     <Panel padding="sm">
+      {/* State first, in words. A coloured dot alone does not say whether a run
+          is waiting on the agent or waiting on you. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
-        <StatusDot tone={STATE_TONE[run.state]} pulse={run.state === 'running'} />
-        {run.meta?.seq !== undefined && <Badge tone="neutral">#{run.meta.seq}</Badge>}
-        <span
+        <HierarchyIcon level={run.kind} color="var(--text-secondary)" />
+        <Badge tone={STATE_TONE[run.state]}>{t(`run.state.${run.state}`)}</Badge>
+        {run.meta?.seq !== undefined && (
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontFamily: 'var(--font-mono)',
+              fontSize: text.xs,
+              color: 'var(--text-secondary)',
+              flexShrink: 0,
+            }}
+          >
+            #{run.meta.seq}
+          </span>
+        )}
+      </div>
+
+      {/* The goal wraps to two lines instead of truncating at one — in a narrow
+          column a single ellipsed line rarely carries enough to identify a run. */}
+      <div
+        style={{
+          marginTop: space[2],
+          fontSize: text.base,
+          fontWeight: 600,
+          lineHeight: 1.35,
+          color: 'var(--text-primary)',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          wordBreak: 'break-word',
+        }}
+      >
+        {run.title}
+      </div>
+
+      {result && (
+        <div
           style={{
-            fontSize: text.base, fontWeight: 600, color: 'var(--text-primary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            marginTop: space[2],
+            fontSize: text.sm,
+            lineHeight: 1.4,
+            color: 'var(--text-secondary)',
+            display: '-webkit-box',
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            wordBreak: 'break-word',
           }}
         >
-          {run.title}
-        </span>
-      </div>
+          {result}
+        </div>
+      )}
 
       {metaLine.length > 0 && (
         <div
           style={{
-            marginTop: space[1], fontFamily: 'var(--font-mono)',
-            fontSize: text.xs, color: 'var(--text-secondary)',
+            marginTop: space[2],
+            fontFamily: 'var(--font-mono)',
+            fontSize: text.xs,
+            color: 'var(--text-secondary)',
+            opacity: 0.7,
           }}
         >
           {metaLine}
         </div>
       )}
 
-      {(run.outcome ?? run.meta?.headline) && (
-        <div style={{ marginTop: space[2], fontSize: text.sm, color: 'var(--text-secondary)' }}>
-          {run.outcome ?? run.meta?.headline}
-        </div>
-      )}
-
       {closing ? (
-        <div style={{ marginTop: space[2], display: 'flex', gap: space[2], alignItems: 'center' }}>
+        <div style={{ marginTop: space[3], display: 'flex', flexDirection: 'column', gap: space[2] }}>
           <input
             data-testid="run-outcome"
             autoFocus
@@ -91,18 +141,23 @@ export function RunCard({ run, onOpen, onClose, onAbandon }: RunCardProps) {
               if (e.key === 'Escape') setClosing(false);
             }}
             style={{
-              flex: 1, minWidth: 0, padding: `${space[1]} ${space[2]}`,
+              width: '100%', boxSizing: 'border-box', padding: `${space[2]} ${space[2]}`,
               borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)',
               background: 'var(--bg-primary)', color: 'var(--text-primary)',
               fontFamily: 'var(--font-ui)', fontSize: text.sm,
             }}
           />
-          <Button variant="ghost" onClick={() => { onAbandon(run.runId); setClosing(false); }}>
-            <span data-testid="run-abandon">{t('run.abandon')}</span>
-          </Button>
+          <div style={{ display: 'flex', gap: space[2], justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => { onAbandon(run.runId); setClosing(false); }}>
+              <span data-testid="run-abandon">{t('run.abandon')}</span>
+            </Button>
+            <Button variant="primary" onClick={submit} disabled={outcome.trim().length === 0}>
+              <span data-testid="run-outcome-submit">{t('run.close')}</span>
+            </Button>
+          </div>
         </div>
       ) : (
-        <div style={{ marginTop: space[2], display: 'flex', gap: space[2], justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: space[3], display: 'flex', gap: space[2], justifyContent: 'flex-end' }}>
           <Button variant="ghost" onClick={() => onOpen(run)}>
             <span data-testid="run-open">{t('run.open')}</span>
           </Button>
@@ -115,6 +170,13 @@ export function RunCard({ run, onOpen, onClose, onAbandon }: RunCardProps) {
       )}
     </Panel>
   );
+}
+
+/** `claude-opus-4-8` → `opus`. The family is what anyone actually reads here. */
+function shortModel(model?: string): string | undefined {
+  if (!model) return undefined;
+  const match = /(opus|sonnet|haiku|fable)/i.exec(model);
+  return match ? match[1]!.toLowerCase() : model;
 }
 
 function formatDuration(ms?: number): string | undefined {

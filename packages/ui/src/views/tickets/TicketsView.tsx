@@ -10,6 +10,7 @@ import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
 import { filterTicketsBySelection, type RunLocationRef } from './ticketFilter.ts';
 import type { Selection } from '../../state/selection.ts';
+import { OPEN_RUN_EVENT, type OpenRunIntent } from '../../state/openRun.ts';
 
 interface TicketsViewProps {
   active: boolean;
@@ -40,6 +41,17 @@ export function TicketsView({ active, subscribeRaw, selection, runs, leftInset }
     };
     window.addEventListener('claude-alive:new-run', handler);
     return () => window.removeEventListener('claude-alive:new-run', handler);
+  }, []);
+
+  // "Open" on a ticket run means this view's detail modal. The shell switches
+  // to this view and we pick the ticket up here, where the modal already lives.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const intent = (event as CustomEvent).detail as OpenRunIntent | undefined;
+      if (intent?.kind === 'ticket') setSelectedId(intent.ticketId);
+    };
+    window.addEventListener(OPEN_RUN_EVENT, handler);
+    return () => window.removeEventListener(OPEN_RUN_EVENT, handler);
   }, []);
 
   const visible = useMemo(

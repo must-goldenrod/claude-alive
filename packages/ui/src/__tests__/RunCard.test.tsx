@@ -78,4 +78,33 @@ describe('RunCard', () => {
     fireEvent.click(screen.getByTestId('run-open'));
     expect(onOpen).toHaveBeenCalledWith(RUN);
   });
+  it('states the run state in words, not just a colour', () => {
+    setup();
+    expect(screen.getByText(/확인 필요|Needs you/)).toBeInTheDocument();
+  });
+
+  it('shortens the model to its family', () => {
+    setup();
+    expect(screen.getByText(/opus/)).toBeInTheDocument();
+    expect(screen.queryByText(/claude-opus-4-8/)).not.toBeInTheDocument();
+  });
+
+  it('marks the run kind with an icon', () => {
+    setup();
+    expect(screen.getByTestId('hierarchy-icon-ticket')).toBeInTheDocument();
+  });
+
+  it('offers an explicit submit as well as Enter', () => {
+    const { onClose } = setup();
+    fireEvent.click(screen.getByTestId('run-close'));
+    fireEvent.change(screen.getByTestId('run-outcome'), { target: { value: '버튼으로 제출' } });
+    fireEvent.click(screen.getByTestId('run-outcome-submit'));
+    expect(onClose).toHaveBeenCalledWith('ticket:t1', '버튼으로 제출');
+  });
+
+  it('disables the submit button while the outcome is blank', () => {
+    setup({ ...RUN, meta: { seq: 12 } });
+    fireEvent.click(screen.getByTestId('run-close'));
+    expect(screen.getByTestId('run-outcome-submit').closest('button')).toBeDisabled();
+  });
 });

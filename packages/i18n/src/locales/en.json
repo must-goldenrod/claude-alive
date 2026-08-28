@@ -903,9 +903,15 @@
   },
   "run": {
     "open": "Open",
-    "close": "Close",
-    "abandon": "Abandon",
+    "close": "Record result",
+    "abandon": "Just clear it",
     "outcomePlaceholder": "One line: what came of this",
-    "closedAt": "closed"
+    "closedAt": "closed",
+    "state": {
+      "running": "Running",
+      "waiting": "Needs you",
+      "closed": "Done",
+      "abandoned": "Cleared"
+    }
   }
 }

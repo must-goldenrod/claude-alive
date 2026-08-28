@@ -11,6 +11,7 @@ import type { TerminalEventHandler, SshSessionInfo } from './views/chat/ChatOver
 import { RepoSidebar } from './components/RepoSidebar/RepoSidebar.tsx';
 import { useRunTree } from './hooks/useRunTree.ts';
 import { layoutInsets } from './state/layoutInsets.ts';
+import { OPEN_RUN_EVENT, type OpenRunIntent } from './state/openRun.ts';
 import { loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
@@ -520,6 +521,25 @@ export default function App() {
   }, [selection]);
 
   const { tree: runTree, closeRun, abandonRun } = useRunTree(true, subscribeRaw);
+
+  // The sidebar states what "open" should surface; routing it needs the shell,
+  // because each kind's surface lives in a different view.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const intent = (event as CustomEvent).detail as OpenRunIntent | undefined;
+      if (!intent) return;
+      if (intent.kind === 'ticket') {
+        handleViewModeChange('tickets');
+        return;
+      }
+      const detail = intent.kind === 'terminal'
+        ? { tabId: intent.tabId }
+        : { sessionId: intent.sessionId };
+      window.dispatchEvent(new CustomEvent('terminal:focusTab', { detail }));
+    };
+    window.addEventListener(OPEN_RUN_EVENT, handler);
+    return () => window.removeEventListener(OPEN_RUN_EVENT, handler);
+  }, [handleViewModeChange]);
 
   const handleNewRun = useCallback((worktree: { path: string }) => {
     // Reuse the ticket composer instead of adding a second creation path; it

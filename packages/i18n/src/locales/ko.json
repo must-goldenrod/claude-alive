@@ -902,9 +902,15 @@
   },
   "run": {
     "open": "열기",
-    "close": "닫기",
-    "abandon": "포기",
+    "close": "완료 기록",
+    "abandon": "그냥 치우기",
     "outcomePlaceholder": "한 줄로: 무엇이 되었는지",
-    "closedAt": "닫힘"
+    "closedAt": "닫힘",
+    "state": {
+      "running": "실행 중",
+      "waiting": "확인 필요",
+      "closed": "완료",
+      "abandoned": "치움"
+    }
   }
 }

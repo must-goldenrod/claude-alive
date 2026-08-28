@@ -11,6 +11,10 @@ export function Badge({ children, tone = 'neutral' }: { children: ReactNode; ton
         alignItems: 'center',
         justifyContent: 'center',
         minWidth: 22,
+        // The pill lives in flex rows beside a growing title. Without these
+        // flexbox squeezes it narrower than the number it is meant to contain.
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
         padding: '1px 7px',
         borderRadius: radius.full,
         fontFamily: 'var(--font-mono)',
