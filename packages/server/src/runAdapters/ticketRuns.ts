@@ -49,3 +49,31 @@ export function ticketRunOutcome(
   if (!terminal || !evaluation?.humanLabeled) return null;
   return ticket.headline?.trim() || ticket.error?.trim() || evaluation.label;
 }
+
+/** Just the run fields the orphan sweep needs, so callers pass whole `Run`s. */
+interface RunRef {
+  runId: string;
+  kind: string;
+  sourceId: string;
+}
+
+/**
+ * Ticket runs whose ticket is gone.
+ *
+ * Deletion used to drop the ticket and leave its run behind, so the sidebar kept
+ * listing work that no longer existed — and counted it as unfinished. Deletion
+ * now removes both, but installs that predate the fix still carry the leftovers,
+ * and a ticket can also be evicted by the store's retention cap. Sweeping at
+ * startup keeps the registry honest either way.
+ *
+ * Only `ticket` runs are considered: other kinds answer to other stores, and
+ * treating an unknown sourceId as an orphan would delete live terminals.
+ */
+export function orphanTicketRunIds(
+  runs: readonly RunRef[],
+  ticketIds: ReadonlySet<string>,
+): string[] {
+  return runs
+    .filter((run) => run.kind === 'ticket' && !ticketIds.has(run.sourceId))
+    .map((run) => run.runId);
+}
