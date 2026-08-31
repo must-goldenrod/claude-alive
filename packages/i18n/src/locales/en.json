@@ -930,5 +930,33 @@
     "touched": "{{count}} files changed",
     "touchedMore": "+{{count}} more",
     "verified": "Verifier"
+  },
+  "git": {
+    "label": "Branch",
+    "current": "on {{name}}",
+    "detached": "detached HEAD",
+    "switch": "Switch",
+    "create": "New branch",
+    "createFrom": "from {{name}}",
+    "delete": "Delete branch",
+    "deleteConfirm": "Delete the local branch \"{{name}}\"? Unmerged work is refused by git.",
+    "namePlaceholder": "feat/my-change",
+    "dirtyHint": "Uncommitted changes — commit or stash before switching.",
+    "notARepoHint": "Not a git repository; branch controls are unavailable.",
+    "switching": "Working…",
+    "error": {
+      "nameEmpty": "Enter a branch name.",
+      "nameWhitespace": "Branch names cannot contain spaces.",
+      "nameTooLong": "That branch name is too long.",
+      "nameReserved": "Branch names cannot contain ~ ^ : ? * [ ] \\\\ .. or @{",
+      "nameEdges": "Branch names cannot start or end that way.",
+      "notARepo": "This folder is not a git repository.",
+      "noSuchBranch": "No local branch named \"{{name}}\".",
+      "alreadyExists": "A branch named \"{{name}}\" already exists.",
+      "dirty": "There are uncommitted changes. Commit or stash them first.",
+      "deleteCurrent": "You cannot delete the branch you are on.",
+      "gitFailed": "git refused: {{message}}",
+      "network": "Could not reach the server."
+    }
   }
 }

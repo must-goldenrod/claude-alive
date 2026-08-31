@@ -41,7 +41,8 @@ import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
 import { createTicketStore } from './ticketStore.js';
 import { createRunStore } from './runStore.js';
-import { resolveCwd } from './gitResolver.js';
+import { resolveCwd, invalidateGitCache } from './gitResolver.js';
+import { createBranch, deleteBranch, listBranches, switchBranch } from './gitBranches.js';
 import { ticketToUpsert, ticketRunOutcome, orphanTicketRunIds } from './runAdapters/ticketRuns.js';
 import { runIdForSession } from './runAttribution.js';
 import { isAllowedWsOrigin } from './wsOrigin.js';
@@ -417,6 +418,23 @@ function fileEvaluatedRun(ticket: Ticket): void {
   if (outcome !== null) runStore.close(`ticket:${ticket.id}`, outcome);
 }
 
+/**
+ * Re-read a checkout and republish every ticket that lives in it.
+ *
+ * A branch operation changes what `resolveCwd` would answer, and the run
+ * registry stores the answer. Without this the sidebar kept naming the branch
+ * that was current when each run was first mirrored.
+ */
+async function refreshAfterCheckout(cwd: string): Promise<void> {
+  invalidateGitCache(cwd);
+  const here = await resolveCwd(cwd);
+  for (const ticket of ticketStore.list()) {
+    if (ticket.cwd === cwd || ticket.cwd.startsWith(`${here.worktree.path}/`) || ticket.cwd === here.worktree.path) {
+      await mirrorTicket(ticket);
+    }
+  }
+}
+
 const evalStore = createEvalStore();
 await evalStore.load();
 
@@ -676,6 +694,27 @@ const httpServer = createHttpServer({
     list: () => backendRegistry.list(),
     check: async (id: string) =>
       id === 'claude-local' || id === 'litellm' || id === 'ssh' ? backendRegistry.check(id) : null,
+  },
+  // Local git branch management for the ticket composer. Every operation
+  // re-resolves the checkout afterwards and re-mirrors its tickets, so the
+  // sidebar's branch label follows the checkout instead of lagging behind it.
+  git: {
+    list: (cwd) => listBranches(cwd),
+    switch: async (cwd, name) => {
+      const result = await switchBranch(cwd, name);
+      if (result.ok) await refreshAfterCheckout(cwd);
+      return result;
+    },
+    create: async (cwd, name, from) => {
+      const result = await createBranch(cwd, name, from);
+      if (result.ok) await refreshAfterCheckout(cwd);
+      return result;
+    },
+    remove: async (cwd, name) => {
+      const result = await deleteBranch(cwd, name);
+      if (result.ok) await refreshAfterCheckout(cwd);
+      return result;
+    },
   },
   sshBrowse: async (target, path) => {
     try {

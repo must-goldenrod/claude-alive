@@ -24,7 +24,6 @@ const TREE: RunTree = {
 
 function setup(overrides: Partial<Parameters<typeof RepoSidebar>[0]> = {}) {
   const onAction = vi.fn();
-  const onNewRun = vi.fn();
   const onToggleRepo = vi.fn();
   const onToggleWorktree = vi.fn();
   render(
@@ -35,11 +34,10 @@ function setup(overrides: Partial<Parameters<typeof RepoSidebar>[0]> = {}) {
       expand={EMPTY_EXPAND}
       onToggleRepo={onToggleRepo}
       onToggleWorktree={onToggleWorktree}
-      onNewRun={onNewRun}
       {...overrides}
     />,
   );
-  return { onAction, onNewRun, onToggleRepo, onToggleWorktree };
+  return { onAction, onToggleRepo, onToggleWorktree };
 }
 
 afterEach(cleanup);
@@ -107,10 +105,17 @@ describe('RepoSidebar', () => {
     expect(screen.queryByTestId('run-abandon')).not.toBeInTheDocument();
   });
 
-  it('the new-run button reports the worktree it was pressed in', () => {
-    const { onNewRun } = setup();
-    fireEvent.click(screen.getByTestId('new-run-w2'));
-    expect(onNewRun).toHaveBeenCalledWith(TREE.worktrees[1]);
+  it('offers no per-branch "+" — selecting the branch is what points the composer', () => {
+    setup();
+    expect(screen.queryByTestId('new-run-w2')).not.toBeInTheDocument();
+  });
+
+  it('draws the fold marker as a stroked chevron, not a filled triangle', () => {
+    setup();
+    expect(screen.getAllByTestId('chevron-expanded').length).toBeGreaterThan(0);
+    cleanup();
+    setup({ expand: toggleRepo(EMPTY_EXPAND, 'r1') });
+    expect(screen.getByTestId('chevron-collapsed')).toBeInTheDocument();
   });
 
   it('the summary line reports the total open count', () => {

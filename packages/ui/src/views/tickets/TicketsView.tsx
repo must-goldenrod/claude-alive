@@ -36,33 +36,16 @@ export function TicketsView({
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Explicit "+" presses from the sidebar. They win over the ambient selection
-  // below until the selection itself changes, because pressing "+" on a branch
-  // is a more specific statement than having that repo selected.
-  const [pickedCwd, setPickedCwd] = useState<string | null>(null);
-
-  // The sidebar's per-worktree "+" routes here rather than opening a second
-  // composer, so there stays exactly one way to create a ticket.
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent).detail as { cwd?: string } | undefined;
-      if (typeof detail?.cwd === 'string') setPickedCwd(detail.cwd);
-    };
-    window.addEventListener('claude-alive:new-run', handler);
-    return () => window.removeEventListener('claude-alive:new-run', handler);
-  }, []);
-
   // Selecting a repo or branch in the sidebar points the composer at it, so a
   // new ticket continues where you were just looking instead of making you
-  // re-pick the folder you already clicked.
+  // re-pick the folder you already clicked. This replaced the per-branch "+"
+  // button, which fired the same prefill and therefore did nothing visible when
+  // you were already on that branch.
   const selectionCwd = useMemo(
     () => selectedCwd(selection, worktrees, primaryWorktreeIds),
     [selection, worktrees, primaryWorktreeIds],
   );
-  useEffect(() => {
-    setPickedCwd(null);
-  }, [selectionCwd]);
-  const presetCwd = pickedCwd ?? selectionCwd ?? undefined;
+  const presetCwd = selectionCwd ?? undefined;
 
   // "Open" on a ticket run means this view's detail modal. The shell switches
   // to this view and we pick the ticket up here, where the modal already lives.

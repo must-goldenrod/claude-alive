@@ -567,13 +567,6 @@ export default function App() {
     return () => window.removeEventListener(OPEN_RUN_EVENT, handler);
   }, [handleViewModeChange]);
 
-  const handleNewRun = useCallback((worktree: { path: string }) => {
-    // Reuse the ticket composer instead of adding a second creation path; it
-    // listens for this event and prefills the cwd.
-    window.dispatchEvent(new CustomEvent('claude-alive:new-run', { detail: { cwd: worktree.path } }));
-    handleViewModeChange('tickets');
-  }, [handleViewModeChange]);
-
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
@@ -609,7 +602,6 @@ export default function App() {
             expand={expand}
             onToggleRepo={handleToggleRepo}
             onToggleWorktree={handleToggleWorktree}
-            onNewRun={handleNewRun}
           />
         )}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
