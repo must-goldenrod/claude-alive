@@ -36,9 +36,40 @@ describe('buildTree', () => {
     expect(nodes[1]?.openCount).toBe(0);
   });
 
-  it('sorts repositories by open count, then by name', () => {
-    const nodes = buildTree(TREE, EMPTY_SELECTION);
-    expect(nodes[0]?.repo.name).toBe('alive');
+  it('sorts repositories by most recent activity, then by name', () => {
+    const tree: RunTree = {
+      ...TREE,
+      runs: [
+        run('a', 'w1', 'r1', { startedAt: 100 }),
+        run('d', 'w3', 'r2', { startedAt: 100, lastActivityAt: 9000 }),
+      ],
+    };
+    expect(buildTree(tree, EMPTY_SELECTION).map((n) => n.repo.repoId)).toEqual(['r2', 'r1']);
+  });
+
+  it('does not reorder repositories when a run closes', () => {
+    const before = buildTree(TREE, EMPTY_SELECTION).map((n) => n.repo.repoId);
+    const closed: RunTree = {
+      ...TREE,
+      // Same timestamps, one fewer open run: order must not depend on open count.
+      runs: TREE.runs.map((r) => (r.runId === 'a' ? { ...r, state: 'closed' as const } : r)),
+    };
+    expect(buildTree(closed, EMPTY_SELECTION).map((n) => n.repo.repoId)).toEqual(before);
+  });
+
+  it('reports each repository last-activity time', () => {
+    const tree: RunTree = {
+      ...TREE,
+      runs: [run('a', 'w1', 'r1', { startedAt: 100, lastActivityAt: 7000 })],
+    };
+    const nodes = buildTree(tree, EMPTY_SELECTION);
+    expect(nodes.find((n) => n.repo.repoId === 'r1')?.lastActivityAt).toBe(7000);
+    expect(nodes.find((n) => n.repo.repoId === 'r2')?.lastActivityAt).toBeNull();
+  });
+
+  it('falls back to startedAt for runs that predate last-activity tracking', () => {
+    const tree: RunTree = { ...TREE, runs: [run('a', 'w1', 'r1', { startedAt: 4321 })] };
+    expect(buildTree(tree, EMPTY_SELECTION)[0]?.lastActivityAt).toBe(4321);
   });
 
   it('sorts runs open-first, then newest first', () => {

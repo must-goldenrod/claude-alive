@@ -134,6 +134,38 @@ describe('runStore', () => {
     expect(store.tree().runs[0]?.touchedFiles).toEqual(['/r/proj/a.ts']);
   });
 
+  it('defaults last activity to the start when the adapter reports none', () => {
+    expect(upsert().lastActivityAt).toBe(1000);
+  });
+
+  it('takes the adapter last-activity time when it is newer', () => {
+    upsert();
+    expect(upsert({ lastActivityAt: 5000 }).lastActivityAt).toBe(5000);
+  });
+
+  it('never lets a stale adapter report move last activity backwards', () => {
+    upsert({ lastActivityAt: 5000 });
+    expect(upsert({ lastActivityAt: 2000 }).lastActivityAt).toBe(5000);
+  });
+
+  it('close does not restamp last activity — filing is not work', () => {
+    upsert({ lastActivityAt: 5000 });
+    const closed = store.close('run-1', '완료');
+    expect(closed?.lastActivityAt).toBe(5000);
+    expect(closed?.closedAt).toBeGreaterThan(5000);
+  });
+
+  it('abandon does not restamp last activity either', () => {
+    upsert({ lastActivityAt: 5000 });
+    expect(store.abandon('run-1')?.lastActivityAt).toBe(5000);
+  });
+
+  it('a touched file counts as activity', () => {
+    upsert({ lastActivityAt: 5000 });
+    const next = store.recordTouchedFile('run-1', '/r/proj/a.ts');
+    expect(next?.lastActivityAt).toBeGreaterThan(5000);
+  });
+
   it('recording on an unknown run returns null', () => {
     expect(store.recordTouchedFile('nope', '/a')).toBeNull();
   });

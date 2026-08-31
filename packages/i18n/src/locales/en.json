@@ -618,7 +618,8 @@
       "cancelled": "Cancelled",
       "interrupted": "Interrupted (server restart)",
       "cwd-not-allowed": "Working directory not allowed"
-    }
+    },
+    "startedAt": "Started"
   },
   "spread": {
     "empty": "No open terminals",
@@ -899,7 +900,19 @@
     "showClosed": "{{count}} done",
     "newRun": "New run",
     "noRepos": "No repositories yet",
-    "detached": "detached"
+    "detached": "detached",
+    "allRepos": "All projects",
+    "allReposHint": "no filter",
+    "filteredBanner": "Filtered to {{name}}",
+    "clearFilter": "Show all",
+    "collapse": "Collapse {{name}}",
+    "expand": "Expand {{name}}",
+    "lastActivity": "{{age}} ago",
+    "noActivity": "no activity",
+    "stateRunning": "running",
+    "stateWaiting": "unfiled",
+    "stateClosed": "closed",
+    "stateAbandoned": "abandoned"
   },
   "run": {
     "open": "Open",

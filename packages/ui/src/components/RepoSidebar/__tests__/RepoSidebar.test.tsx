@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunTree } from '@claude-alive/core';
 import { RepoSidebar } from '../RepoSidebar.tsx';
 import { EMPTY_SELECTION } from '../../../state/selection.ts';
+import { EMPTY_EXPAND, toggleRepo } from '../../../state/sidebarExpand.ts';
 
 const TREE: RunTree = {
   repositories: [{ repoId: 'r1', root: '/r/alive', name: 'alive', isGit: true }],
@@ -25,18 +26,21 @@ function setup(overrides: Partial<Parameters<typeof RepoSidebar>[0]> = {}) {
   const onNewRun = vi.fn();
   const onCloseRun = vi.fn();
   const onAbandonRun = vi.fn();
+  const onToggleRepo = vi.fn();
   render(
     <RepoSidebar
       tree={TREE}
       selection={EMPTY_SELECTION}
       onAction={onAction}
+      expand={EMPTY_EXPAND}
+      onToggleRepo={onToggleRepo}
       onNewRun={onNewRun}
       onCloseRun={onCloseRun}
       onAbandonRun={onAbandonRun}
       {...overrides}
     />,
   );
-  return { onAction, onNewRun, onCloseRun, onAbandonRun };
+  return { onAction, onNewRun, onCloseRun, onAbandonRun, onToggleRepo };
 }
 
 afterEach(cleanup);
@@ -133,5 +137,58 @@ describe('RepoSidebar', () => {
   it('omits the spend figure when nothing has cost anything', () => {
     setup();
     expect(screen.queryByTestId('open-spend')).not.toBeInTheDocument();
+  });
+
+  it('the chevron toggles only its own repository and never filters', () => {
+    const { onToggleRepo, onAction } = setup();
+    fireEvent.click(screen.getByTestId('repo-toggle-r1'));
+    expect(onToggleRepo).toHaveBeenCalledWith('r1');
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('states whether a repository is expanded', () => {
+    setup();
+    expect(screen.getByTestId('repo-toggle-r1')).toHaveAttribute('aria-expanded', 'true');
+    cleanup();
+    setup({ expand: toggleRepo(EMPTY_EXPAND, 'r1') });
+    expect(screen.getByTestId('repo-toggle-r1')).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('hides the branches of a collapsed repository, keeping the repo itself', () => {
+    setup({ expand: toggleRepo(EMPTY_EXPAND, 'r1') });
+    expect(screen.getByTestId('repo-row-r1')).toBeInTheDocument();
+    expect(screen.queryByTestId('worktree-row-w1')).not.toBeInTheDocument();
+  });
+
+  it('offers an all-projects row that clears the filter', () => {
+    const { onAction } = setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1' } });
+    const all = screen.getByTestId('all-repos');
+    expect(all).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(all);
+    expect(onAction).toHaveBeenCalledWith({ type: 'clear' });
+  });
+
+  it('marks the all-projects row as active while nothing is filtered', () => {
+    setup();
+    expect(screen.getByTestId('all-repos')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('names the run state in words, not only by colour', () => {
+    setup();
+    expect(screen.getByTestId('run-state-ticket:t1')).toHaveTextContent(/running|실행중/);
+  });
+
+  it('shows a last-activity age on every run row', () => {
+    setup();
+    expect(screen.getByTestId('run-age-ticket:t1')).toBeInTheDocument();
+  });
+
+  it('shows only the first line of a multi-line goal', () => {
+    const tree: RunTree = {
+      ...TREE,
+      runs: [{ ...TREE.runs[0]!, title: '첫 줄\n둘째 줄' }],
+    };
+    setup({ tree });
+    expect(screen.queryByText(/둘째 줄/)).not.toBeInTheDocument();
   });
 });

@@ -1,20 +1,44 @@
 import type { Repository, Run, RunTree, Worktree } from '@claude-alive/core';
 import { matchesSelection, type Selection } from '../../state/selection.ts';
 
+/**
+ * When a run last did something, falling back to its start for records written
+ * before the field existed.
+ *
+ * Inlined rather than imported from `@claude-alive/core`: the barrel has a
+ * runtime side that reaches for `node:readline`, and pulling it into the browser
+ * bundle breaks the Vite build while typecheck and unit tests still pass.
+ */
+export function runLastActivityAt(run: Pick<Run, 'startedAt' | 'lastActivityAt'>): number {
+  return run.lastActivityAt ?? run.startedAt;
+}
+
 export interface WorktreeNode {
   worktree: Worktree;
   openCount: number;
   runs: Run[];
+  /** Newest activity across this branch's runs; null when it has none. */
+  lastActivityAt: number | null;
 }
 
 export interface RepoNode {
   repo: Repository;
   openCount: number;
   worktrees: WorktreeNode[];
+  /** Newest activity across the whole repository; null when it has no runs. */
+  lastActivityAt: number | null;
 }
 
 function isOpen(run: Run): boolean {
   return run.state === 'running' || run.state === 'waiting';
+}
+
+function newest(times: readonly (number | null)[]): number | null {
+  let latest: number | null = null;
+  for (const t of times) {
+    if (t !== null && (latest === null || t > latest)) latest = t;
+  }
+  return latest;
 }
 
 /**
@@ -38,7 +62,12 @@ export function buildTree(tree: RunTree, selection: Selection): RepoNode[] {
       .filter((w) => w.repoId === repo.repoId)
       .map((worktree) => {
         const runs = [...(byWorktree.get(worktree.worktreeId) ?? [])].sort(compareRuns);
-        return { worktree, runs, openCount: runs.filter(isOpen).length };
+        return {
+          worktree,
+          runs,
+          openCount: runs.filter(isOpen).length,
+          lastActivityAt: newest(runs.map(runLastActivityAt)),
+        };
       })
       .filter((node) => !selection.openOnly || node.runs.length > 0);
 
@@ -46,6 +75,7 @@ export function buildTree(tree: RunTree, selection: Selection): RepoNode[] {
       repo,
       worktrees,
       openCount: worktrees.reduce((sum, w) => sum + w.openCount, 0),
+      lastActivityAt: newest(worktrees.map((w) => w.lastActivityAt)),
     };
   });
 
@@ -54,15 +84,24 @@ export function buildTree(tree: RunTree, selection: Selection): RepoNode[] {
     .sort(compareRepos);
 }
 
-/** Open runs first, then most recently started first. */
+/** Open runs first, then most recently active first. */
 function compareRuns(a: Run, b: Run): number {
   if (isOpen(a) !== isOpen(b)) return isOpen(a) ? -1 : 1;
-  return b.startedAt - a.startedAt;
+  return runLastActivityAt(b) - runLastActivityAt(a);
 }
 
-/** Most unfinished work first, then alphabetical so the order is stable. */
+/**
+ * Most recently active repository first, then alphabetical.
+ *
+ * Deliberately NOT by open count. That key changed the moment a run opened or
+ * closed, so the repo you were reading jumped position under the pointer and
+ * the rest of the list resettled around it. Activity time only moves when
+ * something actually happens, which is the ordering the list is meant to show.
+ */
 function compareRepos(a: RepoNode, b: RepoNode): number {
-  if (a.openCount !== b.openCount) return b.openCount - a.openCount;
+  if (a.lastActivityAt !== b.lastActivityAt) {
+    return (b.lastActivityAt ?? -Infinity) - (a.lastActivityAt ?? -Infinity);
+  }
   return (a.repo.name ?? a.repo.root).localeCompare(b.repo.name ?? b.repo.root);
 }
 

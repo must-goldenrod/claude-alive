@@ -8,7 +8,7 @@ import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
 import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
-import { filterTicketsBySelection, type RunLocationRef } from './ticketFilter.ts';
+import { filterTicketsBySelection, type RunLocationRef, type WorktreeLocationRef } from './ticketFilter.ts';
 import type { Selection } from '../../state/selection.ts';
 import { OPEN_RUN_EVENT, type OpenRunIntent } from '../../state/openRun.ts';
 
@@ -19,13 +19,15 @@ interface TicketsViewProps {
   selection: Selection;
   /** Run records, used to decide which repo a ticket belongs to. */
   runs: readonly RunLocationRef[];
+  /** Worktrees, used to place a ticket that has no run yet by its cwd. */
+  worktrees: readonly WorktreeLocationRef[];
   /** Left edge of the shell's content area; the to-do dock starts past it. */
   leftInset: number;
 }
 
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
-export function TicketsView({ active, subscribeRaw, selection, runs, leftInset }: TicketsViewProps) {
+export function TicketsView({ active, subscribeRaw, selection, runs, worktrees, leftInset }: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -55,8 +57,8 @@ export function TicketsView({ active, subscribeRaw, selection, runs, leftInset }
   }, []);
 
   const visible = useMemo(
-    () => filterTicketsBySelection(tickets, runs, selection),
-    [tickets, runs, selection],
+    () => filterTicketsBySelection(tickets, runs, selection, worktrees),
+    [tickets, runs, selection, worktrees],
   );
 
   const grouped = useMemo(() => {

@@ -13,6 +13,8 @@ export interface RunUpsert {
   /** Adapters only ever report `running` or `waiting`. */
   state: Extract<RunState, 'running' | 'waiting'>;
   startedAt: number;
+  /** When the source last did something. Defaults to `startedAt`. */
+  lastActivityAt?: number;
   meta?: RunMeta;
 }
 
@@ -118,6 +120,12 @@ export function createRunStore({ file }: { file: string }): RunStore {
         title: input.title,
         state,
         startedAt: prior?.startedAt ?? input.startedAt,
+        // Activity only ever moves forward: an adapter re-reporting an older
+        // snapshot must not make a run look staler than it is.
+        lastActivityAt: Math.max(
+          input.lastActivityAt ?? input.startedAt,
+          prior?.lastActivityAt ?? 0,
+        ),
         meta: input.meta ?? prior?.meta,
       };
       if (prior?.outcome !== undefined) next.outcome = prior.outcome;
@@ -136,7 +144,7 @@ export function createRunStore({ file }: { file: string }): RunStore {
       // Unchanged list = a duplicate or a full list; skip the write and the
       // broadcast rather than churning every client on a repeated edit.
       if (touchedFiles === prior.touchedFiles) return prior;
-      const next: Run = { ...prior, touchedFiles };
+      const next: Run = { ...prior, touchedFiles, lastActivityAt: Date.now() };
       runs.set(runId, next);
       emit(next);
       return next;
@@ -145,6 +153,10 @@ export function createRunStore({ file }: { file: string }): RunStore {
     close(runId, outcome) {
       const prior = runs.get(runId);
       if (!prior) return null;
+      // `lastActivityAt` deliberately survives untouched. Filing a run away is
+      // bookkeeping, not work: stamping it now would make three-week-old runs
+      // read as "1m ago" and would reorder the sidebar by when someone tidied
+      // up rather than by when anything happened. `closedAt` records the filing.
       const next: Run = {
         ...prior,
         state: 'closed',
@@ -159,6 +171,7 @@ export function createRunStore({ file }: { file: string }): RunStore {
     abandon(runId) {
       const prior = runs.get(runId);
       if (!prior) return null;
+      // Same as `close`: abandoning does not count as activity (see above).
       const next: Run = { ...prior, state: 'abandoned', closedAt: Date.now() };
       delete next.outcome;
       runs.set(runId, next);

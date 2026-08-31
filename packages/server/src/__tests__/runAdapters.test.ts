@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentInfo, Ticket } from '@claude-alive/core';
+import type { AgentInfo, Ticket, TicketEvaluation } from '@claude-alive/core';
 import type { ResolvedLocation } from '../gitResolver.js';
-import { ticketToUpsert } from '../runAdapters/ticketRuns.js';
+import { ticketToUpsert, ticketRunOutcome } from '../runAdapters/ticketRuns.js';
 import { terminalToUpsert } from '../runAdapters/terminalRuns.js';
 import { agentToUpsert } from '../runAdapters/agentRuns.js';
 
@@ -90,5 +90,48 @@ describe('agentToUpsert', () => {
 
   it('uses createdAt as the start time', () => {
     expect(agentToUpsert(agent(), LOC).startedAt).toBe(700);
+  });
+});
+
+describe('ticketRunOutcome', () => {
+  const evaluation = (over: Partial<TicketEvaluation> = {}): TicketEvaluation =>
+    ({ ticketId: 't-1', route: '/r/proj', seq: 12, label: 'good', humanLabeled: true, updatedAt: 1 } as TicketEvaluation);
+
+  it('keeps an unevaluated done ticket open — the human still has to look at it', () => {
+    expect(ticketRunOutcome(ticket({ state: 'done' }), undefined)).toBeNull();
+  });
+
+  it('keeps a done ticket open while the label is only the auto seed', () => {
+    expect(ticketRunOutcome(ticket({ state: 'done' }), { ...evaluation(), humanLabeled: false })).toBeNull();
+  });
+
+  it('keeps a running ticket open even if somehow labelled', () => {
+    expect(ticketRunOutcome(ticket({ state: 'running' }), evaluation())).toBeNull();
+  });
+
+  it('files a human-evaluated done ticket away under its headline', () => {
+    expect(ticketRunOutcome(ticket({ state: 'done', headline: '검증 완료' }), evaluation())).toBe('검증 완료');
+  });
+
+  it('files a human-evaluated failed ticket away under its error', () => {
+    expect(ticketRunOutcome(ticket({ state: 'failed', error: 'spawn failed' }), evaluation())).toBe('spawn failed');
+  });
+
+  it('falls back to the label when the ticket says nothing', () => {
+    expect(ticketRunOutcome(ticket({ state: 'done' }), evaluation())).toBe('good');
+  });
+});
+
+describe('ticketToUpsert lastActivityAt', () => {
+  it('reports the newest turn, not the start', () => {
+    const up = ticketToUpsert(
+      ticket({ startedAt: 2000, turns: [{ role: 'user', kind: 'prompt', text: 'go', at: 7000 }] }),
+      LOC,
+    );
+    expect(up.lastActivityAt).toBe(7000);
+  });
+
+  it('falls back to the start when nothing has happened since', () => {
+    expect(ticketToUpsert(ticket({ startedAt: 2000 }), LOC).lastActivityAt).toBe(2000);
   });
 });
