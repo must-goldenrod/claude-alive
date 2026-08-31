@@ -152,6 +152,25 @@ export function delegatedModels(ticket: Ticket): string[] {
   return seen;
 }
 
+/**
+ * When something last happened on this ticket: newest turn, end, start, or
+ * creation — whichever is latest.
+ *
+ * Inlined rather than imported from `@claude-alive/core`: the barrel has a
+ * runtime side that reaches for `node:readline`, and pulling it into the
+ * browser bundle breaks the Vite build while typecheck and tests still pass.
+ */
+export function ticketLastActivityAt(ticket: Ticket): number {
+  let latest = ticket.createdAt;
+  const bump = (at?: number): void => {
+    if (at !== undefined && at > latest) latest = at;
+  };
+  bump(ticket.startedAt);
+  bump(ticket.endedAt);
+  for (const turn of ticket.turns ?? []) bump(turn.at);
+  return latest;
+}
+
 /** Compact "MM-DD HH:mm" for the card. Uses startedAt, falling back to createdAt. */
 export function formatStarted(ticket: Ticket): string {
   const ms = ticket.startedAt ?? ticket.createdAt;

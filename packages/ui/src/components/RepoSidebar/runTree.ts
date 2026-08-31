@@ -1,6 +1,17 @@
 import type { Repository, Run, RunTree, Worktree } from '@claude-alive/core';
-import { runLastActivityAt } from '@claude-alive/core';
 import { matchesSelection, type Selection } from '../../state/selection.ts';
+
+/**
+ * When a run last did something, falling back to its start for records written
+ * before the field existed.
+ *
+ * Inlined rather than imported from `@claude-alive/core`: the barrel has a
+ * runtime side that reaches for `node:readline`, and pulling it into the browser
+ * bundle breaks the Vite build while typecheck and unit tests still pass.
+ */
+export function runLastActivityAt(run: Pick<Run, 'startedAt' | 'lastActivityAt'>): number {
+  return run.lastActivityAt ?? run.startedAt;
+}
 
 export interface WorktreeNode {
   worktree: Worktree;

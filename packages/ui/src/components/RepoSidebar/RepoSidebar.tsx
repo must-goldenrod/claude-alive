@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Run, RunTree, Worktree } from '@claude-alive/core';
-import { runLastActivityAt } from '@claude-alive/core';
 import { Badge, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, type BadgeTone } from '../ui/index.ts';
 import type { Selection, SelectionAction } from '../../state/selection.ts';
 import { isRepoExpanded, type ExpandState } from '../../state/sidebarExpand.ts';
@@ -9,7 +8,10 @@ import { RunCard } from '../RunCard.tsx';
 import { dispatchOpenRun } from '../../state/openRun.ts';
 import { useNow } from '../../views/dashboard/hooks/useNow.ts';
 import { formatAge } from '../../utils/age.ts';
-import { buildTree, oldestOpenAge, openCostUsd, type RepoNode, type WorktreeNode } from './runTree.ts';
+import {
+  buildTree, oldestOpenAge, openCostUsd, runLastActivityAt,
+  type RepoNode, type WorktreeNode,
+} from './runTree.ts';
 
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
   running: 'blue',

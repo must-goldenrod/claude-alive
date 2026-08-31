@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next';
+import { useNow } from '../dashboard/hooks/useNow.ts';
+import { formatAge } from '../../utils/age.ts';
 import type { Ticket, TicketEvaluation, SshTarget } from '@claude-alive/core';
 
 /** `dev@host` / `host:port` — inlined (avoid a core runtime import in the browser bundle). */
@@ -9,6 +11,7 @@ function sshDisplay(t: SshTarget): string {
 import {
   projectName,
   formatStarted,
+  ticketLastActivityAt,
   displayStatus,
   oneLineSummary,
   runMetaShort,
@@ -30,7 +33,11 @@ const CARD_HEIGHT = 150;
 
 export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCardProps) {
   const { t } = useTranslation();
+  const now = useNow();
   const status = displayStatus(ticket.state, evaluation);
+  // Started-at alone cannot tell a stalled ticket from a live one. The card now
+  // leads with how long it has been quiet and keeps the start time as a tooltip.
+  const lastActivity = ticketLastActivityAt(ticket);
   const color = STATUS_COLOR[status];
   const isActive = status === 'active';
 
@@ -133,8 +140,12 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
             ⬈ {ticket.location.label || ticket.location.ssh.host}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 10, fontFamily: 'var(--font-mono, monospace)', opacity: 0.45, whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {formatStarted(ticket)}
+        <span
+          data-testid={`ticket-age-${ticket.id}`}
+          title={`${t('tickets.startedAt')}: ${formatStarted(ticket)} / ${new Date(lastActivity).toLocaleString()}`}
+          style={{ marginLeft: 'auto', fontSize: 10, fontFamily: 'var(--font-mono, monospace)', opacity: 0.45, whiteSpace: 'nowrap', flexShrink: 0 }}
+        >
+          {t('sidebar.lastActivity', { age: formatAge(Math.max(0, now - lastActivity)) })}
         </span>
       </div>
 
