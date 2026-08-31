@@ -57,6 +57,18 @@ export function buildTree(tree: RunTree, selection: Selection): RepoNode[] {
     else byWorktree.set(run.worktreeId, [run]);
   }
 
+  // Activity is measured over EVERY run, not the filtered ones. Deriving it from
+  // the visible set made selecting a repo blank out every other repo's activity,
+  // which sorted them all below it — so the row you clicked jumped to the top and
+  // the list resettled around it. A filter narrows what is listed, never where
+  // things sit.
+  const activityByWorktree = new Map<string, number>();
+  for (const run of tree.runs) {
+    const at = runLastActivityAt(run);
+    const prior = activityByWorktree.get(run.worktreeId);
+    if (prior === undefined || at > prior) activityByWorktree.set(run.worktreeId, at);
+  }
+
   const nodes: RepoNode[] = tree.repositories.map((repo) => {
     const worktrees: WorktreeNode[] = tree.worktrees
       .filter((w) => w.repoId === repo.repoId)
@@ -66,7 +78,7 @@ export function buildTree(tree: RunTree, selection: Selection): RepoNode[] {
           worktree,
           runs,
           openCount: runs.filter(isOpen).length,
-          lastActivityAt: newest(runs.map(runLastActivityAt)),
+          lastActivityAt: activityByWorktree.get(worktree.worktreeId) ?? null,
         };
       })
       .filter((node) => !selection.openOnly || node.runs.length > 0);
@@ -75,7 +87,12 @@ export function buildTree(tree: RunTree, selection: Selection): RepoNode[] {
       repo,
       worktrees,
       openCount: worktrees.reduce((sum, w) => sum + w.openCount, 0),
-      lastActivityAt: newest(worktrees.map((w) => w.lastActivityAt)),
+      // Across every worktree of this repo, including ones the filter pruned.
+      lastActivityAt: newest(
+        tree.worktrees
+          .filter((w) => w.repoId === repo.repoId)
+          .map((w) => activityByWorktree.get(w.worktreeId) ?? null),
+      ),
     };
   });
 

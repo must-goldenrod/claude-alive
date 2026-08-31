@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Run, RunTree, Worktree } from '@claude-alive/core';
 import { Badge, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, type BadgeTone } from '../ui/index.ts';
 import type { Selection, SelectionAction } from '../../state/selection.ts';
-import { isRepoExpanded, type ExpandState } from '../../state/sidebarExpand.ts';
-import { RunCard } from '../RunCard.tsx';
+import { isRepoExpanded, isWorktreeExpanded, type ExpandState } from '../../state/sidebarExpand.ts';
 import { dispatchOpenRun } from '../../state/openRun.ts';
 import { useNow } from '../../views/dashboard/hooks/useNow.ts';
 import { formatAge } from '../../utils/age.ts';
@@ -31,30 +29,29 @@ interface RepoSidebarProps {
   tree: RunTree;
   selection: Selection;
   onAction: (action: SelectionAction) => void;
-  /** Which repositories are collapsed. Independent of the filter. */
+  /** Which repositories and branches are collapsed. */
   expand: ExpandState;
   /** Toggle exactly one repository open/closed. */
   onToggleRepo: (repoId: string) => void;
+  /** Toggle exactly one branch's ticket list open/closed. */
+  onToggleWorktree: (worktreeId: string) => void;
   onNewRun: (worktree: Worktree) => void;
-  /** File the focused run away with a one-line result. */
-  onCloseRun: (runId: string, outcome: string) => void;
-  /** File the focused run away without a result. */
-  onAbandonRun: (runId: string) => void;
 }
 
 /**
- * The one hierarchy every view shares: repo → branch/worktree → run.
+ * The one hierarchy every view shares: repo → branch → ticket.
  *
- * It owns no data of its own; it renders whatever `buildTree` produced and
- * reports clicks upward as selection actions.
+ * Each depth behaves the same way, so there is one rule to learn rather than
+ * three: clicking a row opens or closes what is under it AND points the rest of
+ * the app at it. A chevron on the left states which way the row currently sits.
  *
- * Two clicks live on a repo row and they mean different things: the chevron
- * expands it (sidebar-local), the name filters every view to it (app-wide).
- * They used to be the same click, which is why the sidebar read as if it were
- * randomly hiding work.
+ * The deepest row is a ticket, and clicking one opens its detail modal. Actions
+ * (retry, reply, evaluate, delete) live there and only there — the sidebar used
+ * to grow an inline card with its own close/abandon controls, which split the
+ * same decisions across two places.
  */
 export function RepoSidebar({
-  tree, selection, onAction, expand, onToggleRepo, onNewRun, onCloseRun, onAbandonRun,
+  tree, selection, onAction, expand, onToggleRepo, onToggleWorktree, onNewRun,
 }: RepoSidebarProps) {
   const { t } = useTranslation();
   const now = useNow();
@@ -135,13 +132,12 @@ export function RepoSidebar({
             key={node.repo.repoId}
             node={node}
             selection={selection}
-            expanded={isRepoExpanded(expand, node.repo.repoId)}
+            expand={expand}
             onToggleRepo={onToggleRepo}
+            onToggleWorktree={onToggleWorktree}
             now={now}
             onAction={onAction}
             onNewRun={onNewRun}
-            onCloseRun={onCloseRun}
-            onAbandonRun={onAbandonRun}
           />
         ))
       )}
@@ -149,68 +145,66 @@ export function RepoSidebar({
   );
 }
 
+/** The ▾/▸ an expandable row carries, so its state is readable without clicking. */
+function Chevron({ expanded }: { expanded: boolean }) {
+  return (
+    <span aria-hidden="true" style={{ width: 12, flexShrink: 0, fontSize: 10, color: 'var(--text-secondary)' }}>
+      {expanded ? '▾' : '▸'}
+    </span>
+  );
+}
+
 function RepoRow({
-  node, selection, expanded, onToggleRepo, now, onAction, onNewRun, onCloseRun, onAbandonRun,
+  node, selection, expand, onToggleRepo, onToggleWorktree, now, onAction, onNewRun,
 }: {
   node: RepoNode;
   selection: Selection;
-  expanded: boolean;
+  expand: ExpandState;
   onToggleRepo: (repoId: string) => void;
+  onToggleWorktree: (worktreeId: string) => void;
   now: number;
   onAction: (a: SelectionAction) => void;
   onNewRun: (w: Worktree) => void;
-  onCloseRun: (runId: string, outcome: string) => void;
-  onAbandonRun: (runId: string) => void;
 }) {
-  const { t } = useTranslation();
   const selected = selection.repoId === node.repo.repoId;
-  const select = () => onAction({ type: 'selectRepo', repoId: node.repo.repoId });
+  const expanded = isRepoExpanded(expand, node.repo.repoId);
   const name = node.repo.name ?? node.repo.root;
+
+  // One click, two effects: fold the branches under this repo, and point the
+  // board and the ticket composer at it. Selecting is not a toggle — the
+  // all-projects row is the single way back to no filter, so a second click
+  // still just folds.
+  const activate = () => {
+    onToggleRepo(node.repo.repoId);
+    if (!selected) onAction({ type: 'selectRepo', repoId: node.repo.repoId });
+  };
+
   return (
     <div style={{ marginBottom: space[2] }}>
       <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        data-testid={`repo-row-${node.repo.repoId}`}
+        data-selected={selected ? 'true' : 'false'}
+        onClick={activate}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } }}
         style={{
-          display: 'flex', alignItems: 'center', gap: space[1],
-          borderRadius: 'var(--radius-md)',
+          display: 'flex', alignItems: 'center', gap: space[2],
+          padding: space[2], borderRadius: 'var(--radius-md)',
           background: selected ? 'rgba(88,166,255,0.10)' : 'transparent',
+          color: 'var(--text-primary)', fontSize: text.base, fontWeight: 600, cursor: 'pointer',
         }}
       >
-        <button
-          type="button"
-          data-testid={`repo-toggle-${node.repo.repoId}`}
-          aria-expanded={expanded}
-          aria-label={expanded ? t('sidebar.collapse', { name }) : t('sidebar.expand', { name })}
-          onClick={() => onToggleRepo(node.repo.repoId)}
-          style={{
-            border: 'none', background: 'transparent', color: 'var(--text-secondary)',
-            cursor: 'pointer', padding: `${space[2]} 2px ${space[2]} ${space[2]}`,
-            fontSize: 10, lineHeight: 1, width: 20, flexShrink: 0,
-          }}
-        >
-          {expanded ? '▾' : '▸'}
-        </button>
-        <div
-          role="button"
-          tabIndex={0}
-          data-testid={`repo-row-${node.repo.repoId}`}
-          data-selected={selected ? 'true' : 'false'}
-          onClick={select}
-          onKeyDown={(e) => { if (e.key === 'Enter') select(); }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: space[2], flex: 1, minWidth: 0,
-            padding: `${space[2]} ${space[2]} ${space[2]} 0`,
-            color: 'var(--text-primary)', fontSize: text.base, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          <HierarchyIcon level="repo" color="var(--accent-purple)" />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {name}
-          </span>
-          <ActivityAge at={node.lastActivityAt} now={now} testId={`repo-age-${node.repo.repoId}`} />
-          <span style={{ flexShrink: 0 }} data-testid={`repo-open-count-${node.repo.repoId}`}>
-            <Badge tone={node.openCount > 0 ? 'amber' : 'neutral'}>{node.openCount}</Badge>
-          </span>
-        </div>
+        <Chevron expanded={expanded} />
+        <HierarchyIcon level="repo" color="var(--accent-purple)" />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {name}
+        </span>
+        <ActivityAge at={node.lastActivityAt} now={now} testId={`repo-age-${node.repo.repoId}`} />
+        <span style={{ flexShrink: 0 }} data-testid={`repo-open-count-${node.repo.repoId}`}>
+          <Badge tone={node.openCount > 0 ? 'amber' : 'neutral'}>{node.openCount}</Badge>
+        </span>
       </div>
 
       {expanded && node.worktrees.map((wt) => (
@@ -218,11 +212,11 @@ function RepoRow({
           key={wt.worktree.worktreeId}
           node={wt}
           selection={selection}
+          expanded={isWorktreeExpanded(expand, wt.worktree.worktreeId)}
+          onToggleWorktree={onToggleWorktree}
           now={now}
           onAction={onAction}
           onNewRun={onNewRun}
-          onCloseRun={onCloseRun}
-          onAbandonRun={onAbandonRun}
         />
       ))}
     </div>
@@ -230,35 +224,40 @@ function RepoRow({
 }
 
 function WorktreeRow({
-  node, selection, now, onAction, onNewRun, onCloseRun, onAbandonRun,
+  node, selection, expanded, onToggleWorktree, now, onAction, onNewRun,
 }: {
   node: WorktreeNode;
   selection: Selection;
+  expanded: boolean;
+  onToggleWorktree: (worktreeId: string) => void;
   now: number;
   onAction: (a: SelectionAction) => void;
   onNewRun: (w: Worktree) => void;
-  onCloseRun: (runId: string, outcome: string) => void;
-  onAbandonRun: (runId: string) => void;
 }) {
   const { t } = useTranslation();
-  const [showClosed, setShowClosed] = useState(false);
   const selected = selection.worktreeId === node.worktree.worktreeId;
-  const select = () =>
-    onAction({ type: 'selectWorktree', repoId: node.worktree.repoId, worktreeId: node.worktree.worktreeId });
 
-  const open = node.runs.filter((r) => r.state === 'running' || r.state === 'waiting');
-  const closed = node.runs.filter((r) => r.state === 'closed' || r.state === 'abandoned');
-  const shown = showClosed ? [...open, ...closed] : open;
+  const activate = () => {
+    onToggleWorktree(node.worktree.worktreeId);
+    if (!selected) {
+      onAction({
+        type: 'selectWorktree',
+        repoId: node.worktree.repoId,
+        worktreeId: node.worktree.worktreeId,
+      });
+    }
+  };
 
   return (
     <div style={{ marginLeft: space[3] }}>
       <div
         role="button"
         tabIndex={0}
+        aria-expanded={expanded}
         data-testid={`worktree-row-${node.worktree.worktreeId}`}
         data-selected={selected ? 'true' : 'false'}
-        onClick={select}
-        onKeyDown={(e) => { if (e.key === 'Enter') select(); }}
+        onClick={activate}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); } }}
         style={{
           display: 'flex', alignItems: 'center', gap: space[2],
           padding: `${space[1]} ${space[2]}`, borderRadius: 'var(--radius-sm)',
@@ -266,6 +265,7 @@ function WorktreeRow({
           color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: text.sm, cursor: 'pointer',
         }}
       >
+        <Chevron expanded={expanded} />
         <HierarchyIcon level="branch" color="var(--accent-teal)" />
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.worktree.branch || t('sidebar.detached')}
@@ -287,76 +287,72 @@ function WorktreeRow({
         </span>
       </div>
 
-      {shown.map((run) => (
-        <div key={run.runId}>
-          <div
-          role="button"
-          tabIndex={0}
-          data-testid={`run-row-${run.runId}`}
-          data-selected={selection.runId === run.runId ? 'true' : 'false'}
-          onClick={() => onAction({ type: 'focusRun', run })}
-          onKeyDown={(e) => { if (e.key === 'Enter') onAction({ type: 'focusRun', run }); }}
-          style={{
-            display: 'flex', alignItems: 'center', gap: space[2],
-            marginLeft: space[3], padding: `${space[1]} ${space[2]}`,
-            borderRadius: 'var(--radius-sm)',
-            background: selection.runId === run.runId ? 'rgba(88,166,255,0.14)' : 'transparent',
-            color: 'var(--text-primary)', fontSize: text.sm, cursor: 'pointer',
-          }}
-        >
-          <StatusDot tone={STATE_TONE[run.state]} pulse={run.state === 'running'} />
-          <HierarchyIcon level={run.kind} color={toneColor[STATE_TONE[run.state]]} size={12} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {run.meta?.seq !== undefined ? `#${run.meta.seq} ` : ''}{firstLine(run.title)}
-          </span>
-          {/* State in words, not only a colour: "waiting" on this board means
-              "finished, nobody filed it", which no dot can convey. */}
-          <span
-            data-testid={`run-state-${run.runId}`}
-            style={{
-              marginLeft: 'auto', flexShrink: 0, fontSize: text.xs,
-              color: toneColor[STATE_TONE[run.state]], opacity: 0.85,
-            }}
-          >
-            {t(STATE_LABEL[run.state])}
-          </span>
-          <ActivityAge at={runLastActivityAt(run)} now={now} testId={`run-age-${run.runId}`} noGrow />
-          </div>
-          {/* The focused run expands in place. Closing lives here rather than in
-              one view so a run can be filed away from wherever you noticed it. */}
-          {selection.runId === run.runId && (
-            <div style={{ marginLeft: space[3], marginTop: space[1], marginBottom: space[2] }}>
-              <RunCard
-                run={run}
-                onOpen={dispatchOpenRun}
-                onClose={onCloseRun}
-                onAbandon={onAbandonRun}
-              />
-            </div>
-          )}
-        </div>
+      {expanded && node.runs.map((run) => (
+        <TicketRow key={run.runId} run={run} selection={selection} now={now} onAction={onAction} />
       ))}
-
-      {closed.length > 0 && (
-        <button
-          type="button"
-          data-testid={`show-closed-${node.worktree.worktreeId}`}
-          aria-expanded={showClosed}
-          onClick={() => setShowClosed((v) => !v)}
-          style={{
-            marginLeft: space[3], padding: `${space[1]} ${space[2]}`,
-            border: 'none', background: 'transparent', color: 'var(--text-secondary)',
-            fontSize: text.xs, opacity: 0.6, cursor: 'pointer',
-          }}
-        >
-          {showClosed ? '▾ ' : '▸ '}{t('sidebar.showClosed', { count: closed.length })}
-        </button>
-      )}
     </div>
   );
 }
 
-/** "2m ago" beside a row, or nothing at all when there is no activity to date. */
+/**
+ * A ticket, at the depth of the branch it actually belongs to.
+ *
+ * Clicking opens the detail modal rather than expanding a second card here:
+ * retry, reply, evaluate and delete all live in the modal, and offering a
+ * subset of them inline meant the same ticket had two different control sets
+ * depending on where you found it.
+ */
+function TicketRow({
+  run, selection, now, onAction,
+}: {
+  run: Run;
+  selection: Selection;
+  now: number;
+  onAction: (a: SelectionAction) => void;
+}) {
+  const { t } = useTranslation();
+  const open = () => {
+    onAction({ type: 'focusRun', run });
+    dispatchOpenRun(run);
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      data-testid={`run-row-${run.runId}`}
+      data-selected={selection.runId === run.runId ? 'true' : 'false'}
+      onClick={open}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: space[2],
+        marginLeft: space[3], padding: `${space[1]} ${space[2]}`,
+        borderRadius: 'var(--radius-sm)',
+        background: selection.runId === run.runId ? 'rgba(88,166,255,0.14)' : 'transparent',
+        color: 'var(--text-primary)', fontSize: text.sm, cursor: 'pointer',
+      }}
+    >
+      <StatusDot tone={STATE_TONE[run.state]} pulse={run.state === 'running'} />
+      <HierarchyIcon level={run.kind} color={toneColor[STATE_TONE[run.state]]} size={12} />
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {run.meta?.seq !== undefined ? `#${run.meta.seq} ` : ''}{firstLine(run.title)}
+      </span>
+      {/* State in words, not only a colour: "waiting" on this board means
+          "finished, nobody filed it", which no dot can convey. */}
+      <span
+        data-testid={`run-state-${run.runId}`}
+        style={{
+          marginLeft: 'auto', flexShrink: 0, fontSize: text.xs,
+          color: toneColor[STATE_TONE[run.state]], opacity: 0.85,
+        }}
+      >
+        {t(STATE_LABEL[run.state])}
+      </span>
+      <ActivityAge at={runLastActivityAt(run)} now={now} testId={`run-age-${run.runId}`} noGrow />
+    </div>
+  );
+}
+
+/** "2m ago" beside a row, or a dash when there is no activity to date. */
 function ActivityAge({
   at, now, testId, noGrow,
 }: {

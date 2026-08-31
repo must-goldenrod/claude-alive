@@ -619,7 +619,8 @@
       "interrupted": "중단됨 (서버 재시작)",
       "cwd-not-allowed": "허용되지 않은 작업 디렉터리"
     },
-    "startedAt": "시작"
+    "startedAt": "시작",
+    "reviewCta": "검토"
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",

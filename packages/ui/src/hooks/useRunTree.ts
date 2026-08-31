@@ -40,6 +40,12 @@ export function useRunTree(active: boolean, subscribeRaw: RawMessageSubscribe) {
         setTree(msg.tree);
         return;
       }
+      if (msg.type === 'run:removed') {
+        // The source was deleted, so the run is gone rather than closed. Without
+        // this the sidebar kept a row for a ticket that no longer exists.
+        setTree((prev) => ({ ...prev, runs: prev.runs.filter((r) => r.runId !== msg.runId) }));
+        return;
+      }
       if (msg.type === 'run:update') {
         setTree((prev) => {
           const runs = prev.runs.some((r) => r.runId === msg.run.runId)

@@ -81,6 +81,13 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     return subscribeRaw((msg: WSServerMessage) => {
       if (msg.type === 'ticket:update') {
         setById((prev) => ({ ...prev, [msg.ticket.id]: msg.ticket }));
+      } else if (msg.type === 'ticket:removed') {
+        setById((prev) => {
+          if (!(msg.ticketId in prev)) return prev;
+          const next = { ...prev };
+          delete next[msg.ticketId];
+          return next;
+        });
       } else if (msg.type === 'ticket:snapshot') {
         setById(Object.fromEntries(msg.tickets.map((t) => [t.id, t])));
       } else if (msg.type === 'evaluation:update') {

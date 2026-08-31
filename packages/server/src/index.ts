@@ -614,7 +614,17 @@ const httpServer = createHttpServer({
     retry: (id) => ticketRunner.retry(id),
     reply: (id, prompt) => ticketRunner.reply(id, prompt),
     cancel: (id) => ticketRunner.cancel(id),
-    remove: (id) => ticketStore.remove(id),
+    remove: async (id) => {
+      const ok = await ticketStore.remove(id);
+      if (!ok) return false;
+      // A deleted ticket must take its run with it. `close` would be wrong here
+      // — there is no outcome — and leaving the run behind kept the sidebar
+      // offering actions on a ticket that no longer exists.
+      const runId = `ticket:${id}`;
+      if (runStore.remove(runId)) broadcaster.broadcast({ type: 'run:removed', runId });
+      broadcaster.broadcast({ type: 'ticket:removed', ticketId: id });
+      return true;
+    },
     evaluate: async (id, input) => {
       // Ensure a record exists first: tickets that settled before the eval loop
       // (or on an older server) have no record yet, so seed one from the ticket

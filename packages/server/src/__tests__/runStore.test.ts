@@ -166,6 +166,40 @@ describe('runStore', () => {
     expect(next?.lastActivityAt).toBeGreaterThan(5000);
   });
 
+  it('remove deletes the run', () => {
+    upsert();
+    expect(store.remove('run-1')).toBe(true);
+    expect(store.tree().runs).toHaveLength(0);
+  });
+
+  it('remove does not notify run subscribers — that channel would re-add it', () => {
+    upsert();
+    const seen: string[] = [];
+    store.subscribe((r) => seen.push(r.runId));
+    store.remove('run-1');
+    expect(seen).toEqual([]);
+  });
+
+  it('remove is persisted', async () => {
+    upsert();
+    store.remove('run-1');
+    await store.flush();
+    const reloaded = createRunStore({ file: join(dir, 'runs.json') });
+    await reloaded.load();
+    expect(reloaded.tree().runs).toHaveLength(0);
+  });
+
+  it('remove keeps the repository and worktree — other runs may still need them', () => {
+    upsert();
+    store.remove('run-1');
+    expect(store.tree().repositories).toHaveLength(1);
+    expect(store.tree().worktrees).toHaveLength(1);
+  });
+
+  it('remove on an unknown run returns false', () => {
+    expect(store.remove('nope')).toBe(false);
+  });
+
   it('recording on an unknown run returns null', () => {
     expect(store.recordTouchedFile('nope', '/a')).toBeNull();
   });

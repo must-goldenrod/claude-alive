@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Ticket } from '@claude-alive/core';
-import { filterTicketsBySelection } from '../views/tickets/ticketFilter.ts';
+import { filterTicketsBySelection, selectedCwd } from '../views/tickets/ticketFilter.ts';
 import { EMPTY_SELECTION } from '../state/selection.ts';
 
 const ticket = (id: string, cwd: string): Ticket =>
@@ -61,5 +61,32 @@ describe('filterTicketsBySelection', () => {
 
   it('keeps a ticket that has no run when no filter is active', () => {
     expect(filterTicketsBySelection([ticket('c', '/z')], RUNS, EMPTY_SELECTION)).toHaveLength(1);
+  });
+});
+
+describe('selectedCwd', () => {
+  const WTS = [
+    { worktreeId: 'w1', repoId: 'r1', path: '/r/alive' },
+    { worktreeId: 'w2', repoId: 'r1', path: '/r/wt-feature' },
+  ];
+
+  it('is null while nothing is selected, so the picker stays in charge', () => {
+    expect(selectedCwd(EMPTY_SELECTION, WTS)).toBeNull();
+  });
+
+  it('uses the exact checkout when a branch is selected', () => {
+    expect(selectedCwd({ ...EMPTY_SELECTION, repoId: 'r1', worktreeId: 'w2' }, WTS)).toBe('/r/wt-feature');
+  });
+
+  it('falls back to the primary worktree for a repository', () => {
+    expect(selectedCwd({ ...EMPTY_SELECTION, repoId: 'r1' }, WTS, new Set(['w2']))).toBe('/r/wt-feature');
+  });
+
+  it('takes the only worktree when none is marked primary', () => {
+    expect(selectedCwd({ ...EMPTY_SELECTION, repoId: 'r1' }, WTS)).toBe('/r/alive');
+  });
+
+  it('is null for a repository with no worktrees yet', () => {
+    expect(selectedCwd({ ...EMPTY_SELECTION, repoId: 'nope' }, WTS)).toBeNull();
   });
 });

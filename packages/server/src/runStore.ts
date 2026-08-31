@@ -23,6 +23,12 @@ export interface RunStore {
   tree(): RunTree;
   upsert(input: RunUpsert): Run;
   close(runId: string, outcome: string): Run | null;
+  /**
+   * Forget a run entirely. Used when the underlying source is deleted, where
+   * `close` would be a lie: a deleted ticket has no outcome, and leaving its run
+   * behind offers actions on work that no longer exists.
+   */
+  remove(runId: string): boolean;
   /** Record a file this run wrote to. No-op for an unknown run or a repeat path. */
   recordTouchedFile(runId: string, path: string): Run | null;
   abandon(runId: string): Run | null;
@@ -69,10 +75,15 @@ export function createRunStore({ file }: { file: string }): RunStore {
     return flushing;
   }
 
-  function emit(run: Run): void {
-    for (const fn of listeners) fn(run);
+  /** Mark the tree changed so it is persisted, without telling subscribers. */
+  function touch(): void {
     dirty = true;
     void scheduleFlush();
+  }
+
+  function emit(run: Run): void {
+    for (const fn of listeners) fn(run);
+    touch();
   }
 
   return {
@@ -166,6 +177,20 @@ export function createRunStore({ file }: { file: string }): RunStore {
       runs.set(runId, next);
       emit(next);
       return next;
+    },
+
+    remove(runId) {
+      const prior = runs.get(runId);
+      if (!prior) return false;
+      runs.delete(runId);
+      // The repository/worktree records stay: they are shared by every run in
+      // that checkout, and dropping them would empty the sidebar's hierarchy.
+      //
+      // Deliberately NOT `emit`: subscribers are typed `(run) => void` and the
+      // only one broadcasts `run:update`, which would put the run straight back
+      // on every client. Removal is announced by the caller instead.
+      touch();
+      return true;
     },
 
     abandon(runId) {

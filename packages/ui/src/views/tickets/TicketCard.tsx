@@ -18,20 +18,27 @@ import {
   STATUS_COLOR,
   type DisplayStatus,
 } from './ticketDisplay.ts';
-import type { EvaluateFn } from './useTickets.ts';
 import { failureLine } from './failureLine.ts';
 
 interface TicketCardProps {
   ticket: Ticket;
   evaluation?: TicketEvaluation | null;
   onOpen: (ticket: Ticket) => void;
-  onEvaluate?: EvaluateFn;
 }
 
 /** Every card is the same height so lanes stay a tidy grid regardless of content. */
 const CARD_HEIGHT = 150;
 
-export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCardProps) {
+/**
+ * One ticket at a glance, and nothing more.
+ *
+ * The card is read-only on purpose. It used to carry its own Good/Bad buttons,
+ * which meant evaluating happened in two places with different surrounding
+ * context — from the board you could label a ticket without having read its
+ * result. Every action now lives in the detail modal, and the whole card is the
+ * one control that opens it.
+ */
+export function TicketCard({ ticket, evaluation, onOpen }: TicketCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const status = displayStatus(ticket.state, evaluation);
@@ -51,12 +58,6 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
         : status === 'failed'
           ? failureLine(ticket, t)
           : oneLineSummary(ticket) ?? t('tickets.noResult');
-
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
-  const doEval = (e: React.MouseEvent, label: 'good' | 'bad') => {
-    e.stopPropagation();
-    onEvaluate?.(ticket.id, { label });
-  };
 
   const meta = runMetaShort(ticket);
 
@@ -189,52 +190,44 @@ export function TicketCard({ ticket, evaluation, onOpen, onEvaluate }: TicketCar
       {/* footer — always a single row so cards line up */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, minWidth: 0 }}>
         <StatusChip status={status} label={t(`tickets.columns.${status}`)} />
-        {status === 'complete' && onEvaluate ? (
-          <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', flexShrink: 0 }}>
-            <button type="button" onClick={(e) => doEval(e, 'good')} style={evalBtn('var(--accent-green, #3fb950)')}>
-              {t('tickets.evalGood')}
-            </button>
-            <button type="button" onClick={(e) => doEval(e, 'bad')} style={evalBtn('var(--accent-red, #f85149)')}>
-              {t('tickets.evalBad')}
-            </button>
-          </div>
-        ) : status === 'decision' ? (
-          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
-            {t('tickets.answerCta')} →
+        {/* Read-only cues only. `complete` says a decision is waiting for you and
+            `decision` says an answer is; both are answered inside the modal. */}
+        {(status === 'complete' || status === 'decision') && (
+          <span
+            data-testid={`ticket-cta-${ticket.id}`}
+            style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}
+          >
+            {status === 'decision' ? t('tickets.answerCta') : t('tickets.reviewCta')} →
           </span>
-        ) : (
-          <>
-            {status === 'closed' && evaluation && (
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: evaluation.label === 'good' ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)',
-                  flexShrink: 0,
-                }}
-              >
-                {evaluation.label === 'good' ? t('tickets.evalGood') : t('tickets.evalBad')}
-              </span>
-            )}
-            {meta && (
-              <span
-                onClick={stop}
-                style={{
-                  marginLeft: 'auto',
-                  fontSize: 10,
-                  fontFamily: 'var(--font-mono, monospace)',
-                  opacity: 0.5,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  minWidth: 0,
-                }}
-                title={meta}
-              >
-                {meta}
-              </span>
-            )}
-          </>
+        )}
+        {status === 'closed' && evaluation && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: evaluation.label === 'good' ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)',
+              flexShrink: 0,
+            }}
+          >
+            {evaluation.label === 'good' ? t('tickets.evalGood') : t('tickets.evalBad')}
+          </span>
+        )}
+        {meta && status !== 'complete' && status !== 'decision' && (
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontSize: 10,
+              fontFamily: 'var(--font-mono, monospace)',
+              opacity: 0.5,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}
+            title={meta}
+          >
+            {meta}
+          </span>
         )}
       </div>
     </div>
@@ -267,15 +260,3 @@ function StatusChip({ status, label }: { status: DisplayStatus; label: string })
   );
 }
 
-function evalBtn(color: string): React.CSSProperties {
-  return {
-    fontSize: 12,
-    padding: '3px 12px',
-    borderRadius: 8,
-    border: `1px solid ${color}`,
-    background: `color-mix(in srgb, ${color} 10%, transparent)`,
-    color,
-    cursor: 'pointer',
-    fontWeight: 600,
-  };
-}
