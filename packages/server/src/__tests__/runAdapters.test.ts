@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentInfo, Ticket, TicketEvaluation } from '@claude-alive/core';
 import type { ResolvedLocation } from '../gitResolver.js';
-import { ticketToUpsert, ticketRunOutcome } from '../runAdapters/ticketRuns.js';
+import { ticketToUpsert, ticketRunOutcome, orphanTicketRunIds } from '../runAdapters/ticketRuns.js';
 import { terminalToUpsert } from '../runAdapters/terminalRuns.js';
 import { agentToUpsert } from '../runAdapters/agentRuns.js';
 
@@ -133,5 +133,27 @@ describe('ticketToUpsert lastActivityAt', () => {
 
   it('falls back to the start when nothing has happened since', () => {
     expect(ticketToUpsert(ticket({ startedAt: 2000 }), LOC).lastActivityAt).toBe(2000);
+  });
+});
+
+describe('orphanTicketRunIds', () => {
+  const run = (runId: string, kind: 'ticket' | 'terminal', sourceId: string) =>
+    ({ runId, kind, sourceId }) as Parameters<typeof orphanTicketRunIds>[0][number];
+
+  it('finds ticket runs whose ticket no longer exists', () => {
+    const ids = orphanTicketRunIds(
+      [run('ticket:a', 'ticket', 'a'), run('ticket:b', 'ticket', 'b')],
+      new Set(['a']),
+    );
+    expect(ids).toEqual(['ticket:b']);
+  });
+
+  it('never touches runs of another kind — they answer to a different store', () => {
+    const ids = orphanTicketRunIds([run('term:1', 'terminal', 'tab-1')], new Set());
+    expect(ids).toEqual([]);
+  });
+
+  it('returns nothing when every ticket is still present', () => {
+    expect(orphanTicketRunIds([run('ticket:a', 'ticket', 'a')], new Set(['a']))).toEqual([]);
   });
 });

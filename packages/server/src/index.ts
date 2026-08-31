@@ -42,7 +42,7 @@ import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.j
 import { createTicketStore } from './ticketStore.js';
 import { createRunStore } from './runStore.js';
 import { resolveCwd } from './gitResolver.js';
-import { ticketToUpsert, ticketRunOutcome } from './runAdapters/ticketRuns.js';
+import { ticketToUpsert, ticketRunOutcome, orphanTicketRunIds } from './runAdapters/ticketRuns.js';
 import { runIdForSession } from './runAttribution.js';
 import { isAllowedWsOrigin } from './wsOrigin.js';
 import { createTicketRunner } from './ticketRunner.js';
@@ -426,6 +426,17 @@ await evalStore.load();
 // rather than resurfacing as unfinished on every restart.
 for (const ticket of ticketStore.list()) {
   await mirrorTicket(ticket);
+}
+
+// Drop ticket runs whose ticket is gone. Deletions before the removal broadcast
+// existed left these behind, and the store's retention cap can evict a ticket at
+// any time; either way the sidebar would keep listing — and counting as
+// unfinished — work that no longer exists.
+{
+  const liveTicketIds = new Set(ticketStore.list().map((t) => t.id));
+  const orphans = orphanTicketRunIds(runStore.tree().runs, liveTicketIds);
+  for (const runId of orphans) runStore.remove(runId);
+  if (orphans.length > 0) console.log(`[runs] dropped ${orphans.length} run(s) whose ticket is gone`);
 }
 // Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
 // in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
