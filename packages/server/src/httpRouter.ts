@@ -183,10 +183,15 @@ export interface HttpRouterOptions {
   ) => Promise<unknown>;
 }
 
+// A leading `-` is the one character that turns a branch argument into a git
+// flag. gitBranches rejects it too (and git itself rejects such a refname), but
+// the boundary is where argv-shaped input should stop: an allowlist regex would
+// be stricter and also reject the non-ASCII branch names git happily accepts.
+const notAFlag = (v: string) => !v.startsWith('-');
 const GitBranchBodySchema = z.object({
   cwd: z.string().min(1).refine(isAbsolute, 'cwd must be an absolute path'),
-  name: z.string().min(1).max(200),
-  from: z.string().min(1).max(200).optional(),
+  name: z.string().min(1).max(200).refine(notAFlag, 'branch name must not start with "-"'),
+  from: z.string().min(1).max(200).refine(notAFlag, 'start point must not start with "-"').optional(),
 });
 
 const ProjectNameBodySchema = z.object({

@@ -180,3 +180,47 @@ describe('deleteBranch', () => {
     expect((await deleteBranch('/r/proj', 'ghost', fakeGit(CLEAN))).ok).toBe(false);
   });
 });
+
+// Argv-flag smuggling. The guard is four deep — the HTTP schema, branchNameError,
+// the "must already exist" check, and git's own refname rules — but only the
+// second is enforced here, so it is pinned with its own tests: a later edit that
+// drops it would otherwise pass everything else.
+describe('argv flag smuggling', () => {
+  it('never lets a dash-leading branch name reach git', async () => {
+    for (const name of ['--orphan', '-b', '--force']) {
+      const git = vi.fn();
+      const created = await createBranch('/r/proj', name, undefined, git);
+      const switched = await switchBranch('/r/proj', name, git);
+      const deleted = await deleteBranch('/r/proj', name, git);
+      expect(created.code, name).toBe('name-edges');
+      expect(switched.code, name).toBe('name-edges');
+      expect(deleted.code, name).toBe('name-edges');
+      expect(git, name).not.toHaveBeenCalled();
+    }
+  });
+
+  it('never lets a dash-leading start point reach git', async () => {
+    const git = vi.fn();
+    const res = await createBranch('/r/proj', 'feat/ok', '--orphan', git);
+    expect(res.code).toBe('name-edges');
+    expect(res.name).toBe('--orphan');
+    expect(git).not.toHaveBeenCalled();
+  });
+
+  it('requires the start point to be a branch that already exists', async () => {
+    // Even a validly-named start point cannot be an arbitrary string handed to git.
+    const res = await createBranch('/r/proj', 'feat/ok', 'HEAD~5', fakeGit(CLEAN));
+    expect(res.ok).toBe(false);
+  });
+
+  it('passes the start point as its own argv entry, never spliced into one', async () => {
+    const log: string[][] = [];
+    const git = fakeGit({ ...CLEAN, 'checkout -b feat/new main': '' }, log);
+    await createBranch('/r/proj', 'feat/new', 'main', git);
+    // No `--` here on purpose: in `git checkout -b <name> <start>` a `--`
+    // separates pathspecs, so it would make git read the start point as a file
+    // and fail with "not a commit". execFile (not a shell) already keeps each
+    // entry a single argument.
+    expect(log).toContainEqual(['checkout', '-b', 'feat/new', 'main']);
+  });
+});
