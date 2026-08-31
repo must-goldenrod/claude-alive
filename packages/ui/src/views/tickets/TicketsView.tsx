@@ -8,7 +8,7 @@ import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
 import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
-import { filterTicketsBySelection, type RunLocationRef, type WorktreeLocationRef } from './ticketFilter.ts';
+import { filterTicketsBySelection, selectedCwd, type RunLocationRef, type WorktreeLocationRef } from './ticketFilter.ts';
 import type { Selection } from '../../state/selection.ts';
 import { OPEN_RUN_EVENT, type OpenRunIntent } from '../../state/openRun.ts';
 
@@ -21,29 +21,48 @@ interface TicketsViewProps {
   runs: readonly RunLocationRef[];
   /** Worktrees, used to place a ticket that has no run yet by its cwd. */
   worktrees: readonly WorktreeLocationRef[];
+  /** Worktree ids that are their repository's primary checkout. */
+  primaryWorktreeIds: ReadonlySet<string>;
   /** Left edge of the shell's content area; the to-do dock starts past it. */
   leftInset: number;
 }
 
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
-export function TicketsView({ active, subscribeRaw, selection, runs, worktrees, leftInset }: TicketsViewProps) {
+export function TicketsView({
+  active, subscribeRaw, selection, runs, worktrees, primaryWorktreeIds, leftInset,
+}: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const [presetCwd, setPresetCwd] = useState<string | undefined>(undefined);
+  // Explicit "+" presses from the sidebar. They win over the ambient selection
+  // below until the selection itself changes, because pressing "+" on a branch
+  // is a more specific statement than having that repo selected.
+  const [pickedCwd, setPickedCwd] = useState<string | null>(null);
 
   // The sidebar's per-worktree "+" routes here rather than opening a second
   // composer, so there stays exactly one way to create a ticket.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { cwd?: string } | undefined;
-      if (typeof detail?.cwd === 'string') setPresetCwd(detail.cwd);
+      if (typeof detail?.cwd === 'string') setPickedCwd(detail.cwd);
     };
     window.addEventListener('claude-alive:new-run', handler);
     return () => window.removeEventListener('claude-alive:new-run', handler);
   }, []);
+
+  // Selecting a repo or branch in the sidebar points the composer at it, so a
+  // new ticket continues where you were just looking instead of making you
+  // re-pick the folder you already clicked.
+  const selectionCwd = useMemo(
+    () => selectedCwd(selection, worktrees, primaryWorktreeIds),
+    [selection, worktrees, primaryWorktreeIds],
+  );
+  useEffect(() => {
+    setPickedCwd(null);
+  }, [selectionCwd]);
+  const presetCwd = pickedCwd ?? selectionCwd ?? undefined;
 
   // "Open" on a ticket run means this view's detail modal. The shell switches
   // to this view and we pick the ticket up here, where the modal already lives.
@@ -166,7 +185,6 @@ export function TicketsView({ active, subscribeRaw, selection, runs, worktrees, 
                       ticket={ticket}
                       evaluation={evaluations[ticket.id] ?? null}
                       onOpen={(x) => setSelectedId(x.id)}
-                      onEvaluate={evaluateTicket}
                     />
                   ))
                 )}

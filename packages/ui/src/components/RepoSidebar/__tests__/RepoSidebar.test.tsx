@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RunTree } from '@claude-alive/core';
 import { RepoSidebar } from '../RepoSidebar.tsx';
 import { EMPTY_SELECTION } from '../../../state/selection.ts';
-import { EMPTY_EXPAND, toggleRepo } from '../../../state/sidebarExpand.ts';
+import { EMPTY_EXPAND, toggleRepo, toggleWorktree } from '../../../state/sidebarExpand.ts';
+import { OPEN_RUN_EVENT } from '../../../state/openRun.ts';
 
 const TREE: RunTree = {
   repositories: [{ repoId: 'r1', root: '/r/alive', name: 'alive', isGit: true }],
@@ -24,9 +25,8 @@ const TREE: RunTree = {
 function setup(overrides: Partial<Parameters<typeof RepoSidebar>[0]> = {}) {
   const onAction = vi.fn();
   const onNewRun = vi.fn();
-  const onCloseRun = vi.fn();
-  const onAbandonRun = vi.fn();
   const onToggleRepo = vi.fn();
+  const onToggleWorktree = vi.fn();
   render(
     <RepoSidebar
       tree={TREE}
@@ -34,13 +34,12 @@ function setup(overrides: Partial<Parameters<typeof RepoSidebar>[0]> = {}) {
       onAction={onAction}
       expand={EMPTY_EXPAND}
       onToggleRepo={onToggleRepo}
+      onToggleWorktree={onToggleWorktree}
       onNewRun={onNewRun}
-      onCloseRun={onCloseRun}
-      onAbandonRun={onAbandonRun}
       {...overrides}
     />,
   );
-  return { onAction, onNewRun, onCloseRun, onAbandonRun, onToggleRepo };
+  return { onAction, onNewRun, onToggleRepo, onToggleWorktree };
 }
 
 afterEach(cleanup);
@@ -58,29 +57,54 @@ describe('RepoSidebar', () => {
     expect(screen.getByText('feat/x')).toBeInTheDocument();
   });
 
-  it('hides closed runs behind a toggle', () => {
+  it('lists every ticket of a branch, closed ones included', () => {
     setup();
-    expect(screen.queryByText('끝난 일')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('show-closed-w1'));
-    expect(screen.getByText('끝난 일')).toBeInTheDocument();
+    expect(screen.getByTestId('run-row-ticket:t1')).toBeInTheDocument();
+    expect(screen.getByTestId('run-row-ticket:t2')).toBeInTheDocument();
   });
 
-  it('clicking a repository dispatches selectRepo', () => {
-    const { onAction } = setup();
+  it('clicking a repository both folds it and selects it', () => {
+    const { onAction, onToggleRepo } = setup();
     fireEvent.click(screen.getByTestId('repo-row-r1'));
+    expect(onToggleRepo).toHaveBeenCalledWith('r1');
     expect(onAction).toHaveBeenCalledWith({ type: 'selectRepo', repoId: 'r1' });
   });
 
-  it('clicking a branch dispatches selectWorktree', () => {
-    const { onAction } = setup();
+  it('re-clicking the selected repository folds it without reselecting', () => {
+    const { onAction, onToggleRepo } = setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1' } });
+    fireEvent.click(screen.getByTestId('repo-row-r1'));
+    expect(onToggleRepo).toHaveBeenCalledWith('r1');
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it('clicking a branch both folds it and selects it', () => {
+    const { onAction, onToggleWorktree } = setup();
     fireEvent.click(screen.getByTestId('worktree-row-w1'));
+    expect(onToggleWorktree).toHaveBeenCalledWith('w1');
     expect(onAction).toHaveBeenCalledWith({ type: 'selectWorktree', repoId: 'r1', worktreeId: 'w1' });
   });
 
-  it('clicking a run dispatches focusRun with the whole run', () => {
+  it('hides a collapsed branch tickets, keeping the branch row', () => {
+    setup({ expand: toggleWorktree(EMPTY_EXPAND, 'w1') });
+    expect(screen.getByTestId('worktree-row-w1')).toBeInTheDocument();
+    expect(screen.queryByTestId('run-row-ticket:t1')).not.toBeInTheDocument();
+  });
+
+  it('clicking a ticket focuses it and asks the shell to open its detail', () => {
     const { onAction } = setup();
+    const opened = vi.fn();
+    window.addEventListener(OPEN_RUN_EVENT, opened);
     fireEvent.click(screen.getByTestId('run-row-ticket:t1'));
+    window.removeEventListener(OPEN_RUN_EVENT, opened);
     expect(onAction).toHaveBeenCalledWith({ type: 'focusRun', run: TREE.runs[0] });
+    expect(opened).toHaveBeenCalled();
+  });
+
+  it('offers no inline close or abandon — those live in the detail modal', () => {
+    setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1', worktreeId: 'w1', runId: 'ticket:t1' } });
+    expect(screen.queryByTestId('run-close')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('run-outcome')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('run-abandon')).not.toBeInTheDocument();
   });
 
   it('the new-run button reports the worktree it was pressed in', () => {
@@ -103,26 +127,6 @@ describe('RepoSidebar', () => {
     setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1' } });
     expect(screen.getByTestId('repo-row-r1')).toHaveAttribute('data-selected', 'true');
   });
-  it('shows no run card while nothing is focused', () => {
-    setup();
-    expect(screen.queryByTestId('run-close')).not.toBeInTheDocument();
-  });
-
-  it('renders the focused run card so closing is reachable from any view', () => {
-    setup({ selection: { ...EMPTY_SELECTION, repoId: 'r1', worktreeId: 'w1', runId: 'ticket:t1' } });
-    expect(screen.getByTestId('run-close')).toBeInTheDocument();
-  });
-
-  it('closing the focused run reports the run id and the typed outcome', () => {
-    const { onCloseRun } = setup({
-      selection: { ...EMPTY_SELECTION, repoId: 'r1', worktreeId: 'w1', runId: 'ticket:t1' },
-    });
-    fireEvent.click(screen.getByTestId('run-close'));
-    const input = screen.getByTestId('run-outcome');
-    fireEvent.change(input, { target: { value: '확장 완료' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(onCloseRun).toHaveBeenCalledWith('ticket:t1', '확장 완료');
-  });
   it('shows what the open runs have cost so far', () => {
     const tree = {
       ...TREE,
@@ -139,19 +143,13 @@ describe('RepoSidebar', () => {
     expect(screen.queryByTestId('open-spend')).not.toBeInTheDocument();
   });
 
-  it('the chevron toggles only its own repository and never filters', () => {
-    const { onToggleRepo, onAction } = setup();
-    fireEvent.click(screen.getByTestId('repo-toggle-r1'));
-    expect(onToggleRepo).toHaveBeenCalledWith('r1');
-    expect(onAction).not.toHaveBeenCalled();
-  });
-
-  it('states whether a repository is expanded', () => {
+  it('states whether each row is expanded', () => {
     setup();
-    expect(screen.getByTestId('repo-toggle-r1')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('repo-row-r1')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('worktree-row-w1')).toHaveAttribute('aria-expanded', 'true');
     cleanup();
     setup({ expand: toggleRepo(EMPTY_EXPAND, 'r1') });
-    expect(screen.getByTestId('repo-toggle-r1')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('repo-row-r1')).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('hides the branches of a collapsed repository, keeping the repo itself', () => {

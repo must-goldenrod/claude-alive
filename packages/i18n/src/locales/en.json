@@ -619,7 +619,8 @@
       "interrupted": "Interrupted (server restart)",
       "cwd-not-allowed": "Working directory not allowed"
     },
-    "startedAt": "Started"
+    "startedAt": "Started",
+    "reviewCta": "Review"
   },
   "spread": {
     "empty": "No open terminals",

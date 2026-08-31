@@ -13,7 +13,7 @@ import { useRunTree } from './hooks/useRunTree.ts';
 import { layoutInsets } from './state/layoutInsets.ts';
 import { OPEN_RUN_EVENT, type OpenRunIntent } from './state/openRun.ts';
 import { loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
-import { loadExpand, saveExpand, toggleRepo, type ExpandState } from './state/sidebarExpand.ts';
+import { loadExpand, saveExpand, toggleRepo, toggleWorktree, type ExpandState } from './state/sidebarExpand.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
 import { buildAlertContent } from './services/notificationContent.ts';
@@ -532,8 +532,21 @@ export default function App() {
       return next;
     });
   }, []);
+  const handleToggleWorktree = useCallback((worktreeId: string) => {
+    setExpand((prev) => {
+      const next = toggleWorktree(prev, worktreeId);
+      saveExpand(window.localStorage, next);
+      return next;
+    });
+  }, []);
 
-  const { tree: runTree, closeRun, abandonRun } = useRunTree(true, subscribeRaw);
+  const { tree: runTree } = useRunTree(true, subscribeRaw);
+  // Which checkout is a repository's main one, so selecting a repo alone can
+  // still name a concrete folder for the ticket composer.
+  const primaryWorktreeIds = useMemo(
+    () => new Set(runTree.worktrees.filter((w) => w.isPrimary).map((w) => w.worktreeId)),
+    [runTree.worktrees],
+  );
 
   // The sidebar states what "open" should surface; routing it needs the shell,
   // because each kind's surface lives in a different view.
@@ -595,9 +608,8 @@ export default function App() {
             onAction={dispatchSelection}
             expand={expand}
             onToggleRepo={handleToggleRepo}
+            onToggleWorktree={handleToggleWorktree}
             onNewRun={handleNewRun}
-            onCloseRun={(runId, outcome) => void closeRun(runId, outcome)}
-            onAbandonRun={(runId) => void abandonRun(runId)}
           />
         )}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative' }}>
@@ -659,6 +671,7 @@ export default function App() {
                 selection={selection}
                 runs={runTree.runs}
                 worktrees={runTree.worktrees}
+                primaryWorktreeIds={primaryWorktreeIds}
                 leftInset={insets.repo}
               />
             </Suspense>

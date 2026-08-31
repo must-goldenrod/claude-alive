@@ -72,6 +72,22 @@ describe('buildTree', () => {
     expect(buildTree(tree, EMPTY_SELECTION)[0]?.lastActivityAt).toBe(4321);
   });
 
+  it('keeps repository order unchanged while a filter is active', () => {
+    const unfiltered = buildTree(TREE, EMPTY_SELECTION).map((n) => n.repo.repoId);
+    const filtered = buildTree(TREE, { ...EMPTY_SELECTION, repoId: 'r2' }).map((n) => n.repo.repoId);
+    expect(filtered).toEqual(unfiltered);
+  });
+
+  it('reports last activity from every run, not just the ones passing the filter', () => {
+    const tree: RunTree = {
+      ...TREE,
+      runs: [run('a', 'w1', 'r1', { startedAt: 100, lastActivityAt: 7000 })],
+    };
+    // Filtering to r2 hides r1's run, but r1 was still last active at 7000.
+    const nodes = buildTree(tree, { ...EMPTY_SELECTION, repoId: 'r2' });
+    expect(nodes.find((n) => n.repo.repoId === 'r1')?.lastActivityAt).toBe(7000);
+  });
+
   it('sorts runs open-first, then newest first', () => {
     const tree: RunTree = {
       ...TREE,

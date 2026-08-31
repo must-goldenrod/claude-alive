@@ -45,6 +45,29 @@ function placeTicket(
 }
 
 /**
+ * The working directory the sidebar's current selection points at.
+ *
+ * A branch names an exact checkout, so it wins. A repository on its own falls
+ * back to its primary worktree (or its only one), which is what "start work in
+ * this project" means when no branch has been picked. Returns null when nothing
+ * is selected, leaving the composer's own picker in charge.
+ */
+export function selectedCwd(
+  selection: Selection,
+  worktrees: readonly WorktreeLocationRef[],
+  primaryWorktreeIds: ReadonlySet<string> = new Set(),
+): string | null {
+  if (selection.worktreeId) {
+    return worktrees.find((w) => w.worktreeId === selection.worktreeId)?.path ?? null;
+  }
+  if (!selection.repoId) return null;
+  const inRepo = worktrees.filter((w) => w.repoId === selection.repoId);
+  if (inRepo.length === 0) return null;
+  const primary = inRepo.find((w) => primaryWorktreeIds.has(w.worktreeId));
+  return (primary ?? inRepo[0]!).path;
+}
+
+/**
  * Narrow the ticket board to the sidebar's filter.
  *
  * A ticket that cannot be placed at all is KEPT rather than dropped. Dropping

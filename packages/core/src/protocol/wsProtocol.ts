@@ -74,11 +74,17 @@ export type WSServerMessage =
   // A single ticket changed state (queued → running → verifying → done/failed).
   // Carries the whole ticket so the client merges without a refetch.
   | { type: 'ticket:update'; ticket: Ticket }
+  // A ticket was deleted. Carries only the id — there is no ticket left to send.
+  // Without this a deleted ticket lingered on every other client's board and in
+  // the sidebar, still offering actions against work that no longer exists.
+  | { type: 'ticket:removed'; ticketId: string }
   // An evaluation record was created (ticket settled) or a human label was applied.
   | { type: 'evaluation:update'; evaluation: TicketEvaluation }
   // Repo->worktree->run tree. Sent once on connect; live changes ride on run:update.
   | { type: 'run:snapshot'; tree: RunTree }
-  | { type: 'run:update'; run: Run };
+  | { type: 'run:update'; run: Run }
+  // A run's source was deleted, so the run is gone rather than closed.
+  | { type: 'run:removed'; runId: string };
 
 export type WSClientMessage =
   | { type: 'ping' }

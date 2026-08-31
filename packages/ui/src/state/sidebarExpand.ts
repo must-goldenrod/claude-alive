@@ -1,41 +1,57 @@
 /**
  * Which sidebar rows are expanded.
  *
- * Kept apart from `Selection` on purpose. Selecting a repo FILTERS every view;
- * expanding one only changes how much of the sidebar you can see. Conflating
- * them is what made the sidebar confusing to read: clicking a repo appeared to
- * open it while quietly narrowing the whole board.
+ * Kept apart from `Selection` because they answer different questions: expansion
+ * is how much of the tree you can see, selection is which repo/branch the rest
+ * of the app is pointed at. A row click does both, but only expansion is stored
+ * here — selection persists separately and drives the board and the composer.
  *
- * Repos are expanded by default (the sidebar's job is to show work), so the set
- * stores the COLLAPSED ids — an unknown repo is therefore open, and a new one
- * appears expanded instead of hidden.
+ * Rows are expanded by default (the sidebar's job is to show work), so the sets
+ * store the COLLAPSED ids: an unknown row is open, and a repo or branch that
+ * appears for the first time shows its contents instead of hiding them.
  */
 export interface ExpandState {
-  /** Repo ids the user has collapsed. */
+  /** Repo ids the user has collapsed. Hides every branch beneath. */
   collapsedRepos: readonly string[];
+  /** Worktree ids the user has collapsed. Hides that branch's tickets. */
+  collapsedWorktrees: readonly string[];
 }
 
-export const EMPTY_EXPAND: ExpandState = { collapsedRepos: [] };
+export const EMPTY_EXPAND: ExpandState = { collapsedRepos: [], collapsedWorktrees: [] };
 
 export function isRepoExpanded(state: ExpandState, repoId: string): boolean {
   return !state.collapsedRepos.includes(repoId);
 }
 
+export function isWorktreeExpanded(state: ExpandState, worktreeId: string): boolean {
+  return !state.collapsedWorktrees.includes(worktreeId);
+}
+
+function flip(ids: readonly string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
+}
+
 /**
- * Toggle exactly one repo, leaving every other row untouched.
+ * Toggle exactly one repository, leaving every other row untouched.
  *
- * The single-repo guarantee is the point: an earlier version derived expansion
+ * The single-row guarantee is the point: an earlier version derived expansion
  * from selection, so opening one repo collapsed the others and the list moved
  * under the pointer.
  */
 export function toggleRepo(state: ExpandState, repoId: string): ExpandState {
-  const collapsed = state.collapsedRepos.includes(repoId)
-    ? state.collapsedRepos.filter((id) => id !== repoId)
-    : [...state.collapsedRepos, repoId];
-  return { collapsedRepos: collapsed };
+  return { ...state, collapsedRepos: flip(state.collapsedRepos, repoId) };
+}
+
+/** Toggle exactly one branch's ticket list. */
+export function toggleWorktree(state: ExpandState, worktreeId: string): ExpandState {
+  return { ...state, collapsedWorktrees: flip(state.collapsedWorktrees, worktreeId) };
 }
 
 const KEY = 'claude-alive.sidebarExpand';
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+}
 
 export function loadExpand(storage: Pick<Storage, 'getItem'>): ExpandState {
   try {
@@ -43,9 +59,11 @@ export function loadExpand(storage: Pick<Storage, 'getItem'>): ExpandState {
     if (!raw) return EMPTY_EXPAND;
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return EMPTY_EXPAND;
-    const ids = (parsed as Partial<ExpandState>).collapsedRepos;
-    if (!Array.isArray(ids)) return EMPTY_EXPAND;
-    return { collapsedRepos: ids.filter((id): id is string => typeof id === 'string') };
+    const p = parsed as Partial<Record<keyof ExpandState, unknown>>;
+    return {
+      collapsedRepos: stringList(p.collapsedRepos),
+      collapsedWorktrees: stringList(p.collapsedWorktrees),
+    };
   } catch {
     return EMPTY_EXPAND;
   }
