@@ -6,6 +6,7 @@ import { FolderPicker } from './FolderPicker.tsx';
 import { RemoteFolderPicker } from './RemoteFolderPicker.tsx';
 import { loadPresets, SSH_PRESETS_CHANGED } from '../chat/sshPresets.ts';
 import { DEFAULT_RUN_PRESET, RUN_PRESET_IDS, RUN_PRESET_PREVIEW, runPresetLabelKey } from './runPresets.ts';
+import { BranchPicker } from './BranchPicker.tsx';
 
 interface NewTicketFormProps {
   /**
@@ -252,6 +253,9 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
           {submitting ? t('tickets.creating') : t('tickets.create')}
         </button>
       </div>
+      {/* Which branch the run happens on. Local only: a remote checkout is not
+          ours to move, and the hooks that would report the change are local. */}
+      {!isRemote && cwd.length > 0 && <BranchPicker cwd={cwd} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)' }}>{t('tickets.presetLabel')}</span>
         <div style={{ display: 'flex', gap: 4, background: 'var(--bg-tertiary, #21262d)', padding: 3, borderRadius: 10 }}>

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readdir } from 'node:fs/promises';
-import { resolve as pathResolve } from 'node:path';
+import { isAbsolute, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { z } from 'zod';
 import { TICKET_RUN_PRESET_IDS } from '@claude-alive/core';
@@ -164,12 +164,30 @@ export interface HttpRouterOptions {
     check: (id: string) => Promise<unknown | null>;
   };
 
+  /**
+   * Local git branch operations for the ticket composer. Absent when the git
+   * subsystem is off, in which case `/api/git/*` 404s and the UI hides the
+   * branch controls entirely.
+   */
+  git?: {
+    list: (cwd: string) => Promise<unknown>;
+    switch: (cwd: string, name: string) => Promise<unknown>;
+    create: (cwd: string, name: string, from?: string) => Promise<unknown>;
+    remove: (cwd: string, name: string) => Promise<unknown>;
+  };
+
   /** Remote directory listing over SSH, for the ticket's remote folder picker. */
   sshBrowse?: (
     target: { host: string; user?: string; port?: number; identityFile?: string },
     path?: string,
   ) => Promise<unknown>;
 }
+
+const GitBranchBodySchema = z.object({
+  cwd: z.string().min(1).refine(isAbsolute, 'cwd must be an absolute path'),
+  name: z.string().min(1).max(200),
+  from: z.string().min(1).max(200).optional(),
+});
 
 const ProjectNameBodySchema = z.object({
   cwd: z.string().min(1),
@@ -296,6 +314,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     runs,
     tickets,
     backends,
+    git,
     sshBrowse,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
@@ -572,6 +591,48 @@ export function createHttpServer(options: HttpRouterOptions) {
       sendJson(res, 200, { backends: backends.list() }, req);
       return;
     }
+    // ── Local git branches ───────────────────────────────────────────────────
+    // These check out and delete branches in the user's working tree, so they
+    // are loopback-only exactly like the ticket routes. Every branch name is
+    // validated in gitBranches before it reaches git.
+    if (git && url.pathname.startsWith('/api/git/')) {
+      if (!isLoopbackRequest(req)) {
+        sendJson(res, 403, { error: 'Git API is restricted to loopback' }, req);
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/git/branches') {
+        const cwd = url.searchParams.get('cwd');
+        if (!cwd || !isAbsolute(cwd)) {
+          sendJson(res, 400, { error: 'cwd must be an absolute path' }, req);
+          return;
+        }
+        sendJson(res, 200, { branches: await git.list(cwd) }, req);
+        return;
+      }
+      if (req.method === 'POST' || req.method === 'DELETE') {
+        const parsed = GitBranchBodySchema.safeParse(
+          JSON.parse(await readBody(req).catch(() => '{}') || '{}'),
+        );
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'Invalid body: cwd and name are required' }, req);
+          return;
+        }
+        const { cwd, name, from } = parsed.data;
+        if (url.pathname === '/api/git/checkout' && req.method === 'POST') {
+          sendJson(res, 200, { result: await git.switch(cwd, name) }, req);
+          return;
+        }
+        if (url.pathname === '/api/git/branches' && req.method === 'POST') {
+          sendJson(res, 200, { result: await git.create(cwd, name, from) }, req);
+          return;
+        }
+        if (url.pathname === '/api/git/branches' && req.method === 'DELETE') {
+          sendJson(res, 200, { result: await git.remove(cwd, name) }, req);
+          return;
+        }
+      }
+    }
+
     // POST /api/ssh/browse — list remote sub-directories for the remote folder
     // picker (loopback-only; the ssh target comes from the local user's preset).
     if (sshBrowse && req.method === 'POST' && url.pathname === '/api/ssh/browse') {

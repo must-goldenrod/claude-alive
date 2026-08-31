@@ -929,5 +929,33 @@
     "touched": "변경 파일 {{count}}개",
     "touchedMore": "외 {{count}}개",
     "verified": "검증"
+  },
+  "git": {
+    "label": "브랜치",
+    "current": "{{name}} 에서 작업",
+    "detached": "detached HEAD",
+    "switch": "이동",
+    "create": "새 브랜치",
+    "createFrom": "{{name}} 기준",
+    "delete": "브랜치 삭제",
+    "deleteConfirm": "로컬 브랜치 \"{{name}}\" 을 삭제합니다. 병합되지 않은 작업이 있으면 git이 거부합니다.",
+    "namePlaceholder": "feat/my-change",
+    "dirtyHint": "커밋되지 않은 변경이 있습니다. 커밋하거나 스태시한 뒤 이동하세요.",
+    "notARepoHint": "git 저장소가 아니라 브랜치 조작을 쓸 수 없습니다.",
+    "switching": "처리 중…",
+    "error": {
+      "nameEmpty": "브랜치 이름을 입력하세요.",
+      "nameWhitespace": "브랜치 이름에 공백을 쓸 수 없습니다.",
+      "nameTooLong": "브랜치 이름이 너무 깁니다.",
+      "nameReserved": "브랜치 이름에 ~ ^ : ? * [ ] \\\\ .. @{ 를 쓸 수 없습니다.",
+      "nameEdges": "브랜치 이름의 시작/끝이 규칙에 맞지 않습니다.",
+      "notARepo": "이 폴더는 git 저장소가 아닙니다.",
+      "noSuchBranch": "\"{{name}}\" 로컬 브랜치가 없습니다.",
+      "alreadyExists": "\"{{name}}\" 브랜치가 이미 있습니다.",
+      "dirty": "커밋되지 않은 변경이 있습니다. 먼저 커밋하거나 스태시하세요.",
+      "deleteCurrent": "현재 작업 중인 브랜치는 삭제할 수 없습니다.",
+      "gitFailed": "git 거부: {{message}}",
+      "network": "서버에 연결하지 못했습니다."
+    }
   }
 }

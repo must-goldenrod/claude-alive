@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearGitCache, resolveCwd, type GitExec } from '../gitResolver.js';
 
 /** Fake git: answers toplevel/branch from a table, fails for unknown paths. */
-function fakeGit(table: Record<string, { top: string; branch: string }>): GitExec {
+function fakeGit(table: Record<string, { top: string; branch: string; gitDir?: string }>): GitExec {
   return vi.fn(async (args: string[], cwd: string) => {
     const entry = table[cwd];
     if (!entry) return null;
     if (args.includes('--show-toplevel')) return entry.top;
     if (args.includes('--abbrev-ref')) return entry.branch;
+    if (args.includes('--absolute-git-dir')) return entry.gitDir ?? `${entry.top}/.git`;
     return null;
   });
 }
@@ -58,7 +59,29 @@ describe('resolveCwd', () => {
     const exec = fakeGit({ '/r/proj': { top: '/r/proj', branch: 'main' } });
     await resolveCwd('/r/proj', { exec });
     await resolveCwd('/r/proj', { exec });
-    expect(exec).toHaveBeenCalledTimes(2); // toplevel + branch, once each
+    expect(exec).toHaveBeenCalledTimes(3); // toplevel + branch + git-dir, once each
+  });
+
+  it('re-reads once the cache entry has aged out, so a checkout is picked up', async () => {
+    const exec = fakeGit({ '/r/proj': { top: '/r/proj', branch: 'main' } });
+    let clock = 1_000;
+    const now = () => clock;
+    expect((await resolveCwd('/r/proj', { exec, now })).worktree.branch).toBe('main');
+    clock += 60_000;
+    await resolveCwd('/r/proj', { exec, now });
+    expect(exec).toHaveBeenCalledTimes(6);
+  });
+
+  it('treats a linked worktree as not primary, whatever its branch is named', async () => {
+    const exec = fakeGit({
+      '/r/wt': { top: '/r/wt', branch: 'main', gitDir: '/r/proj/.git/worktrees/wt' },
+    });
+    expect((await resolveCwd('/r/wt', { exec })).worktree.isPrimary).toBe(false);
+  });
+
+  it('treats the main checkout as primary even on a feature branch', async () => {
+    const exec = fakeGit({ '/r/proj': { top: '/r/proj', branch: 'feat/x' } });
+    expect((await resolveCwd('/r/proj', { exec })).worktree.isPrimary).toBe(true);
   });
 
   it('scopes remote paths by locationKey', async () => {

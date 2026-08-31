@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { Run, RunTree, Worktree } from '@claude-alive/core';
-import { Badge, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, type BadgeTone } from '../ui/index.ts';
+import type { Run, RunTree } from '@claude-alive/core';
+import { Badge, Chevron, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, type BadgeTone } from '../ui/index.ts';
 import type { Selection, SelectionAction } from '../../state/selection.ts';
 import { isRepoExpanded, isWorktreeExpanded, type ExpandState } from '../../state/sidebarExpand.ts';
 import { dispatchOpenRun } from '../../state/openRun.ts';
@@ -35,7 +35,6 @@ interface RepoSidebarProps {
   onToggleRepo: (repoId: string) => void;
   /** Toggle exactly one branch's ticket list open/closed. */
   onToggleWorktree: (worktreeId: string) => void;
-  onNewRun: (worktree: Worktree) => void;
 }
 
 /**
@@ -51,7 +50,7 @@ interface RepoSidebarProps {
  * same decisions across two places.
  */
 export function RepoSidebar({
-  tree, selection, onAction, expand, onToggleRepo, onToggleWorktree, onNewRun,
+  tree, selection, onAction, expand, onToggleRepo, onToggleWorktree,
 }: RepoSidebarProps) {
   const { t } = useTranslation();
   const now = useNow();
@@ -137,7 +136,6 @@ export function RepoSidebar({
             onToggleWorktree={onToggleWorktree}
             now={now}
             onAction={onAction}
-            onNewRun={onNewRun}
           />
         ))
       )}
@@ -145,17 +143,8 @@ export function RepoSidebar({
   );
 }
 
-/** The ▾/▸ an expandable row carries, so its state is readable without clicking. */
-function Chevron({ expanded }: { expanded: boolean }) {
-  return (
-    <span aria-hidden="true" style={{ width: 12, flexShrink: 0, fontSize: 10, color: 'var(--text-secondary)' }}>
-      {expanded ? '▾' : '▸'}
-    </span>
-  );
-}
-
 function RepoRow({
-  node, selection, expand, onToggleRepo, onToggleWorktree, now, onAction, onNewRun,
+  node, selection, expand, onToggleRepo, onToggleWorktree, now, onAction,
 }: {
   node: RepoNode;
   selection: Selection;
@@ -164,7 +153,6 @@ function RepoRow({
   onToggleWorktree: (worktreeId: string) => void;
   now: number;
   onAction: (a: SelectionAction) => void;
-  onNewRun: (w: Worktree) => void;
 }) {
   const selected = selection.repoId === node.repo.repoId;
   const expanded = isRepoExpanded(expand, node.repo.repoId);
@@ -216,7 +204,6 @@ function RepoRow({
           onToggleWorktree={onToggleWorktree}
           now={now}
           onAction={onAction}
-          onNewRun={onNewRun}
         />
       ))}
     </div>
@@ -224,7 +211,7 @@ function RepoRow({
 }
 
 function WorktreeRow({
-  node, selection, expanded, onToggleWorktree, now, onAction, onNewRun,
+  node, selection, expanded, onToggleWorktree, now, onAction,
 }: {
   node: WorktreeNode;
   selection: Selection;
@@ -232,7 +219,6 @@ function WorktreeRow({
   onToggleWorktree: (worktreeId: string) => void;
   now: number;
   onAction: (a: SelectionAction) => void;
-  onNewRun: (w: Worktree) => void;
 }) {
   const { t } = useTranslation();
   const selected = selection.worktreeId === node.worktree.worktreeId;
@@ -270,20 +256,11 @@ function WorktreeRow({
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.worktree.branch || t('sidebar.detached')}
         </span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: space[1], alignItems: 'center', flexShrink: 0 }}>
+        {/* No "+" here any more. It re-fired the same composer prefill that
+            selecting the row already does, so on the branch you were already on
+            it looked like a dead button. */}
+        <span style={{ marginLeft: 'auto', flexShrink: 0 }}>
           <Badge tone={node.openCount > 0 ? 'amber' : 'neutral'}>{node.openCount}</Badge>
-          <button
-            type="button"
-            data-testid={`new-run-${node.worktree.worktreeId}`}
-            title={t('sidebar.newRun')}
-            onClick={(e) => { e.stopPropagation(); onNewRun(node.worktree); }}
-            style={{
-              border: 'none', background: 'transparent', color: 'var(--text-secondary)',
-              cursor: 'pointer', fontSize: text.base, lineHeight: 1, padding: 0,
-            }}
-          >
-            +
-          </button>
         </span>
       </div>
 
