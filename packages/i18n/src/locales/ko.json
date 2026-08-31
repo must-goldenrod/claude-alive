@@ -898,7 +898,19 @@
     "showClosed": "완료 {{count}}개",
     "newRun": "새 런",
     "noRepos": "아직 레포지토리가 없습니다",
-    "detached": "detached"
+    "detached": "detached",
+    "allRepos": "전체 프로젝트",
+    "allReposHint": "필터 없음",
+    "filteredBanner": "{{name}} 만 보는 중",
+    "clearFilter": "전체 보기",
+    "collapse": "{{name}} 접기",
+    "expand": "{{name}} 펼치기",
+    "lastActivity": "{{age}} 전",
+    "noActivity": "활동 없음",
+    "stateRunning": "실행중",
+    "stateWaiting": "미정리",
+    "stateClosed": "종료",
+    "stateAbandoned": "폐기"
   },
   "run": {
     "open": "열기",

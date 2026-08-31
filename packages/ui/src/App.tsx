@@ -13,6 +13,7 @@ import { useRunTree } from './hooks/useRunTree.ts';
 import { layoutInsets } from './state/layoutInsets.ts';
 import { OPEN_RUN_EVENT, type OpenRunIntent } from './state/openRun.ts';
 import { loadSelection, saveSelection, selectionReducer } from './state/selection.ts';
+import { loadExpand, saveExpand, toggleRepo, type ExpandState } from './state/sidebarExpand.ts';
 import { ToastContainer, useToasts } from './components/ToastContainer.tsx';
 import { fireNotification } from './services/notifications.ts';
 import { buildAlertContent } from './services/notificationContent.ts';
@@ -520,6 +521,18 @@ export default function App() {
     saveSelection(window.localStorage, selection);
   }, [selection]);
 
+  // Which repositories are collapsed. Kept apart from `selection` because
+  // expanding a repo is a sidebar-local view choice, while selecting one
+  // narrows every view in the app.
+  const [expand, setExpand] = useState<ExpandState>(() => loadExpand(window.localStorage));
+  const handleToggleRepo = useCallback((repoId: string) => {
+    setExpand((prev) => {
+      const next = toggleRepo(prev, repoId);
+      saveExpand(window.localStorage, next);
+      return next;
+    });
+  }, []);
+
   const { tree: runTree, closeRun, abandonRun } = useRunTree(true, subscribeRaw);
 
   // The sidebar states what "open" should surface; routing it needs the shell,
@@ -580,6 +593,8 @@ export default function App() {
             tree={runTree}
             selection={selection}
             onAction={dispatchSelection}
+            expand={expand}
+            onToggleRepo={handleToggleRepo}
             onNewRun={handleNewRun}
             onCloseRun={(runId, outcome) => void closeRun(runId, outcome)}
             onAbandonRun={(runId) => void abandonRun(runId)}
