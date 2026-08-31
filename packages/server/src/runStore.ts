@@ -13,6 +13,8 @@ export interface RunUpsert {
   /** Adapters only ever report `running` or `waiting`. */
   state: Extract<RunState, 'running' | 'waiting'>;
   startedAt: number;
+  /** When the source last did something. Defaults to `startedAt`. */
+  lastActivityAt?: number;
   meta?: RunMeta;
 }
 
@@ -118,6 +120,12 @@ export function createRunStore({ file }: { file: string }): RunStore {
         title: input.title,
         state,
         startedAt: prior?.startedAt ?? input.startedAt,
+        // Activity only ever moves forward: an adapter re-reporting an older
+        // snapshot must not make a run look staler than it is.
+        lastActivityAt: Math.max(
+          input.lastActivityAt ?? input.startedAt,
+          prior?.lastActivityAt ?? 0,
+        ),
         meta: input.meta ?? prior?.meta,
       };
       if (prior?.outcome !== undefined) next.outcome = prior.outcome;
@@ -136,7 +144,7 @@ export function createRunStore({ file }: { file: string }): RunStore {
       // Unchanged list = a duplicate or a full list; skip the write and the
       // broadcast rather than churning every client on a repeated edit.
       if (touchedFiles === prior.touchedFiles) return prior;
-      const next: Run = { ...prior, touchedFiles };
+      const next: Run = { ...prior, touchedFiles, lastActivityAt: Date.now() };
       runs.set(runId, next);
       emit(next);
       return next;
@@ -145,11 +153,13 @@ export function createRunStore({ file }: { file: string }): RunStore {
     close(runId, outcome) {
       const prior = runs.get(runId);
       if (!prior) return null;
+      const closedAt = Date.now();
       const next: Run = {
         ...prior,
         state: 'closed',
         outcome: outcome.trim().slice(0, 300),
-        closedAt: Date.now(),
+        closedAt,
+        lastActivityAt: closedAt,
       };
       runs.set(runId, next);
       emit(next);
@@ -159,7 +169,8 @@ export function createRunStore({ file }: { file: string }): RunStore {
     abandon(runId) {
       const prior = runs.get(runId);
       if (!prior) return null;
-      const next: Run = { ...prior, state: 'abandoned', closedAt: Date.now() };
+      const closedAt = Date.now();
+      const next: Run = { ...prior, state: 'abandoned', closedAt, lastActivityAt: closedAt };
       delete next.outcome;
       runs.set(runId, next);
       emit(next);

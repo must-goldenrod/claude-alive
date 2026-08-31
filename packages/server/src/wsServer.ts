@@ -1,7 +1,7 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { RunTree, WSServerMessage, WSClientMessage } from '@claude-alive/core';
+import type { RunTree, Ticket, WSServerMessage, WSClientMessage } from '@claude-alive/core';
 import { parseClientMessage } from './wsClientSchema.js';
 
 const MAX_CLIENTS = 50;
@@ -13,6 +13,13 @@ export interface WSBroadcasterOptions {
    * when the run subsystem is off; clients then just never see a `run:snapshot`.
    */
   getRunTree?: () => RunTree;
+  /**
+   * Ticket snapshot, sent alongside the agent snapshot on connect. Without it a
+   * client that missed a `ticket:update` while disconnected stayed wrong until
+   * a manual reload — the board is the default view, so its own refetch (which
+   * only fires when the view activates) never runs again.
+   */
+  getTickets?: () => Ticket[];
   maxClients?: number;
   onClientMessage?: (ws: WebSocket, msg: WSClientMessage) => void;
   onClientDisconnect?: (ws: WebSocket) => void;
@@ -24,6 +31,7 @@ export class WSBroadcaster {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private getSnapshot: WSBroadcasterOptions['getSnapshot'];
   private getRunTree?: WSBroadcasterOptions['getRunTree'];
+  private getTickets?: WSBroadcasterOptions['getTickets'];
   private maxClients: number;
   private onClientMessage?: WSBroadcasterOptions['onClientMessage'];
   private onClientDisconnect?: WSBroadcasterOptions['onClientDisconnect'];
@@ -31,6 +39,7 @@ export class WSBroadcaster {
   constructor(options: WSBroadcasterOptions) {
     this.getSnapshot = options.getSnapshot;
     this.getRunTree = options.getRunTree;
+    this.getTickets = options.getTickets;
     this.maxClients = options.maxClients ?? MAX_CLIENTS;
     this.onClientMessage = options.onClientMessage;
     this.onClientDisconnect = options.onClientDisconnect;
@@ -46,6 +55,7 @@ export class WSBroadcaster {
 
       this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
       this.sendRunTree(ws);
+      this.sendTickets(ws);
 
       ws.on('message', (raw) => {
         const msg = parseClientMessage(raw.toString());
@@ -60,6 +70,7 @@ export class WSBroadcaster {
         } else if (msg.type === 'request:snapshot') {
           this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
           this.sendRunTree(ws);
+          this.sendTickets(ws);
         } else {
           this.onClientMessage?.(ws, msg);
         }
@@ -90,6 +101,12 @@ export class WSBroadcaster {
   private sendRunTree(ws: WebSocket): void {
     const tree = this.getRunTree?.();
     if (tree) this.send(ws, { type: 'run:snapshot', tree });
+  }
+
+  /** Send every ticket when the ticket subsystem is wired; a no-op otherwise. */
+  private sendTickets(ws: WebSocket): void {
+    const tickets = this.getTickets?.();
+    if (tickets) this.send(ws, { type: 'ticket:snapshot', tickets });
   }
 
   broadcast(message: WSServerMessage): void {

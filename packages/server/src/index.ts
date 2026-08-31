@@ -42,7 +42,7 @@ import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.j
 import { createTicketStore } from './ticketStore.js';
 import { createRunStore } from './runStore.js';
 import { resolveCwd } from './gitResolver.js';
-import { ticketToUpsert } from './runAdapters/ticketRuns.js';
+import { ticketToUpsert, ticketRunOutcome } from './runAdapters/ticketRuns.js';
 import { runIdForSession } from './runAttribution.js';
 import { isAllowedWsOrigin } from './wsOrigin.js';
 import { createTicketRunner } from './ticketRunner.js';
@@ -397,19 +397,36 @@ async function mirrorTicket(ticket: Ticket): Promise<void> {
           : undefined,
     });
     runStore.upsert(ticketToUpsert(ticket, location));
+    fileEvaluatedRun(ticket);
   } catch (err) {
     // A run that cannot be placed is not worth failing a ticket over.
     console.warn('[runs] failed to mirror ticket', ticket.id, err);
   }
 }
 
+/**
+ * Close a ticket's run once a human has evaluated it.
+ *
+ * The board's good/bad step already means "I have looked at this and it is
+ * done" — it is what moves a card from 완료 to 종료. Until this existed the run
+ * registry never heard about that step, so every evaluated ticket stayed
+ * `waiting` and the sidebar's unfinished count only ever grew.
+ */
+function fileEvaluatedRun(ticket: Ticket): void {
+  const outcome = ticketRunOutcome(ticket, evalStore.get(ticket.id));
+  if (outcome !== null) runStore.close(`ticket:${ticket.id}`, outcome);
+}
+
+const evalStore = createEvalStore();
+await evalStore.load();
+
 // Backfill every ticket that predates the registry so the sidebar is populated
-// on first boot rather than only after the next ticket changes state.
+// on first boot rather than only after the next ticket changes state. Runs
+// after `evalStore` loads so already-evaluated tickets are filed away here
+// rather than resurfacing as unfinished on every restart.
 for (const ticket of ticketStore.list()) {
   await mirrorTicket(ticket);
 }
-const evalStore = createEvalStore();
-await evalStore.load();
 // Write the `ca-delegate` sub-agent tool and capture its absolute path, embedded
 // in the orchestrator prompt so an orchestrated ticket can delegate to litellm.
 // Its dir is prepended to the agent PATH (main + verifier) so `command -v
@@ -587,6 +604,11 @@ const httpServer = createHttpServer({
       const ticket = await ticketStore.create(input);
       ticketRunner.enqueue(ticket);
       broadcaster.broadcast({ type: 'ticket:update', ticket });
+      // Mirror at creation, not first state change. A queued ticket waiting on
+      // a concurrency slot used to have no run at all, so with a sidebar filter
+      // active the board could not prove which repo it belonged to and dropped
+      // it — the ticket looked like it was never created.
+      void mirrorTicket(ticket);
       return ticket;
     },
     retry: (id) => ticketRunner.retry(id),
@@ -602,7 +624,14 @@ const httpServer = createHttpServer({
         if (ticket) await evalStore.upsertFromTicket(ticket);
       }
       const evaluation = await evalStore.setLabel(id, input);
-      if (evaluation) broadcaster.broadcast({ type: 'evaluation:update', evaluation });
+      if (evaluation) {
+        broadcaster.broadcast({ type: 'evaluation:update', evaluation });
+        // Evaluating a ticket IS filing it away — the board moves the card to
+        // 종료. Close the mirrored run in the same breath so the sidebar's
+        // unfinished count and the board agree on what is still open.
+        const ticket = ticketStore.get(id);
+        if (ticket) fileEvaluatedRun(ticket);
+      }
       return evaluation;
     },
     setReflected: async (id, reflected) => {
@@ -689,6 +718,7 @@ const TOUCH_THROTTLE_MS = 15_000;
 const broadcaster = new WSBroadcaster({
   getSnapshot,
   getRunTree: () => runStore.tree(),
+  getTickets: () => ticketStore.list(),
   onClientMessage: (ws, msg) => {
     if (msg.type === 'terminal:spawn') {
       // Idempotent: a spawn for a tab we already own is treated as a reattach.

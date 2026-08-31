@@ -17,6 +17,7 @@ export type {
 } from './protocol/wsProtocol.js';
 export { parseTranscriptTokens } from './transcript/parser.js';
 export { TICKET_ACTIVE_STATES, isTicketActive, addUsage } from './tickets/types.js';
+export { ticketLastActivityAt } from './tickets/activity.js';
 export { sshTargetDisplay, isRemoteLocation } from './tickets/location.js';
 export type { LocationKind, SshTarget, TicketLocation } from './tickets/location.js';
 export type { BackendId, BackendKind, BackendStatus, TicketDelegation } from './tickets/orchestration.js';
@@ -35,7 +36,7 @@ export {
   DEFAULT_EVAL_WEIGHT, MIN_EVAL_WEIGHT, MAX_EVAL_WEIGHT,
 } from './tickets/evaluation.js';
 export type { EvalLabel, TicketEvaluation, RouteGuide } from './tickets/evaluation.js';
-export { RUN_OPEN_STATES, isRunOpen } from './runs/types.js';
+export { RUN_OPEN_STATES, isRunOpen, runLastActivityAt } from './runs/types.js';
 export { editedPathFrom, mergeTouchedFiles, MAX_TOUCHED_FILES } from './runs/touchedFiles.js';
 export type {
   RunKind, RunState, RunMeta, Run, Repository, Worktree, RunTree,

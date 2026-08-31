@@ -31,9 +31,32 @@ describe('filterTicketsBySelection', () => {
     expect(out.map((x) => x.id)).toEqual(['b']);
   });
 
-  it('drops a ticket that has no run yet when a filter is active', () => {
-    const out = filterTicketsBySelection([ticket('c', '/z')], RUNS, { ...EMPTY_SELECTION, repoId: 'r1' });
+  it('places a ticket that has no run yet by its cwd', () => {
+    const wts = [{ worktreeId: 'w1', repoId: 'r1', path: '/x' }, { worktreeId: 'w2', repoId: 'r2', path: '/y' }];
+    const out = filterTicketsBySelection(
+      [ticket('c', '/y/sub')], RUNS, { ...EMPTY_SELECTION, repoId: 'r1' }, wts,
+    );
     expect(out).toEqual([]);
+    expect(
+      filterTicketsBySelection([ticket('c', '/y/sub')], RUNS, { ...EMPTY_SELECTION, repoId: 'r2' }, wts)
+        .map((x) => x.id),
+    ).toEqual(['c']);
+  });
+
+  it('prefers the deepest matching worktree over its parent', () => {
+    const wts = [
+      { worktreeId: 'w1', repoId: 'r1', path: '/x' },
+      { worktreeId: 'w2', repoId: 'r2', path: '/x/inner' },
+    ];
+    const out = filterTicketsBySelection(
+      [ticket('c', '/x/inner/pkg')], RUNS, { ...EMPTY_SELECTION, repoId: 'r2' }, wts,
+    );
+    expect(out.map((x) => x.id)).toEqual(['c']);
+  });
+
+  it('keeps an unplaceable ticket rather than making it vanish mid-create', () => {
+    const out = filterTicketsBySelection([ticket('c', '/z')], RUNS, { ...EMPTY_SELECTION, repoId: 'r1' });
+    expect(out.map((x) => x.id)).toEqual(['c']);
   });
 
   it('keeps a ticket that has no run when no filter is active', () => {

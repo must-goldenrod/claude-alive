@@ -53,6 +53,13 @@ export interface Run {
   /** One line the human wrote when closing. Absent while open. */
   outcome?: string;
   startedAt: number;
+  /**
+   * When this run last did something — newest turn, state change, or file
+   * touched. `startedAt` answers "when did this begin", which is the wrong
+   * question when scanning for stalled work; absent on runs that predate the
+   * field, in which case callers fall back to `startedAt`.
+   */
+  lastActivityAt?: number;
   closedAt?: number;
   meta?: RunMeta;
   /**
@@ -74,4 +81,9 @@ export const RUN_OPEN_STATES: readonly RunState[] = ['running', 'waiting'];
 
 export function isRunOpen(state: RunState): boolean {
   return RUN_OPEN_STATES.includes(state);
+}
+
+/** When a run last did something. Falls back to its start for older records. */
+export function runLastActivityAt(run: Pick<Run, 'startedAt' | 'lastActivityAt'>): number {
+  return run.lastActivityAt ?? run.startedAt;
 }

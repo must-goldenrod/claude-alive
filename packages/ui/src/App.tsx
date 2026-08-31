@@ -643,6 +643,7 @@ export default function App() {
                 subscribeRaw={subscribeRaw}
                 selection={selection}
                 runs={runTree.runs}
+                worktrees={runTree.worktrees}
                 leftInset={insets.repo}
               />
             </Suspense>
