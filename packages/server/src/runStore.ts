@@ -153,13 +153,15 @@ export function createRunStore({ file }: { file: string }): RunStore {
     close(runId, outcome) {
       const prior = runs.get(runId);
       if (!prior) return null;
-      const closedAt = Date.now();
+      // `lastActivityAt` deliberately survives untouched. Filing a run away is
+      // bookkeeping, not work: stamping it now would make three-week-old runs
+      // read as "1m ago" and would reorder the sidebar by when someone tidied
+      // up rather than by when anything happened. `closedAt` records the filing.
       const next: Run = {
         ...prior,
         state: 'closed',
         outcome: outcome.trim().slice(0, 300),
-        closedAt,
-        lastActivityAt: closedAt,
+        closedAt: Date.now(),
       };
       runs.set(runId, next);
       emit(next);
@@ -169,8 +171,8 @@ export function createRunStore({ file }: { file: string }): RunStore {
     abandon(runId) {
       const prior = runs.get(runId);
       if (!prior) return null;
-      const closedAt = Date.now();
-      const next: Run = { ...prior, state: 'abandoned', closedAt, lastActivityAt: closedAt };
+      // Same as `close`: abandoning does not count as activity (see above).
+      const next: Run = { ...prior, state: 'abandoned', closedAt: Date.now() };
       delete next.outcome;
       runs.set(runId, next);
       emit(next);
