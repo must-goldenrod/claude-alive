@@ -1,7 +1,7 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { RunTree, Ticket, WSServerMessage, WSClientMessage } from '@claude-alive/core';
+import type { RunTree, Ticket, UsageLimitsSnapshot, WSServerMessage, WSClientMessage } from '@claude-alive/core';
 import { parseClientMessage } from './wsClientSchema.js';
 
 const MAX_CLIENTS = 50;
@@ -20,6 +20,11 @@ export interface WSBroadcasterOptions {
    * only fires when the view activates) never runs again.
    */
   getTickets?: () => Ticket[];
+  /**
+   * Subscription usage snapshot, sent on connect. Without it a fresh client
+   * would show no usage pills until the next 60s poll landed.
+   */
+  getUsageLimits?: () => UsageLimitsSnapshot | null;
   maxClients?: number;
   onClientMessage?: (ws: WebSocket, msg: WSClientMessage) => void;
   onClientDisconnect?: (ws: WebSocket) => void;
@@ -32,6 +37,7 @@ export class WSBroadcaster {
   private getSnapshot: WSBroadcasterOptions['getSnapshot'];
   private getRunTree?: WSBroadcasterOptions['getRunTree'];
   private getTickets?: WSBroadcasterOptions['getTickets'];
+  private getUsageLimits?: WSBroadcasterOptions['getUsageLimits'];
   private maxClients: number;
   private onClientMessage?: WSBroadcasterOptions['onClientMessage'];
   private onClientDisconnect?: WSBroadcasterOptions['onClientDisconnect'];
@@ -40,6 +46,7 @@ export class WSBroadcaster {
     this.getSnapshot = options.getSnapshot;
     this.getRunTree = options.getRunTree;
     this.getTickets = options.getTickets;
+    this.getUsageLimits = options.getUsageLimits;
     this.maxClients = options.maxClients ?? MAX_CLIENTS;
     this.onClientMessage = options.onClientMessage;
     this.onClientDisconnect = options.onClientDisconnect;
@@ -56,6 +63,7 @@ export class WSBroadcaster {
       this.send(ws, { type: 'snapshot', ...this.getSnapshot() } as WSServerMessage);
       this.sendRunTree(ws);
       this.sendTickets(ws);
+      this.sendUsageLimits(ws);
 
       ws.on('message', (raw) => {
         const msg = parseClientMessage(raw.toString());
@@ -101,6 +109,12 @@ export class WSBroadcaster {
   private sendRunTree(ws: WebSocket): void {
     const tree = this.getRunTree?.();
     if (tree) this.send(ws, { type: 'run:snapshot', tree });
+  }
+
+  /** Send the latest usage snapshot when one has been polled; a no-op otherwise. */
+  private sendUsageLimits(ws: WebSocket): void {
+    const usage = this.getUsageLimits?.();
+    if (usage) this.send(ws, { type: 'system:usage', usage });
   }
 
   /** Send every ticket when the ticket subsystem is wired; a no-op otherwise. */

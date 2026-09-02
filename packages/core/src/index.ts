@@ -49,3 +49,6 @@ export type {
   EfficioStatus, EfficioTimelineRow, EfficioTimeline,
   EfficioAxisScore, EfficioSessionProfile, EfficioProfiles, EfficioRepeat,
 } from './efficio/types.js';
+export type {
+  UsageWindow, ScopedUsageWindow, UsageLimitsSnapshot,
+} from './usage/rateLimits.js';

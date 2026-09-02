@@ -6,7 +6,9 @@
     "toggleLeftPanel": "Toggle left panel",
     "toggleRightPanel": "Toggle right panel",
     "toggleChat": "Toggle chat",
-    "openSettings": "Settings"
+    "openSettings": "Settings",
+    "usageResetsIn": "resets in {{time}}",
+    "usageStale": "last known value"
   },
   "settings": {
     "title": "Settings",

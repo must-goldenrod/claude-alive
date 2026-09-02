@@ -4,6 +4,7 @@ import type { EfficioStatus } from '../efficio/types.js';
 import type { Ticket } from '../tickets/types.js';
 import type { TicketEvaluation } from '../tickets/evaluation.js';
 import type { Run, RunTree } from '../runs/types.js';
+import type { UsageLimitsSnapshot } from '../usage/rateLimits.js';
 
 export type TerminalMode = 'claude' | 'shell';
 export type TerminalSource = 'local' | 'ssh';
@@ -50,6 +51,7 @@ export type WSServerMessage =
   | { type: 'snapshot'; agents: AgentInfo[]; recentEvents: EventLogEntry[]; completedSessions: CompletedSession[]; stats: AgentStats; resumableSessions: ResumableSession[] }
   | { type: 'system:heartbeat'; timestamp: number }
   | { type: 'system:metrics'; cpu: number; memUsed: number; memTotal: number; timestamp: number }
+  | { type: 'system:usage'; usage: UsageLimitsSnapshot }
   | { type: 'terminal:output'; tabId: string; data: string }
   | { type: 'terminal:exited'; tabId: string; exitCode: number }
   | { type: 'terminal:ssh-error'; tabId: string; kind: SSHErrorKind; line: string }

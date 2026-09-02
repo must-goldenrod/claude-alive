@@ -6,7 +6,9 @@
     "toggleLeftPanel": "왼쪽 패널 토글",
     "toggleRightPanel": "오른쪽 패널 토글",
     "toggleChat": "채팅 토글",
-    "openSettings": "설정"
+    "openSettings": "설정",
+    "usageResetsIn": "{{time}} 후 초기화",
+    "usageStale": "마지막 확인 값"
   },
   "settings": {
     "title": "설정",
