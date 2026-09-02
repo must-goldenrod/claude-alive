@@ -32,6 +32,7 @@ import {
 } from './completedStore.js';
 import { createUsageRecordsCache } from './usage/jsonlUsage.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
+import { UsageLimitsPoller } from './usage/rateLimitsPoller.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
 import { resolveSessionTerminal } from './sessionTerminalLink.js';
@@ -775,8 +776,15 @@ const terminalManager = new TerminalManager({
 const lastTouchAt = new Map<string, number>();
 const TOUCH_THROTTLE_MS = 15_000;
 
+// Claude subscription usage windows (5h / 7d / model-scoped), the same numbers
+// `/usage` reports. 60s cadence; a failed poll dims the pills instead of
+// clearing them (see UsageLimitsPoller's failure policy). Declared before the
+// broadcaster because `getUsageLimits` runs on the first client connect.
+const usagePoller = new UsageLimitsPoller();
+
 const broadcaster = new WSBroadcaster({
   getSnapshot,
+  getUsageLimits: () => usagePoller.latest(),
   getRunTree: () => runStore.tree(),
   getTickets: () => ticketStore.list(),
   onClientMessage: (ws, msg) => {
@@ -916,6 +924,11 @@ metricsPoller.subscribe((snapshot) => {
 });
 metricsPoller.start();
 
+usagePoller.subscribe((usage) => {
+  broadcaster.broadcast({ type: 'system:usage', usage });
+});
+usagePoller.start();
+
 // Watch ~/.efficio for DB changes and push fresh status to clients. efficio
 // `collect`/`fit` rewrites the SQLite store (multiple fs events) → debounce.
 // Directory watch (not file) so we also catch first-time DB creation.
@@ -966,6 +979,7 @@ process.on('SIGINT', () => {
   for (const timer of despawnTimers.values()) clearTimeout(timer);
   despawnTimers.clear();
   metricsPoller.stop();
+  usagePoller.stop();
   efficioCollector.stop();
   efficioWatcher?.close();
   stopWorkerLoop();

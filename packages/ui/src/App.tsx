@@ -234,7 +234,7 @@ export default function App() {
     }
   }, []);
 
-  const { agents, events, completedSessions, stats, systemMetrics, resumableSessions, connected, send } = useWebSocket(WS_URL, stableOnRaw);
+  const { agents, events, completedSessions, stats, systemMetrics, usageLimits, resumableSessions, connected, send } = useWebSocket(WS_URL, stableOnRaw);
 
   // Resource alert: fires when CPU or memory stays above the configured threshold for
   // `sustainSeconds`. After dismiss we apply a 30s cooldown to avoid spam loops.
@@ -581,6 +581,7 @@ export default function App() {
         onToggleChat={() => setChatOpen(prev => !prev)}
         onOpenSettings={() => setSettingsOpen(true)}
         systemMetrics={systemMetrics}
+        usageLimits={usageLimits}
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ResourceAlert alert={resourceAlert} onDismiss={handleResourceAlertDismiss} />

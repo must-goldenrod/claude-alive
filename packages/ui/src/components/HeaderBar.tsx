@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ViewMode } from '../App.tsx';
+import type { UsageLimitsSnapshot } from '@claude-alive/core';
 import type { SystemMetrics } from '../views/dashboard/hooks/useWebSocket.ts';
+import { toUsagePills, formatResetsIn } from './usagePills.ts';
 import { viewsInGroup, type ViewGroup } from './viewGroups.ts';
 import {
   currentPermission,
@@ -21,6 +23,7 @@ interface HeaderBarProps {
   onToggleChat?: () => void;
   onOpenSettings?: () => void;
   systemMetrics?: SystemMetrics | null;
+  usageLimits?: UsageLimitsSnapshot | null;
 }
 
 function formatBytes(bytes: number): string {
@@ -42,11 +45,15 @@ interface MetricPillProps {
   ratio: number;
   primary: string;
   secondary?: string;
+  /** Overrides the percentage text; lets an overage read >100% on a clamped bar. */
+  percent?: number;
+  /** Dims the pill when the value is last-known rather than fresh. */
+  stale?: boolean;
 }
 
-function MetricPill({ label, ratio, primary, secondary }: MetricPillProps) {
+function MetricPill({ label, ratio, primary, secondary, percent, stale }: MetricPillProps) {
   const color = metricColor(ratio);
-  const pct = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+  const pct = percent ?? Math.round(Math.max(0, Math.min(1, ratio)) * 100);
   return (
     <div
       title={secondary ? `${label} ${primary} · ${secondary}` : `${label} ${primary}`}
@@ -62,6 +69,8 @@ function MetricPill({ label, ratio, primary, secondary }: MetricPillProps) {
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
         color: 'var(--text-secondary)',
+        opacity: stale ? 0.45 : 1,
+        transition: 'opacity 300ms ease',
       }}
     >
       <span style={{ fontWeight: 600, letterSpacing: '0.04em', color: 'var(--text-secondary)', opacity: 0.75 }}>
@@ -187,6 +196,7 @@ export function HeaderBar({
   onToggleChat,
   onOpenSettings,
   systemMetrics,
+  usageLimits,
 }: HeaderBarProps) {
   const { t, i18n } = useTranslation();
   const isKo = i18n.language?.startsWith('ko');
@@ -216,6 +226,15 @@ export function HeaderBar({
     setNotificationsEnabled(next);
     setNotifEnabled(next);
   };
+
+  // Minute-resolution clock for the reset countdowns; nothing else re-renders on it.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const usagePills = toUsagePills(usageLimits ?? null);
 
   const toggleLang = () => {
     i18n.changeLanguage(isKo ? 'en' : 'ko');
@@ -331,6 +350,32 @@ export function HeaderBar({
       </div>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Claude subscription usage — 5h session, 7d, and any model-scoped weekly
+            window (e.g. Fable), polled server-side every 60s. A failed poll keeps
+            the last values and dims them rather than dropping the pills. */}
+        {usagePills.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
+            {usagePills.map((p) => {
+              const resetsIn = formatResetsIn(p.resetsAt, now);
+              const parts = [
+                resetsIn ? t('header.usageResetsIn', { time: resetsIn }) : null,
+                p.stale ? t('header.usageStale') : null,
+              ].filter(Boolean) as string[];
+              return (
+                <MetricPill
+                  key={p.label}
+                  label={p.label}
+                  ratio={p.ratio}
+                  percent={p.percent}
+                  stale={p.stale}
+                  primary={`${p.percent}%`}
+                  secondary={parts.length > 0 ? parts.join(' · ') : undefined}
+                />
+              );
+            })}
+          </div>
+        )}
+
         {/* CPU / RAM indicators — live from server's os module, 2s cadence. */}
         {systemMetrics && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
