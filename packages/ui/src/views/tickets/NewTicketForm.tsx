@@ -49,6 +49,9 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
   // Default ON: orchestrated runs are the normal way tickets are executed here,
   // so the checkbox starts checked and stays a one-click opt-out.
   const [orchestrated, setOrchestrated] = useState(true);
+  // Default ON: a verified ticket that is not committed gets absorbed into the
+  // next ticket's diff, which is what makes per-ticket review impossible.
+  const [autoCommit, setAutoCommit] = useState(true);
   // Which model/effort the agent runs with. `standard` reproduces the behaviour
   // tickets had before presets existed, so the default changes nothing.
   const [runPreset, setRunPreset] = useState<TicketRunPreset>(DEFAULT_RUN_PRESET);
@@ -69,7 +72,7 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
     if (!canSubmit) return;
     setSubmitting(true);
     // Orchestrator mode delegates to sub-agents; only meaningful for local runs.
-    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote, runPreset);
+    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote, runPreset, autoCommit);
     setSubmitting(false);
     if (err) {
       setError(err); // surface the server's specific reason (e.g. bad cwd)
@@ -308,6 +311,13 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
           <input type="checkbox" checked={orchestrated} onChange={(e) => setOrchestrated(e.target.checked)} style={{ cursor: 'pointer' }} />
           <span>{t('tickets.orchestrate')}</span>
           <span style={{ opacity: 0.6 }}>{t('tickets.orchestrateHint')}</span>
+        </label>
+      )}
+      {!isRemote && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary, #8b949e)', cursor: 'pointer', userSelect: 'none' }}>
+          <input type="checkbox" checked={autoCommit} onChange={(e) => setAutoCommit(e.target.checked)} style={{ cursor: 'pointer' }} />
+          <span>{t('tickets.autoCommit')}</span>
+          <span style={{ opacity: 0.6 }}>{t('tickets.autoCommitHint')}</span>
         </label>
       )}
       {error && (

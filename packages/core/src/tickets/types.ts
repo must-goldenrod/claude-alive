@@ -28,6 +28,11 @@ export interface TicketTurn {
   text: string;
   /** Agent one-line headline for a `result` turn, when present. */
   headline?: string;
+  /**
+   * Who produced a `user` turn: the human, or the advisory panel answering on
+   * their behalf. Absent = human (every turn written before the panel existed).
+   */
+  by?: 'human' | 'panel';
   /** Per-run usage for an agent turn (the ticket's top-level `usage` is the sum). */
   usage?: TicketUsage;
   at: number;
@@ -43,9 +48,96 @@ export type TicketFailureReason =
   | 'interrupted' // server restarted while running/verifying (not reattachable)
   | 'cwd-not-allowed'; // create requested a cwd outside the allowlist
 
+/**
+ * One independent reviewer's opinion in the LiteLLM verification panel.
+ * `passed === null` means the model never produced a parseable verdict (timeout,
+ * rate limit, malformed answer) — it abstains rather than voting either way.
+ */
+export interface VerificationOpinion {
+  /** Model the panel asked for (gateway id or alias). */
+  model: string;
+  /** Model that actually answered, when a fallback substituted. */
+  respondedModel?: string;
+  passed: boolean | null;
+  reason: string;
+  /** Why this reviewer abstained, when `passed` is null. */
+  error?: string;
+}
+
+/** How many voters agreed with the final verdict, out of how many voted. */
+export interface PanelConsensus {
+  agree: number;
+  total: number;
+}
+
+/**
+ * The completion gate's report.
+ *
+ * `passed`/`reason` stay the top-level summary every existing consumer reads.
+ * `gate` is the Claude reviewer that inspected the working directory (build,
+ * tests, git diff); `panel` holds the independent LiteLLM reviewers that judged
+ * the same claim from the report text alone. The Claude gate holds a veto — it
+ * is the only reviewer with filesystem access — and a majority of the panel can
+ * veto a gate PASS, so a green verdict means both agreed.
+ */
 export interface TicketVerification {
   passed: boolean;
   reason: string;
+  gate?: { passed: boolean; reason: string };
+  panel?: VerificationOpinion[];
+  consensus?: PanelConsensus;
+  at?: number;
+}
+
+/** Result of the post-verification auto-commit. Recorded even when it did nothing. */
+export interface TicketCommit {
+  committed: boolean;
+  /** Short sha, present when a commit was actually created. */
+  sha?: string;
+  /** The commit subject line (bilingual), present whenever a commit was attempted. */
+  message?: string;
+  /** Number of files in the commit. */
+  files?: number;
+  /** Why nothing was committed (clean tree, not a repo, remote ticket, git error). */
+  skipped?: string;
+  at: number;
+}
+
+/**
+ * Lifecycle of a decision the agent handed back to a human.
+ *
+ * `pending` — parked, no panel consulted yet. `deciding` — LiteLLM reviewers are
+ * being polled. `decided` — they converged and the answer was fed back to the
+ * agent automatically. `failed` — no convergence (or no panel available), so the
+ * ticket waits for the human.
+ */
+export type DecisionStage = 'pending' | 'deciding' | 'decided' | 'failed';
+
+/** One reviewer's answer to a decision question. */
+export interface DecisionOpinion {
+  model: string;
+  respondedModel?: string;
+  /** Normalized option label (e.g. "A", "2") when the question offered a list. */
+  choice?: string;
+  /** The reviewer's answer as one line, used verbatim as the reply when adopted. */
+  recommendation: string;
+  rationale: string;
+  /** Self-reported 0–1 confidence, when the reviewer gave one. */
+  confidence?: number;
+  error?: string;
+}
+
+export interface TicketDecisionPanel {
+  stage: DecisionStage;
+  /** The question the panel was asked (snapshotted; the ticket's may be cleared). */
+  question: string;
+  opinions: DecisionOpinion[];
+  /** The adopted answer, present when `stage === 'decided'`. */
+  resolution?: string;
+  consensus?: PanelConsensus;
+  /** Why the panel could not decide — shown to the human who takes over. */
+  reason?: string;
+  at: number;
 }
 
 /** Token/cost/turn accounting for a ticket's main-agent run, when the model reports it. */
@@ -109,12 +201,28 @@ export interface Ticket {
   /** Token/cost/turn accounting, when the model reports it. */
   usage?: TicketUsage;
   verification?: TicketVerification;
+  /**
+   * Commit created after the gate passed. Absent = auto-commit never ran (the
+   * ticket did not reach a passing verdict, or `autoCommit` is off).
+   */
+  commit?: TicketCommit;
+  /**
+   * Opt out of the post-verification auto-commit for this ticket.
+   * Undefined = enabled, which is the default.
+   */
+  autoCommit?: boolean;
   failureReason?: TicketFailureReason;
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */
   claudeSessionId?: string;
   error?: string;
   /** The pending question when `state === 'decision'`, parsed from `DECISION:`. */
   decisionQuestion?: string;
+  /**
+   * Multi-model review of the pending decision. Its `stage` is the decision's
+   * user-facing sub-status (전/중/완료/실패) — `state` stays `decision` throughout,
+   * so the queue semantics (holds no slot, resumable) are unchanged.
+   */
+  decisionPanel?: TicketDecisionPanel;
   /** Full conversation thread (goal, agent results/decisions, user replies). */
   turns?: TicketTurn[];
   /** Number of agent runs so far (initial run = 1, each reply adds one). */
@@ -146,6 +254,8 @@ export interface TicketCreateInput {
   orchestrated?: boolean;
   /** Run preset. Omitted = the CLI's own defaults (matches pre-feature behaviour). */
   preset?: TicketRunPreset;
+  /** Opt out of the post-verification auto-commit. Omitted = enabled. */
+  autoCommit?: boolean;
 }
 
 /** States the UI renders as "in progress". */

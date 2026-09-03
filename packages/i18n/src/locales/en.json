@@ -622,7 +622,37 @@
       "cwd-not-allowed": "Working directory not allowed"
     },
     "startedAt": "Started",
-    "reviewCta": "Review"
+    "reviewCta": "Review",
+    "verificationReportLabel": "Review report",
+    "advisoryLabel": "Advisory panel",
+    "verdictLabel": "Verdict",
+    "gateLabel": "Gate (Claude)",
+    "consensusLabel": "Consensus",
+    "abstainedLabel": "No answer",
+    "commitLabel": "Commit",
+    "commitSkipped": "not committed",
+    "filesLabel": "files",
+    "resolutionLabel": "Adopted",
+    "escalationLabel": "Escalated",
+    "reviewPhase": {
+      "unverified": "unverified",
+      "verifying": "verifying",
+      "verified": "verified",
+      "verifyFailed": "verification failed",
+      "decisionPending": "decision pending",
+      "decisionRunning": "deciding",
+      "decisionDone": "decided",
+      "decisionFailed": "decision failed",
+      "failed": "failed"
+    },
+    "decisionStage": {
+      "pending": "decision pending",
+      "deciding": "deciding",
+      "decided": "decided",
+      "failed": "decision failed"
+    },
+    "autoCommit": "Commit when verified",
+    "autoCommitHint": "Commits locally after the gate passes. Never pushes."
   },
   "spread": {
     "empty": "No open terminals",

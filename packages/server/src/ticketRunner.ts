@@ -9,7 +9,10 @@
 import { resolve, sep } from 'node:path';
 import { realpathSync, existsSync } from 'node:fs';
 import { addUsage } from '@claude-alive/core';
-import type { Ticket, TicketFailureReason, TicketUsage, TicketTurn } from '@claude-alive/core';
+import type {
+  Ticket, TicketFailureReason, TicketUsage, TicketTurn,
+  TicketVerification, TicketCommit, TicketDecisionPanel,
+} from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
 
 export interface MainOutcome {
@@ -68,7 +71,19 @@ export interface TicketRunnerOptions {
   /** Spawn the autonomous main agent for a ticket. `opts` drives follow-up replies. */
   spawnMain: (ticket: Ticket, opts?: SpawnMainOpts) => RunnerHeadlessHandle;
   /** Self-verification. Rejects → fail-closed (verification-inconclusive). */
-  verify: (ticket: Ticket, mainResult: string | null) => Promise<{ passed: boolean; reason: string }>;
+  verify: (ticket: Ticket, mainResult: string | null) => Promise<TicketVerification>;
+  /**
+   * Commit the work once the gate passes. Omitted = never commit (the
+   * pre-feature behaviour). Errors are absorbed into the returned record — a
+   * failed commit reports itself on the ticket, it never fails a passed ticket.
+   */
+  commitWork?: (ticket: Ticket) => Promise<TicketCommit>;
+  /**
+   * Ask the multi-model advisory panel to resolve a pending decision. Omitted =
+   * every decision waits for the human, as before. When the panel converges the
+   * runner replies on the human's behalf and the ticket resumes by itself.
+   */
+  adviseDecision?: (ticket: Ticket, question: string) => Promise<TicketDecisionPanel>;
   /** Push a changed ticket to clients. */
   broadcast: (ticket: Ticket) => void;
   /**
@@ -148,7 +163,7 @@ function isTerminal(t: Ticket | undefined): boolean {
 }
 
 export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
-  const { store, spawnMain, verify, broadcast, onSettled, validateCwd } = options;
+  const { store, spawnMain, verify, broadcast, onSettled, validateCwd, commitWork, adviseDecision } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs;
   const resumePrompt = options.resumePrompt ?? DEFAULT_RESUME_PROMPT;
@@ -349,8 +364,13 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         rounds,
         claudeSessionId: sessionId ?? undefined,
         turns: [...(cur?.turns ?? []), turn],
+        decisionPanel: adviseDecision ? { stage: 'pending', question, opinions: [], at: now() } : undefined,
       });
       releaseSlot(id); // waiting on the human; hold no concurrency slot
+      // Consult the advisory panel in the background: the ticket is already
+      // parked and holds no slot, so a slow panel costs nothing and a human who
+      // answers first simply wins the race (the panel's reply is then dropped).
+      void consultPanel(id, question);
       return;
     }
 
@@ -386,7 +406,13 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         return;
       }
       if (verdict.passed) {
-        await apply(id, { state: 'done', verification: verdict, endedAt: now() });
+        const commit = await commitVerified(verifying, verdict);
+        await apply(id, {
+          state: 'done',
+          verification: verdict,
+          ...(commit ? { commit } : {}),
+          endedAt: now(),
+        });
         releaseSlot(id);
       } else {
         await fail(id, 'verification-failed', verdict.reason || 'goal not met', verdict);
@@ -404,6 +430,99 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     if (isTerminal(store.get(id))) return;
     handles.get(id)?.kill();
     await fail(id, 'timeout', 'exceeded wallclock timeout');
+  }
+
+  /**
+   * Continue a parked ticket with an answer. `by` records whether a human or the
+   * advisory panel produced it, so a thread never implies the human said
+   * something they did not.
+   */
+  async function replyInternal(id: string, prompt: string, by: 'human' | 'panel'): Promise<Ticket | undefined> {
+    const t = store.get(id);
+    if (!t || t.state !== 'decision') return t ?? undefined;
+    const answer = prompt.trim();
+    if (!answer) return t;
+    if (!t.claudeSessionId) {
+      // No session to resume — the reply cannot continue the conversation.
+      await fail(id, 'error', 'no Claude session to resume for this reply');
+      return store.get(id);
+    }
+    const userTurn: TicketTurn = { role: 'user', kind: 'prompt', text: answer, by, at: now() };
+    running.add(id); // interactive reply re-acquires a slot immediately
+    const started = await apply(id, {
+      state: 'running',
+      decisionQuestion: undefined,
+      startedAt: now(),
+      endedAt: undefined,
+      turns: [...(t.turns ?? []), userTurn],
+    });
+    if (!started) {
+      releaseSlot(id);
+      return undefined;
+    }
+    let handle: RunnerHeadlessHandle;
+    try {
+      handle = spawnMain(started, {
+        prompt: answer,
+        resumeSessionId: t.claudeSessionId,
+        onSessionId: (sid) => void noteSession(id, sid),
+      });
+    } catch (e) {
+      await fail(id, 'error', `failed to resume agent: ${String(e)}`);
+      return store.get(id);
+    }
+    attach(id, handle);
+    return started;
+  }
+
+  /**
+   * Commit a ticket whose gate just passed. A commit failure is recorded on the
+   * ticket and nothing more: the work was verified, and refusing to mark it done
+   * because git was unhappy would lose a passing verdict over a side effect.
+   */
+  async function commitVerified(ticket: Ticket, verification: TicketVerification): Promise<TicketCommit | undefined> {
+    if (!commitWork) return undefined;
+    if (ticket.autoCommit === false) return undefined;
+    try {
+      return await commitWork({ ...ticket, verification });
+    } catch (e) {
+      return { committed: false, skipped: `commit threw: ${String(e)}`, at: now() };
+    }
+  }
+
+  /**
+   * Resolve a parked decision with the advisory panel.
+   *
+   * Every exit re-reads the ticket before writing: the human may have answered
+   * while the panel was thinking, and a late panel answer must never re-park or
+   * overwrite a ticket that has already moved on.
+   */
+  async function consultPanel(id: string, question: string): Promise<void> {
+    if (!adviseDecision) return;
+    const parked = store.get(id);
+    if (!parked || parked.state !== 'decision') return;
+    await apply(id, { decisionPanel: { stage: 'deciding', question, opinions: [], at: now() } });
+
+    let panel: TicketDecisionPanel;
+    try {
+      panel = await adviseDecision(parked, question);
+    } catch (e) {
+      panel = {
+        stage: 'failed',
+        question,
+        opinions: [],
+        consensus: { agree: 0, total: 0 },
+        reason: e instanceof Error ? e.message : 'decision panel failed',
+        at: now(),
+      };
+    }
+
+    const still = store.get(id);
+    if (!still || still.state !== 'decision') return; // answered by a human meanwhile
+    await apply(id, { decisionPanel: panel });
+    if (panel.stage === 'decided' && panel.resolution) {
+      await replyInternal(id, panel.resolution, 'panel');
+    }
   }
 
   function enqueue(ticket: Ticket): void {
@@ -430,6 +549,20 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
           }
         }
       }
+      // A panel that was mid-flight when the server died left the ticket showing
+      // "deciding" with nothing running. Hand it to the human rather than
+      // silently re-polling: the first poll may already have been paid for.
+      for (const t of store.list()) {
+        if (t.state === 'decision' && t.decisionPanel?.stage === 'deciding') {
+          await apply(t.id, {
+            decisionPanel: {
+              ...t.decisionPanel,
+              stage: 'failed',
+              reason: 'server restarted while the advisory panel was running',
+            },
+          });
+        }
+      }
       // Re-enqueue anything still queued so a restart resumes the backlog.
       for (const t of store.list()) {
         if (t.state === 'queued') enqueue(t);
@@ -449,9 +582,11 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         error: undefined,
         failureReason: undefined,
         verification: undefined,
+        commit: undefined,
         result: undefined,
         // A retry re-runs the goal from scratch, so accumulation resets.
         decisionQuestion: undefined,
+        decisionPanel: undefined,
         turns: undefined,
         rounds: undefined,
         usage: undefined,
@@ -460,43 +595,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       return t;
     },
 
-    async reply(id, prompt) {
-      const t = store.get(id);
-      if (!t || t.state !== 'decision') return t ?? undefined;
-      const answer = prompt.trim();
-      if (!answer) return t;
-      if (!t.claudeSessionId) {
-        // No session to resume — the reply cannot continue the conversation.
-        await fail(id, 'error', 'no Claude session to resume for this reply');
-        return store.get(id);
-      }
-      const userTurn: TicketTurn = { role: 'user', kind: 'prompt', text: answer, at: now() };
-      running.add(id); // interactive reply re-acquires a slot immediately
-      const started = await apply(id, {
-        state: 'running',
-        decisionQuestion: undefined,
-        startedAt: now(),
-        endedAt: undefined,
-        turns: [...(t.turns ?? []), userTurn],
-      });
-      if (!started) {
-        releaseSlot(id);
-        return undefined;
-      }
-      let handle: RunnerHeadlessHandle;
-      try {
-        handle = spawnMain(started, {
-          prompt: answer,
-          resumeSessionId: t.claudeSessionId,
-          onSessionId: (sid) => void noteSession(id, sid),
-        });
-      } catch (e) {
-        await fail(id, 'error', `failed to resume agent: ${String(e)}`);
-        return store.get(id);
-      }
-      attach(id, handle);
-      return started;
-    },
+    reply: (id, prompt) => replyInternal(id, prompt, 'human'),
 
     async cancel(id) {
       const cur = store.get(id);
