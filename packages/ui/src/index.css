@@ -13,6 +13,7 @@
   --accent-red: #f85149;
   --accent-purple: #bc8cff;
   --accent-teal: #39c5cf;
+  --accent-pink: #f778ba;
   /* Distinct greys for the winding-down lifecycle states so `despawning` and
      `removed` don't collapse into `idle`. */
   --state-despawning: #6e7681;

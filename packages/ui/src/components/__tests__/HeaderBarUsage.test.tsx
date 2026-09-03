@@ -28,6 +28,17 @@ describe('HeaderBar usage pills', () => {
     expect(screen.getByText('9%')).toBeDefined();
   });
 
+  it('renders each window countdown at its own granularity', () => {
+    const now = Date.now();
+    renderHeader({
+      ...usage,
+      fiveHour: { utilization: 0.09, resetsAt: now + 2 * 3600_000 + 30 * 60_000 },
+      sevenDay: { utilization: 0.08, resetsAt: now + 3 * 86400_000 + 4 * 3600_000 },
+    });
+    expect(screen.getByText('2h 30m')).toBeDefined();
+    expect(screen.getByText('3d 04h')).toBeDefined();
+  });
+
   it('renders no usage pills before the first poll lands', () => {
     renderHeader(null);
     expect(screen.queryByText('5H')).toBeNull();

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { ViewMode } from '../App.tsx';
 import type { UsageLimitsSnapshot } from '@claude-alive/core';
 import type { SystemMetrics } from '../views/dashboard/hooks/useWebSocket.ts';
-import { toUsagePills, formatResetsIn } from './usagePills.ts';
+import { toUsagePills, formatRemaining, usagePillColor } from './usagePills.ts';
 import { viewsInGroup, type ViewGroup } from './viewGroups.ts';
 import {
   currentPermission,
@@ -47,13 +47,18 @@ interface MetricPillProps {
   secondary?: string;
   /** Overrides the percentage text; lets an overage read >100% on a clamped bar. */
   percent?: number;
+  /** Overrides the bar/percentage colour; usage pills carry their own hue. */
+  color?: string;
+  /** Small trailing text after the percentage, e.g. a reset countdown. */
+  trailing?: string;
   /** Dims the pill when the value is last-known rather than fresh. */
   stale?: boolean;
 }
 
-function MetricPill({ label, ratio, primary, secondary, percent, stale }: MetricPillProps) {
-  const color = metricColor(ratio);
-  const pct = percent ?? Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+function MetricPill({ label, ratio, primary, secondary, percent, color, trailing, stale }: MetricPillProps) {
+  const barPct = Math.round(Math.max(0, Math.min(1, ratio)) * 100);
+  const pillColor = color ?? metricColor(ratio);
+  const pct = percent ?? barPct;
   return (
     <div
       title={secondary ? `${label} ${primary} · ${secondary}` : `${label} ${primary}`}
@@ -92,15 +97,20 @@ function MetricPill({ label, ratio, primary, secondary, percent, stale }: Metric
             top: 0,
             left: 0,
             bottom: 0,
-            width: `${pct}%`,
-            background: color,
+            width: `${barPct}%`,
+            background: pillColor,
             transition: 'width 500ms ease, background-color 300ms ease',
           }}
         />
       </div>
-      <span style={{ color: color, fontWeight: 600, minWidth: 32, textAlign: 'right' }}>
+      <span style={{ color: pillColor, fontWeight: 600, minWidth: 32, textAlign: 'right' }}>
         {pct}%
       </span>
+      {trailing && (
+        <span style={{ color: 'var(--text-secondary)', opacity: 0.7, fontSize: 10, letterSpacing: '0.02em' }}>
+          {trailing}
+        </span>
+      )}
     </div>
   );
 }
@@ -356,9 +366,9 @@ export function HeaderBar({
         {usagePills.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 4 }}>
             {usagePills.map((p) => {
-              const resetsIn = formatResetsIn(p.resetsAt, now);
+              const remaining = formatRemaining(p.resetsAt, now, p.remainingUnit);
               const parts = [
-                resetsIn ? t('header.usageResetsIn', { time: resetsIn }) : null,
+                remaining ? t('header.usageResetsIn', { time: remaining }) : null,
                 p.stale ? t('header.usageStale') : null,
               ].filter(Boolean) as string[];
               return (
@@ -367,6 +377,8 @@ export function HeaderBar({
                   label={p.label}
                   ratio={p.ratio}
                   percent={p.percent}
+                  color={usagePillColor(p.baseColor, p.ratio)}
+                  trailing={remaining ?? undefined}
                   stale={p.stale}
                   primary={`${p.percent}%`}
                   secondary={parts.length > 0 ? parts.join(' · ') : undefined}
