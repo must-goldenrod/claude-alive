@@ -29,7 +29,9 @@ describe('HeaderBar usage pills', () => {
   });
 
   it('renders each window countdown at its own granularity', () => {
-    const now = Date.now();
+    // A few seconds of slack: the component reads its own Date.now() after this
+    // one, and without the margin a boundary value floors to one minute less.
+    const now = Date.now() + 5_000;
     renderHeader({
       ...usage,
       fiveHour: { utilization: 0.09, resetsAt: now + 2 * 3600_000 + 30 * 60_000 },
