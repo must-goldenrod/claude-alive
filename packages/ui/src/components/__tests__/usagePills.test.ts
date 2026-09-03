@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { UsageLimitsSnapshot } from '@claude-alive/core';
-import { toUsagePills, formatResetsIn } from '../usagePills.ts';
+import { toUsagePills, formatRemaining, usagePillColor } from '../usagePills.ts';
 
 const snapshot = (over: Partial<UsageLimitsSnapshot> = {}): UsageLimitsSnapshot => ({
   fiveHour: { utilization: 0.05, resetsAt: null },
@@ -35,25 +35,47 @@ describe('toUsagePills', () => {
     // The displayed percentage still tells the truth about the overage.
     expect(pills[0]!.percent).toBe(140);
   });
+
+  it('marks the 5-hour window hh:mm and the weekly windows dd:hh', () => {
+    const pills = toUsagePills(snapshot());
+    expect(pills.map((p) => p.remainingUnit)).toEqual(['hm', 'dh', 'dh']);
+  });
+
+  it('gives each window its own base colour, none of them the CPU/RAM green', () => {
+    const colors = toUsagePills(snapshot()).map((p) => p.baseColor);
+    expect(new Set(colors).size).toBe(3);
+    expect(colors).not.toContain('var(--accent-green)');
+    expect(colors).not.toContain('var(--accent-blue)');
+  });
 });
 
-describe('formatResetsIn', () => {
+describe('formatRemaining', () => {
   const now = Date.UTC(2026, 8, 2, 12, 0, 0);
 
-  it('renders hours and minutes for a window resetting today', () => {
-    expect(formatResetsIn(now + 2 * 3600_000 + 30 * 60_000, now)).toBe('2h 30m');
+  it('renders the session window as hours and zero-padded minutes', () => {
+    expect(formatRemaining(now + 2 * 3600_000 + 30 * 60_000, now, 'hm')).toBe('2h 30m');
+    expect(formatRemaining(now + 45 * 60_000, now, 'hm')).toBe('0h 45m');
+    expect(formatRemaining(now + 3600_000 + 5 * 60_000, now, 'hm')).toBe('1h 05m');
   });
 
-  it('renders minutes only under an hour', () => {
-    expect(formatResetsIn(now + 45 * 60_000, now)).toBe('45m');
-  });
-
-  it('renders days and hours for a multi-day window', () => {
-    expect(formatResetsIn(now + 3 * 86400_000 + 4 * 3600_000, now)).toBe('3d 4h');
+  it('renders the weekly window as days and zero-padded hours', () => {
+    expect(formatRemaining(now + 3 * 86400_000 + 4 * 3600_000, now, 'dh')).toBe('3d 04h');
+    expect(formatRemaining(now + 5 * 3600_000, now, 'dh')).toBe('0d 05h');
   });
 
   it('returns null when there is no reset time or it already passed', () => {
-    expect(formatResetsIn(null, now)).toBeNull();
-    expect(formatResetsIn(now - 1000, now)).toBeNull();
+    expect(formatRemaining(null, now, 'hm')).toBeNull();
+    expect(formatRemaining(now - 1000, now, 'dh')).toBeNull();
+  });
+});
+
+describe('usagePillColor', () => {
+  it('keeps the window base colour while usage is normal', () => {
+    expect(usagePillColor('var(--accent-teal)', 0.2)).toBe('var(--accent-teal)');
+  });
+
+  it('escalates to amber then red as the limit is approached', () => {
+    expect(usagePillColor('var(--accent-teal)', 0.7)).toBe('var(--accent-amber)');
+    expect(usagePillColor('var(--accent-teal)', 0.9)).toBe('var(--accent-red)');
   });
 });
