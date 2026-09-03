@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Ticket, TicketEvaluation, TicketTurn, TicketDelegation, EvalLabel } from '@claude-alive/core';
+import type {
+  Ticket, TicketEvaluation, TicketTurn, TicketDelegation, EvalLabel,
+  TicketVerification, TicketCommit, TicketDecisionPanel,
+} from '@claude-alive/core';
 import { Markdown } from './Markdown.tsx';
 import {
   projectName,
@@ -10,6 +13,9 @@ import {
   formatCost,
   formatDuration,
   parseDecisionOptions,
+  reviewPhase,
+  reviewPhaseKey,
+  REVIEW_PHASE_BORDER,
   type DecisionOption,
 } from './ticketDisplay.ts';
 import type { EvaluateFn, ReplyFn } from './useTickets.ts';
@@ -157,15 +163,6 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
 
-          {ticket.verification && (
-            <Section label={t('tickets.verificationLabel')}>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary, #8b949e)', lineHeight: 1.5 }}>
-                {ticket.verification.passed ? '✓ ' : '✗ '}
-                {ticket.verification.reason}
-              </div>
-            </Section>
-          )}
-
           {(ticket.model || ticket.usage) && (
             <Section label={t('tickets.runInfoLabel')}>
               <RunInfo ticket={ticket} t={t} />
@@ -184,6 +181,14 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
 
+          {/* Advisory panel sits directly above the question it was asked, so a
+              human taking over reads the models' attempt before their own. */}
+          {ticket.decisionPanel && (
+            <Section label={t('tickets.advisoryLabel')}>
+              <AdvisoryReport panel={ticket.decisionPanel} t={t} />
+            </Section>
+          )}
+
           {/* The decision itself lives at the bottom, after all the context above. */}
           {decision && (
             <Section label={t('tickets.decisionLabel')}>
@@ -194,6 +199,14 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
                 onPick={(o) => setReplyText(`${o.key}) ${o.text}`)}
                 t={t}
               />
+            </Section>
+          )}
+
+          {/* Bottom-of-modal review report: who checked this, what they said,
+              and what was committed as a result. */}
+          {(ticket.verification || ticket.commit) && (
+            <Section label={t('tickets.verificationReportLabel')}>
+              <VerificationReport ticket={ticket} t={t} />
             </Section>
           )}
         </div>
@@ -648,7 +661,7 @@ function ReplyComposer({
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary, #8b949e)', marginBottom: 6 }}>
@@ -677,3 +690,172 @@ const btnStyle: React.CSSProperties = {
   color: 'var(--text-secondary, #8b949e)',
   cursor: 'pointer',
 };
+
+/** Small key→value row used by both review reports. */
+function ReportRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, fontSize: 12, lineHeight: 1.6 }}>
+      <span style={{ minWidth: 92, flexShrink: 0, color: 'var(--text-secondary, #8b949e)' }}>{label}</span>
+      <span style={{ color: 'var(--text-primary, #e6edf3)', minWidth: 0, wordBreak: 'break-word' }}>{children}</span>
+    </div>
+  );
+}
+
+/** `gemini/gemini-3.1-pro-preview` → `gemini-3.1-pro-preview`. */
+function shortModel(model: string): string {
+  return model.includes('/') ? model.slice(model.lastIndexOf('/') + 1) : model;
+}
+
+/**
+ * The completion report.
+ *
+ * A verdict is only worth as much as the reader's ability to check it, so this
+ * lists every reviewer by name and shows what each one actually said — including
+ * the ones that abstained. A single ✓ with no attribution is the thing this
+ * replaces: it looked identical whether three models had agreed or none had run.
+ */
+function VerificationReport({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) {
+  const v: TicketVerification | undefined = ticket.verification;
+  const commit: TicketCommit | undefined = ticket.commit;
+  const phase = reviewPhase(ticket);
+  const phaseColor = REVIEW_PHASE_BORDER[phase];
+  const voters = v?.panel?.filter((o) => o.passed !== null) ?? [];
+  const abstained = v?.panel?.filter((o) => o.passed === null) ?? [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: phaseColor,
+            border: `1px solid ${phaseColor}`,
+            borderRadius: 5,
+            padding: '1px 6px',
+          }}
+        >
+          {t(reviewPhaseKey(phase))}
+        </span>
+        {v?.consensus && (
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.7 }}>
+            {t('tickets.consensusLabel')} {v.consensus.agree}/{v.consensus.total}
+          </span>
+        )}
+        {/* Say so explicitly: a report with no reviewers listed must not read
+            as "three models agreed" to someone skimming it. */}
+        {ticket.panelReview === false && (
+          <span style={{ fontSize: 11, opacity: 0.7 }}>{t('tickets.panelOffLabel')}</span>
+        )}
+      </div>
+
+      {v?.reason && <ReportRow label={t('tickets.verdictLabel')}>{v.reason}</ReportRow>}
+
+      {v?.gate && (
+        <ReportRow label={t('tickets.gateLabel')}>
+          <span style={{ color: v.gate.passed ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)' }}>
+            {v.gate.passed ? '✓' : '✗'}
+          </span>{' '}
+          {v.gate.reason}
+        </ReportRow>
+      )}
+
+      {voters.map((o) => (
+        <ReportRow key={o.model} label={shortModel(o.respondedModel ?? o.model)}>
+          <span style={{ color: o.passed ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)' }}>
+            {o.passed ? '✓' : '✗'}
+          </span>{' '}
+          {o.reason}
+        </ReportRow>
+      ))}
+
+      {abstained.length > 0 && (
+        <ReportRow label={t('tickets.abstainedLabel')}>
+          <span style={{ opacity: 0.7 }}>
+            {abstained.map((o) => `${shortModel(o.model)} (${o.error ?? '—'})`).join(', ')}
+          </span>
+        </ReportRow>
+      )}
+
+      {commit && (
+        <ReportRow label={t('tickets.commitLabel')}>
+          {commit.committed ? (
+            <>
+              <span style={{ fontFamily: 'var(--font-mono, monospace)', color: 'var(--accent-green, #3fb950)' }}>
+                {commit.sha ?? 'HEAD'}
+              </span>
+              {typeof commit.files === 'number' && (
+                <span style={{ opacity: 0.7 }}> · {commit.files} {t('tickets.filesLabel')}</span>
+              )}
+              {commit.message && <div style={{ opacity: 0.8, marginTop: 2 }}>{commit.message}</div>}
+            </>
+          ) : (
+            <span style={{ opacity: 0.7 }}>{commit.skipped ?? t('tickets.commitSkipped')}</span>
+          )}
+        </ReportRow>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the advisory models said about a pending decision.
+ *
+ * Shown whether they converged or not: when they did, it explains why the ticket
+ * moved on without the human; when they did not, their disagreement is the most
+ * useful thing the human can read before deciding themselves.
+ */
+function AdvisoryReport({ panel, t }: { panel: TicketDecisionPanel; t: (key: string) => string }) {
+  const stageColor =
+    panel.stage === 'decided'
+      ? 'var(--accent-green, #3fb950)'
+      : panel.stage === 'failed'
+        ? 'var(--accent-pink, #f778ba)'
+        : 'var(--accent-amber, #d29922)';
+  const answered = panel.opinions.filter((o) => !o.error);
+  const failed = panel.opinions.filter((o) => o.error);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: stageColor,
+            border: `1px solid ${stageColor}`,
+            borderRadius: 5,
+            padding: '1px 6px',
+          }}
+        >
+          {t(`tickets.decisionStage.${panel.stage}`)}
+        </span>
+        {panel.consensus && panel.consensus.total > 0 && (
+          <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', opacity: 0.7 }}>
+            {t('tickets.consensusLabel')} {panel.consensus.agree}/{panel.consensus.total}
+          </span>
+        )}
+      </div>
+
+      {panel.resolution && <ReportRow label={t('tickets.resolutionLabel')}>{panel.resolution}</ReportRow>}
+      {panel.reason && <ReportRow label={t('tickets.escalationLabel')}>{panel.reason}</ReportRow>}
+
+      {answered.map((o) => (
+        <ReportRow key={o.model} label={shortModel(o.respondedModel ?? o.model)}>
+          {o.choice && <strong style={{ marginRight: 4 }}>{o.choice})</strong>}
+          {o.recommendation}
+          {typeof o.confidence === 'number' && (
+            <span style={{ opacity: 0.6, fontFamily: 'var(--font-mono, monospace)' }}> ({o.confidence.toFixed(2)})</span>
+          )}
+          {o.rationale && <div style={{ opacity: 0.75, marginTop: 2 }}>{o.rationale}</div>}
+        </ReportRow>
+      ))}
+
+      {failed.length > 0 && (
+        <ReportRow label={t('tickets.abstainedLabel')}>
+          <span style={{ opacity: 0.7 }}>{failed.map((o) => `${shortModel(o.model)} (${o.error})`).join(', ')}</span>
+        </ReportRow>
+      )}
+    </div>
+  );
+}

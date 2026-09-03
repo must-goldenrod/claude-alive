@@ -46,3 +46,23 @@ describe('buildOrchestratorPrompt', () => {
     expect(out.endsWith(HEADLINE_INSTRUCTION)).toBe(true);
   });
 });
+
+describe('remote commit instruction', () => {
+  it('is absent by default so a local ticket prompt is unchanged', () => {
+    expect(buildMainPrompt('goal')).not.toContain('git commit');
+    expect(buildMainPrompt('goal', '', {})).toBe(buildMainPrompt('goal'));
+  });
+
+  it('is appended before the marker instruction when asked for', () => {
+    const p = buildMainPrompt('goal', '', { askToCommit: true });
+    expect(p).toContain('git commit');
+    expect(p).toContain('push');
+    expect(p.indexOf('git commit')).toBeLessThan(p.indexOf('HEADLINE:'));
+  });
+
+  it('reaches the orchestrator prompt too', () => {
+    const p = buildOrchestratorPrompt('goal', '', '/bin/ca-delegate', 'm', { askToCommit: true });
+    expect(p).toContain('git commit');
+    expect(p.indexOf('git commit')).toBeLessThan(p.indexOf('HEADLINE:'));
+  });
+});

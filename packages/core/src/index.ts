@@ -30,6 +30,8 @@ export type { TicketRunPreset, TicketRunProfile, TicketEffort } from './tickets/
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
   TicketTurn, TicketTurnRole, TicketTurnKind,
+  VerificationOpinion, PanelConsensus, TicketCommit,
+  DecisionStage, DecisionOpinion, TicketDecisionPanel,
 } from './tickets/types.js';
 export {
   seedAutoLabel, clampWeight,

@@ -52,3 +52,36 @@ describe('createVerifier', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('createVerifier with a review panel', () => {
+  const outcome2 = (result: string): HeadlessOutcome => ({
+    exitCode: 0,
+    result: { result, isError: false, sessionId: null, subtype: 'success', model: null },
+    sessionId: null,
+    stderr: '',
+  });
+  const ticket = { goal: 'g', cwd: '/r', id: '1', state: 'verifying', createdAt: 0 } as const;
+
+  it('lets the panel overturn a gate PASS by majority', async () => {
+    const v = createVerifier({
+      run: async () => outcome2('{"passed": true, "reason": "looks done"}'),
+      panel: {
+        models: ['a', 'b'],
+        run: async () => [
+          { model: 'a', content: '{"passed":false,"reason":"different problem"}' },
+          { model: 'b', content: '{"passed":false,"reason":"different problem"}' },
+        ],
+      },
+      now: () => 7,
+    });
+    const verdict = await v.verify(ticket, 'r');
+    expect(verdict.passed).toBe(false);
+    expect(verdict.gate).toEqual({ passed: true, reason: 'looks done' });
+    expect(verdict.consensus).toEqual({ agree: 2, total: 3 });
+  });
+
+  it('keeps the gate verdict untouched when no panel is configured', async () => {
+    const v = createVerifier({ run: async () => outcome2('{"passed": true, "reason": "ok"}') });
+    await expect(v.verify(ticket, 'r')).resolves.toEqual({ passed: true, reason: 'ok' });
+  });
+});

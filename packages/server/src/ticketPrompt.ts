@@ -18,9 +18,32 @@ export const HEADLINE_INSTRUCTION =
   '- 목표를 끝냈으면:  HEADLINE: <핵심 결과 30자 이내 한 줄>\n' +
   '- 사람의 결정·선택이 있어야 더 진행할 수 있으면:  DECISION: <무엇을 정해야 하는지와 선택지를 한 줄로>';
 
-export function buildMainPrompt(goal: string, guideText = ''): string {
+/**
+ * Commit instruction for tickets the server cannot commit itself.
+ *
+ * A local ticket is committed by the server the moment its verification gate
+ * turns green — a deterministic step the agent has no say in. A ticket running
+ * over SSH produces its changes on the remote host, where the server has no
+ * hands, so there the agent is asked to commit instead. It is the weaker
+ * arrangement (the agent is the party under review, and it can forget), which is
+ * why it is used only where the strong one is impossible.
+ */
+export const REMOTE_COMMIT_INSTRUCTION =
+  '\n\n---\n이 작업은 원격 호스트에서 실행됩니다. 파일을 변경했다면 마지막 마커를 출력하기 전에 ' +
+  '변경분을 반드시 커밋하세요 (push 는 하지 마세요):\n' +
+  '- `git add -A -- .` 후 `git commit -m "<type>: <한글 설명> / <English description>"`\n' +
+  '- 변경이 없거나 git 저장소가 아니면 커밋하지 않습니다.\n' +
+  '- 커밋했다면 결과 본문에 커밋 해시를 한 줄로 남기세요.';
+
+export interface MainPromptOptions {
+  /** Append {@link REMOTE_COMMIT_INSTRUCTION}. Used for remote (ssh) tickets only. */
+  askToCommit?: boolean;
+}
+
+export function buildMainPrompt(goal: string, guideText = '', opts: MainPromptOptions = {}): string {
   const prefix = guideText.trim() ? `${guideText.trim()}\n\n---\n` : '';
-  return `${prefix}${goal}${HEADLINE_INSTRUCTION}`;
+  const commit = opts.askToCommit ? REMOTE_COMMIT_INSTRUCTION : '';
+  return `${prefix}${goal}${commit}${HEADLINE_INSTRUCTION}`;
 }
 
 /**
@@ -41,6 +64,7 @@ export function buildOrchestratorPrompt(
   guideText: string,
   delegateCmd: string,
   model: string,
+  opts: MainPromptOptions = {},
 ): string {
   const prefix = guideText.trim() ? `${guideText.trim()}\n\n---\n` : '';
   const orchestration =
@@ -55,5 +79,6 @@ export function buildOrchestratorPrompt(
     `  ${delegateCmd} --list-models   # 모델 목록과 현재 쿨다운 상태\n` +
     '서브에이전트의 답변이 stdout으로 반환된다. 여러 번/여러 모델로 위임하고 결과를 종합해 판단하라. ' +
     '위임이 불필요하면 직접 처리해도 된다.\n\n---\n';
-  return `${prefix}${orchestration}목표: ${goal}${HEADLINE_INSTRUCTION}`;
+  const commit = opts.askToCommit ? REMOTE_COMMIT_INSTRUCTION : '';
+  return `${prefix}${orchestration}목표: ${goal}${commit}${HEADLINE_INSTRUCTION}`;
 }

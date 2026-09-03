@@ -622,7 +622,41 @@
       "cwd-not-allowed": "Working directory not allowed"
     },
     "startedAt": "Started",
-    "reviewCta": "Review"
+    "reviewCta": "Review",
+    "verificationReportLabel": "Review report",
+    "advisoryLabel": "Advisory panel",
+    "verdictLabel": "Verdict",
+    "gateLabel": "Gate (Claude)",
+    "consensusLabel": "Consensus",
+    "abstainedLabel": "No answer",
+    "commitLabel": "Commit",
+    "commitSkipped": "not committed",
+    "filesLabel": "files",
+    "resolutionLabel": "Adopted",
+    "escalationLabel": "Escalated",
+    "reviewPhase": {
+      "unverified": "unverified",
+      "verifying": "verifying",
+      "verified": "verified",
+      "verifyFailed": "verification failed",
+      "decisionPending": "decision pending",
+      "decisionRunning": "deciding",
+      "decisionDone": "decided",
+      "decisionFailed": "decision failed",
+      "failed": "failed"
+    },
+    "decisionStage": {
+      "pending": "decision pending",
+      "deciding": "deciding",
+      "decided": "decided",
+      "failed": "decision failed"
+    },
+    "autoCommit": "Commit when verified",
+    "autoCommitHint": "Commits locally after the gate passes. Never pushes.",
+    "autoCommitRemoteHint": "Remote ticket — the agent is asked to commit on the host. Never pushes.",
+    "panelReview": "Cross-check with other models",
+    "panelReviewHint": "Sends the goal and the report to third-party models. Off = local gate only.",
+    "panelOffLabel": "Panel off — local gate only"
   },
   "spread": {
     "empty": "No open terminals",

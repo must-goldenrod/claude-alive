@@ -16,6 +16,9 @@ import {
   oneLineSummary,
   runMetaShort,
   STATUS_COLOR,
+  reviewPhase,
+  reviewPhaseKey,
+  REVIEW_PHASE_BORDER,
   type DisplayStatus,
 } from './ticketDisplay.ts';
 import { failureLine } from './failureLine.ts';
@@ -47,6 +50,11 @@ export function TicketCard({ ticket, evaluation, onOpen }: TicketCardProps) {
   const lastActivity = ticketLastActivityAt(ticket);
   const color = STATUS_COLOR[status];
   const isActive = status === 'active';
+  // The border carries the review state (검증/의사결정), which is a different
+  // question from the column the card sits in — see reviewPhase().
+  const phase = reviewPhase(ticket);
+  const phaseBorder = REVIEW_PHASE_BORDER[phase];
+  const phaseSettling = phase === 'verifying' || phase === 'decisionRunning';
 
   // Focal line: the one-line result. While active, show the live sub-status;
   // on failure, the reason; otherwise the headline/derived summary.
@@ -79,7 +87,7 @@ export function TicketCard({ ticket, evaluation, onOpen }: TicketCardProps) {
         // Active cards get their surface + flowing rainbow border from the
         // `.ticket-card--active` class; static statuses keep the left accent.
         background: 'var(--bg-secondary, #161b22)',
-        border: '1px solid var(--border-default, #30363d)',
+        border: `1px solid ${phaseBorder}`,
         boxShadow: isActive ? 'none' : `inset 3px 0 0 ${color}`,
         borderRadius: 12,
         padding: '12px 14px 12px 16px',
@@ -93,14 +101,14 @@ export function TicketCard({ ticket, evaluation, onOpen }: TicketCardProps) {
         e.currentTarget.style.transform = 'translateY(-1px)';
         if (!isActive) {
           e.currentTarget.style.background = 'var(--bg-tertiary, #1c2230)';
-          e.currentTarget.style.borderColor = `color-mix(in srgb, ${color} 45%, var(--border-default, #30363d))`;
+          e.currentTarget.style.borderColor = `color-mix(in srgb, ${phaseBorder} 70%, var(--border-default, #30363d))`;
         }
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
         if (!isActive) {
           e.currentTarget.style.background = 'var(--bg-secondary, #161b22)';
-          e.currentTarget.style.borderColor = 'var(--border-default, #30363d)';
+          e.currentTarget.style.borderColor = phaseBorder;
         }
       }}
     >
@@ -190,6 +198,26 @@ export function TicketCard({ ticket, evaluation, onOpen }: TicketCardProps) {
       {/* footer — always a single row so cards line up */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, minWidth: 0 }}>
         <StatusChip status={status} label={t(`tickets.columns.${status}`)} />
+        {/* Text equivalent of the border, so the review state survives color
+            blindness and a greyscale screenshot. */}
+        {phase !== 'unverified' && phase !== 'failed' && (
+          <span
+            data-testid={`ticket-phase-${ticket.id}`}
+            title={t(reviewPhaseKey(phase))}
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: phaseBorder,
+              border: `1px solid ${phaseBorder}`,
+              borderRadius: 5,
+              padding: '1px 5px',
+              flexShrink: 0,
+              ...(phaseSettling ? { animation: 'pulse 1.4s infinite' } : {}),
+            }}
+          >
+            {t(reviewPhaseKey(phase))}
+          </span>
+        )}
         {/* Read-only cues only. `complete` says a decision is waiting for you and
             `decision` says an answer is; both are answered inside the modal. */}
         {(status === 'complete' || status === 'decision') && (

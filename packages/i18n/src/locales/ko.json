@@ -622,7 +622,41 @@
       "cwd-not-allowed": "허용되지 않은 작업 디렉터리"
     },
     "startedAt": "시작",
-    "reviewCta": "검토"
+    "reviewCta": "검토",
+    "verificationReportLabel": "검증 리포트",
+    "advisoryLabel": "자문 패널",
+    "verdictLabel": "판정",
+    "gateLabel": "게이트(Claude)",
+    "consensusLabel": "합의",
+    "abstainedLabel": "무응답",
+    "commitLabel": "커밋",
+    "commitSkipped": "커밋 안 함",
+    "filesLabel": "개 파일",
+    "resolutionLabel": "채택",
+    "escalationLabel": "에스컬레이션",
+    "reviewPhase": {
+      "unverified": "검증 전",
+      "verifying": "검증 중",
+      "verified": "검증 완료",
+      "verifyFailed": "검증 실패",
+      "decisionPending": "의사결정 전",
+      "decisionRunning": "의사결정 중",
+      "decisionDone": "의사결정 완료",
+      "decisionFailed": "의사결정 실패",
+      "failed": "실패"
+    },
+    "decisionStage": {
+      "pending": "의사결정 전",
+      "deciding": "의사결정 중",
+      "decided": "의사결정 완료",
+      "failed": "의사결정 실패"
+    },
+    "autoCommit": "검증 통과 시 커밋",
+    "autoCommitHint": "게이트 통과 후 로컬 커밋만 합니다. push는 하지 않습니다.",
+    "autoCommitRemoteHint": "원격 티켓 — 에이전트가 원격 호스트에서 커밋합니다. push는 하지 않습니다.",
+    "panelReview": "타 모델 교차검증",
+    "panelReviewHint": "목표와 결과를 외부 모델에 전송합니다. 끄면 로컬 게이트만 사용합니다.",
+    "panelOffLabel": "패널 미사용 — 로컬 게이트 단독"
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",

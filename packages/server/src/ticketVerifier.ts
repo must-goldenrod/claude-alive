@@ -7,6 +7,8 @@
  */
 import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/core';
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
+import { reviewWithPanel } from './panel/verificationPanel.js';
+import type { Panel } from './panel/litellmPanel.js';
 
 export interface Verifier {
   /** Resolves with a verdict, or throws if no parseable verdict could be obtained. */
@@ -26,6 +28,15 @@ export interface VerifierOptions {
     /** Model/effort the ticket ran with; the gate inherits them (see `verify`). */
     flags?: { model?: string; effort?: string };
   }) => Promise<HeadlessOutcome>;
+  /**
+   * Independent LiteLLM reviewers layered on top of the Claude gate. Omitted
+   * (no LITELLM_KEY) = gate-only, which is the pre-panel behaviour exactly.
+   *
+   * A function form is resolved per ticket, so a ticket whose content may not
+   * leave the machine gets the gate alone while everything else gets the panel.
+   */
+  panel?: Panel | ((ticket: Ticket) => Panel | undefined);
+  now?: () => number;
 }
 
 export function buildVerificationPrompt(goal: string, mainResult: string | null, orchestrated = false): string {
@@ -104,7 +115,15 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
       if (!verdict) {
         throw new Error('verifier produced no parseable verdict');
       }
-      return verdict;
+      // No panel for this ticket → the gate's verdict is the verdict, unchanged.
+      const panel = typeof options.panel === 'function' ? options.panel(ticket) : options.panel;
+      if (!panel) return verdict;
+      return reviewWithPanel(
+        { panel, ...(options.now ? { now: options.now } : {}) },
+        ticket,
+        mainResult,
+        verdict,
+      );
     },
   };
 }

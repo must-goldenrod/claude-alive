@@ -53,6 +53,10 @@ import { resolveExecutor } from './executors/resolve.js';
 import { createFlagSupportCache } from './agentFlags.js';
 import { sshListDirs } from './executors/sshBrowse.js';
 import { createLitellmClient } from './orchestrator/litellmClient.js';
+import { createLitellmPanel, resolvePanelModels } from './panel/litellmPanel.js';
+import { parsePanelExcludedRoots, panelAllowedFor } from './panel/panelPolicy.js';
+import { adviseDecision as runDecisionPanel } from './panel/decisionPanel.js';
+import { createTicketCommitter } from './ticketCommit.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
 import { ensureDelegateCli, resolveDelegateModel } from './orchestrator/delegateCli.js';
 import { readDelegations } from './orchestrator/delegationStore.js';
@@ -482,6 +486,48 @@ const runFlagCache = createFlagSupportCache();
 const executorFor = (location: import('@claude-alive/core').TicketLocation | undefined) =>
   resolveExecutor(location, { localAllowedRoots, flagCache: runFlagCache });
 
+// ── Review panel (litellm) ───────────────────────────────────────────────────
+// One gateway client, two consumers: the completion gate's second-opinion panel
+// and the decision advisory panel. Built before the runner because both gates
+// are wired into it at construction. Absent LITELLM_KEY leaves both undefined,
+// and every gate degrades to the single-reviewer behaviour it had before.
+const litellmClient = process.env.LITELLM_KEY
+  ? createLitellmClient({
+      baseUrl: process.env.LITELLM_BASE_URL ?? 'https://litellm.must.codes',
+      apiKey: process.env.LITELLM_KEY,
+    })
+  : undefined;
+const reviewPanel = litellmClient
+  ? createLitellmPanel(litellmClient, { models: resolvePanelModels(process.env) })
+  : undefined;
+if (reviewPanel) {
+  console.log(`[panel] review panel: ${reviewPanel.models.join(', ')}`);
+} else {
+  console.log('[panel] LITELLM_KEY not set — verification runs gate-only, decisions wait for a human');
+}
+
+// Auto-commit after a passing verdict. `CLAUDE_ALIVE_AUTO_COMMIT=0` disables it
+// server-wide; a single ticket opts out with `autoCommit: false` at creation.
+const autoCommitEnabled = process.env.CLAUDE_ALIVE_AUTO_COMMIT !== '0';
+const ticketCommitter = autoCommitEnabled ? createTicketCommitter() : undefined;
+
+// Both panels ship ticket text to third-party providers, so they are opt-out per
+// ticket and per directory tree (CLAUDE_ALIVE_PANEL_EXCLUDE). An excluded ticket
+// keeps the local Claude gate and parks its decisions for a human.
+const panelExcludedRoots = parsePanelExcludedRoots(process.env);
+if (panelExcludedRoots.length > 0) {
+  console.log(`[panel] panels disabled under: ${panelExcludedRoots.join(', ')}`);
+}
+const panelFor = (ticket: import('@claude-alive/core').Ticket) =>
+  reviewPanel && panelAllowedFor(ticket, panelExcludedRoots) ? reviewPanel : undefined;
+
+/**
+ * A remote ticket's changes land on the SSH host, where the server cannot run
+ * git — so those tickets carry the commit instruction in their prompt instead.
+ */
+const askRemoteToCommit = (ticket: import('@claude-alive/core').Ticket) =>
+  autoCommitEnabled && ticket.autoCommit !== false && ticket.location?.kind === 'ssh';
+
 // The verifier runs at the SAME location as the main agent.
 const ticketVerifier = createVerifier({
   run: ({ goal, cwd, location, orchestrated, flags }) =>
@@ -492,6 +538,7 @@ const ticketVerifier = createVerifier({
       ...(flags && (flags.model || flags.effort) ? { run: flags } : {}),
       ...(orchestrated && delegateBinDir ? { pathPrepend: delegateBinDir } : {}),
     }).done,
+  ...(reviewPanel ? { panel: panelFor } : {}),
 });
 const ticketRunner = createTicketRunner({
   store: ticketStore,
@@ -505,12 +552,13 @@ const ticketRunner = createTicketRunner({
     // an SSH-run agent couldn't call it — remote orchestration is a follow-up).
     const orchestrated =
       Boolean(ticket.orchestrated) && ticket.location?.kind !== 'ssh' && delegateCmd !== null;
+    const promptOpts = { askToCommit: askRemoteToCommit(ticket) };
     const goal = opts?.prompt
       ? // Follow-up reply: wrap the raw answer and resume the same session.
-        buildMainPrompt(opts.prompt)
+        buildMainPrompt(opts.prompt, '', promptOpts)
       : orchestrated && delegateCmd
-        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd, delegateModel)
-        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text);
+        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd, delegateModel, promptOpts)
+        : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, promptOpts);
     // Run profile snapshotted on the ticket at creation. Read from the ticket (not
     // re-resolved from the preset) so retries and decision replies reuse exactly
     // what the first run used, even across a preset-table change.
@@ -550,6 +598,16 @@ const ticketRunner = createTicketRunner({
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
+  // Commit only what the gate passed, and only locally — never push.
+  ...(ticketCommitter ? { commitWork: (ticket) => ticketCommitter.commit(ticket) } : {}),
+  // Multi-model advisory panel for a parked decision. Without a gateway the
+  // ticket simply waits for the human, as it always did.
+  ...(reviewPanel
+    ? {
+        adviseDecision: (ticket, question) => runDecisionPanel({ panel: reviewPanel }, ticket, question),
+        advisoryEnabled: (ticket) => panelFor(ticket) !== undefined,
+      }
+    : {}),
   // Location-aware cwd validation (local fs, or remote `ssh test -d`).
   validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),
   broadcast: (ticket) => {
@@ -594,12 +652,6 @@ function findOnPath(bin: string): string | null {
   }
   return null;
 }
-const litellmClient = process.env.LITELLM_KEY
-  ? createLitellmClient({
-      baseUrl: process.env.LITELLM_BASE_URL ?? 'https://litellm.must.codes',
-      apiKey: process.env.LITELLM_KEY,
-    })
-  : undefined;
 const backendRegistry = createBackendRegistry({
   litellm: litellmClient,
   findClaude: () => findOnPath('claude'),

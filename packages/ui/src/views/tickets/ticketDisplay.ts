@@ -41,6 +41,74 @@ export const STATUS_COLOR: Record<DisplayStatus, string> = {
   failed: 'var(--accent-red, #f85149)',
 };
 
+/**
+ * Review phase — the card's border language.
+ *
+ * `DisplayStatus` answers "which column?"; this answers "has this been checked,
+ * and did it hold up?". They are separate because a ticket in progress and a
+ * ticket whose gate is running both live in the 진행중 column, yet only one of
+ * them has a claim on the table worth reviewing. The border is what makes that
+ * difference readable without opening anything.
+ *
+ * Verification: 검증 전 → 검증 중 → 검증 완료 / 검증 실패.
+ * Decision:     의사결정 전 → 의사결정 중 → 의사결정 완료 / 의사결정 실패.
+ */
+export type ReviewPhase =
+  | 'unverified'
+  | 'verifying'
+  | 'verified'
+  | 'verifyFailed'
+  | 'decisionPending'
+  | 'decisionRunning'
+  | 'decisionDone'
+  | 'decisionFailed'
+  | 'failed';
+
+export function reviewPhase(ticket: Pick<Ticket, 'state' | 'verification' | 'failureReason' | 'decisionPanel'>): ReviewPhase {
+  if (ticket.state === 'decision') {
+    switch (ticket.decisionPanel?.stage) {
+      case 'deciding':
+        return 'decisionRunning';
+      case 'decided':
+        return 'decisionDone';
+      case 'failed':
+        return 'decisionFailed';
+      default:
+        return 'decisionPending';
+    }
+  }
+  if (ticket.state === 'verifying') return 'verifying';
+  if (ticket.state === 'done') return 'verified';
+  if (ticket.state === 'failed') {
+    return ticket.failureReason === 'verification-failed' || ticket.failureReason === 'verification-inconclusive'
+      ? 'verifyFailed'
+      : 'failed';
+  }
+  return 'unverified';
+}
+
+/**
+ * Border color per phase. Anything not yet reviewed keeps the neutral default
+ * border, so a colored border always means "a check has run or is running" —
+ * spending a color on the resting state would drain the signal from the rest.
+ */
+export const REVIEW_PHASE_BORDER: Record<ReviewPhase, string> = {
+  unverified: 'var(--border-default, #30363d)',
+  verifying: 'var(--accent-amber, #d29922)',
+  verified: 'var(--accent-green, #3fb950)',
+  verifyFailed: 'var(--accent-red, #f85149)',
+  decisionPending: 'var(--accent-purple, #bc8cff)',
+  decisionRunning: 'var(--accent-amber, #d29922)',
+  decisionDone: 'var(--accent-green, #3fb950)',
+  decisionFailed: 'var(--accent-pink, #f778ba)',
+  failed: 'var(--accent-red, #f85149)',
+};
+
+/** i18n key for the phase badge shown on the card and in the report header. */
+export function reviewPhaseKey(phase: ReviewPhase): string {
+  return `tickets.reviewPhase.${phase}`;
+}
+
 /** One labeled choice parsed out of a decision question. */
 export interface DecisionOption {
   /** The option's label, uppercased — e.g. "A" or "1". */
