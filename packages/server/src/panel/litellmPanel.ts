@@ -14,6 +14,7 @@
  *    reach a verdict from the reviewers that did answer.
  */
 import type { LitellmClient } from '../orchestrator/litellmClient.js';
+import { buildDelegateChain } from '../orchestrator/delegateModels.js';
 
 /** One reviewer's raw answer. `content` is null when the member did not answer. */
 export interface PanelMemberResult {
@@ -63,22 +64,61 @@ export function resolvePanelModels(env: NodeJS.ProcessEnv): readonly string[] {
   return models.length > 0 ? Object.freeze(models) : DEFAULT_PANEL_MODELS;
 }
 
+/**
+ * The models one seat will try, in order.
+ *
+ * A panel is only worth running if enough seats actually answer, and on a shared
+ * gateway the common failure is a 429, not a wrong answer — so a seat falls back
+ * the same way a delegation does. Peers already on the roster are removed from
+ * the tail: a seat that failed over onto its neighbour's model would cast a
+ * second vote from the same model, which is the one thing a panel must not do.
+ */
+export function seatChain(model: string, roster: readonly string[]): string[] {
+  const peers = new Set(roster.filter((m) => m !== model));
+  const chain = buildDelegateChain(model).filter((id) => id === model || !peers.has(id));
+  return chain.length > 0 ? chain : [model];
+}
+
+/**
+ * Drop votes that came from the same model twice.
+ *
+ * Two seats can still land on one model when a roster entry is an alias of
+ * another's fallback. Roster order wins; the later seat is recorded as an
+ * abstention so the report shows the seat existed and why it did not vote.
+ */
+export function dedupeByRespondedModel(results: readonly PanelMemberResult[]): PanelMemberResult[] {
+  const claimed = new Set<string>();
+  return results.map((r) => {
+    if (r.content === null) return r;
+    const key = r.respondedModel ?? r.model;
+    if (claimed.has(key)) {
+      return { ...r, content: null, error: `duplicate model (${key}) — vote dropped` };
+    }
+    claimed.add(key);
+    return r;
+  });
+}
+
 export function createLitellmPanel(
   client: LitellmClient,
-  opts: { models?: readonly string[]; timeoutMs?: number } = {},
+  opts: { models?: readonly string[]; timeoutMs?: number; fallbacks?: boolean } = {},
 ): Panel {
   const roster = opts.models ?? DEFAULT_PANEL_MODELS;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_PANEL_TIMEOUT_MS;
+  const useFallbacks = opts.fallbacks !== false;
 
   return {
     models: roster,
     async run(req) {
       const models = req.models ?? roster;
-      return Promise.all(
-        models.map(async (model): Promise<PanelMemberResult> => {
+
+      const askSeat = async (model: string): Promise<PanelMemberResult> => {
+        const chain = useFallbacks ? seatChain(model, models) : [model];
+        let lastError = 'no answer';
+        for (const candidate of chain) {
           try {
             const r = await client.chat(
-              model,
+              candidate,
               [
                 { role: 'system', content: req.system },
                 { role: 'user', content: req.user },
@@ -86,14 +126,16 @@ export function createLitellmPanel(
               { timeoutMs: req.timeoutMs ?? timeoutMs },
             );
             const content = r.content.trim();
-            return content
-              ? { model, respondedModel: r.model, content }
-              : { model, respondedModel: r.model, content: null, error: 'empty answer' };
+            if (content) return { model, respondedModel: r.model ?? candidate, content };
+            lastError = 'empty answer';
           } catch (e) {
-            return { model, content: null, error: e instanceof Error ? e.message : String(e) };
+            lastError = e instanceof Error ? e.message : String(e);
           }
-        }),
-      );
+        }
+        return { model, content: null, error: lastError };
+      };
+
+      return dedupeByRespondedModel(await Promise.all(models.map(askSeat)));
     },
   };
 }

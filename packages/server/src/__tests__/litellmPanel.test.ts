@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   createLitellmPanel,
+  seatChain,
+  dedupeByRespondedModel,
   extractJsonObject,
   readString,
   resolvePanelModels,
@@ -67,14 +69,14 @@ describe('createLitellmPanel', () => {
   });
 
   it('isolates a failing member instead of failing the panel', async () => {
-    const panel = createLitellmPanel(stubClient({ a: 'ok', b: new Error('429 rate limited') }), { models: ['a', 'b'] });
+    const panel = createLitellmPanel(stubClient({ a: 'ok', b: new Error('429 rate limited') }), { models: ['a', 'b'], fallbacks: false });
     const out = await panel.run({ system: 's', user: 'u' });
     expect(out[0]).toMatchObject({ model: 'a', content: 'ok' });
     expect(out[1]).toMatchObject({ model: 'b', content: null, error: '429 rate limited' });
   });
 
   it('treats an empty answer as no answer', async () => {
-    const panel = createLitellmPanel(stubClient({ a: '   ' }), { models: ['a'] });
+    const panel = createLitellmPanel(stubClient({ a: '   ' }), { models: ['a'], fallbacks: false });
     const [m] = await panel.run({ system: 's', user: 'u' });
     expect(m).toMatchObject({ content: null, error: 'empty answer' });
   });
@@ -92,7 +94,78 @@ describe('createLitellmPanel', () => {
         return { content: model, model };
       },
     };
-    await createLitellmPanel(client, { models: ['a', 'b', 'c'] }).run({ system: 's', user: 'u' });
+    await createLitellmPanel(client, { models: ['a', 'b', 'c'], fallbacks: false }).run({ system: 's', user: 'u' });
     expect(peak).toBe(3);
+  });
+});
+
+describe('seatChain', () => {
+  it('gives a known model its own fallbacks', () => {
+    const chain = seatChain('grok-4.5', ['grok-4.5']);
+    expect(chain[0]).toBe('grok-4.5');
+    expect(chain.length).toBeGreaterThan(1);
+  });
+
+  it('never falls back onto another seat\'s model', () => {
+    const roster = ['grok-4.5', 'kimi-k3', 'gemini/gemini-3.1-pro-preview'];
+    for (const m of roster) {
+      const rest = roster.filter((x) => x !== m);
+      expect(seatChain(m, roster).filter((id) => rest.includes(id))).toEqual([]);
+    }
+  });
+
+  it('always keeps at least the requested model', () => {
+    expect(seatChain('some-unknown-model', ['some-unknown-model'])[0]).toBe('some-unknown-model');
+  });
+});
+
+describe('dedupeByRespondedModel', () => {
+  it('keeps the first vote from a model and drops later duplicates', () => {
+    const out = dedupeByRespondedModel([
+      { model: 'a', respondedModel: 'x', content: 'first' },
+      { model: 'b', respondedModel: 'x', content: 'second' },
+    ]);
+    expect(out[0]!.content).toBe('first');
+    expect(out[1]!.content).toBeNull();
+    expect(out[1]!.error).toContain('duplicate model');
+  });
+
+  it('leaves distinct models and existing abstentions alone', () => {
+    const out = dedupeByRespondedModel([
+      { model: 'a', respondedModel: 'x', content: 'one' },
+      { model: 'b', respondedModel: 'y', content: 'two' },
+      { model: 'c', content: null, error: 'timeout' },
+    ]);
+    expect(out.map((m) => m.content)).toEqual(['one', 'two', null]);
+  });
+});
+
+describe('panel fallbacks', () => {
+  it('fails a rate-limited seat over to the next model so the seat still votes', async () => {
+    const calls: string[] = [];
+    const client: LitellmClient = {
+      checkConnection: async () => ({ ok: true }),
+      chat: async (model) => {
+        calls.push(model);
+        if (model === 'grok-4.5') throw new Error('HTTP 429');
+        return { content: 'answer', model };
+      },
+    };
+    const [seat] = await createLitellmPanel(client, { models: ['grok-4.5'] }).run({ system: 's', user: 'u' });
+    expect(seat!.content).toBe('answer');
+    expect(seat!.model).toBe('grok-4.5');
+    expect(seat!.respondedModel).not.toBe('grok-4.5');
+    expect(calls[0]).toBe('grok-4.5');
+  });
+
+  it('abstains with the last error when the whole chain is exhausted', async () => {
+    const client: LitellmClient = {
+      checkConnection: async () => ({ ok: true }),
+      chat: async () => {
+        throw new Error('HTTP 429');
+      },
+    };
+    const [seat] = await createLitellmPanel(client, { models: ['grok-4.5'] }).run({ system: 's', user: 'u' });
+    expect(seat).toMatchObject({ content: null, error: 'HTTP 429' });
   });
 });
