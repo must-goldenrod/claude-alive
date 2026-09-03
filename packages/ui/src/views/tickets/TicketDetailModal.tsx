@@ -206,6 +206,7 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             value={replyText}
             onChange={setReplyText}
             onReply={onReply}
+            onSent={onClose}
             t={t}
           />
         )}
@@ -576,6 +577,7 @@ function ReplyComposer({
   value,
   onChange,
   onReply,
+  onSent,
   t,
 }: {
   ticketId: string;
@@ -583,6 +585,8 @@ function ReplyComposer({
   value: string;
   onChange: (text: string) => void;
   onReply: ReplyFn;
+  /** Called once the reply is accepted — the answer is in, so the modal closes. */
+  onSent: () => void;
   t: (key: string) => string;
 }) {
   const [sending, setSending] = useState(false);
@@ -593,7 +597,11 @@ function ReplyComposer({
     setSending(true);
     const ok = await onReply(ticketId, value.trim());
     setSending(false);
-    if (ok) onChange('');
+    // A failed send keeps both the draft and the modal, so the answer is not
+    // lost and can be retried; a successful one is done — close it.
+    if (!ok) return;
+    onChange('');
+    onSent();
   };
 
   return (
