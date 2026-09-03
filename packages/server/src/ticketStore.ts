@@ -115,6 +115,7 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
         // Only the opt-OUT is stored; undefined means enabled, so the field is
         // absent on every ticket that keeps the default.
         ...(input.autoCommit === false ? { autoCommit: false } : {}),
+        ...(input.panelReview === false ? { panelReview: false } : {}),
         ...(profile ? { requestedModel: profile.model, effort: profile.effort } : {}),
         state: 'queued',
         createdAt: now(),

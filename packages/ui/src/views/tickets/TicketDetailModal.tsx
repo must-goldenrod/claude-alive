@@ -742,6 +742,11 @@ function VerificationReport({ ticket, t }: { ticket: Ticket; t: (key: string) =>
             {t('tickets.consensusLabel')} {v.consensus.agree}/{v.consensus.total}
           </span>
         )}
+        {/* Say so explicitly: a report with no reviewers listed must not read
+            as "three models agreed" to someone skimming it. */}
+        {ticket.panelReview === false && (
+          <span style={{ fontSize: 11, opacity: 0.7 }}>{t('tickets.panelOffLabel')}</span>
+        )}
       </div>
 
       {v?.reason && <ReportRow label={t('tickets.verdictLabel')}>{v.reason}</ReportRow>}

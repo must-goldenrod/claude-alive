@@ -84,6 +84,12 @@ export interface TicketRunnerOptions {
    * runner replies on the human's behalf and the ticket resumes by itself.
    */
   adviseDecision?: (ticket: Ticket, question: string) => Promise<TicketDecisionPanel>;
+  /**
+   * Per-ticket gate on the advisory panel. A ticket whose content may not leave
+   * the machine parks for the human with no panel record at all, exactly as it
+   * would if no gateway were configured. Omitted = every ticket is eligible.
+   */
+  advisoryEnabled?: (ticket: Ticket) => boolean;
   /** Push a changed ticket to clients. */
   broadcast: (ticket: Ticket) => void;
   /**
@@ -163,7 +169,7 @@ function isTerminal(t: Ticket | undefined): boolean {
 }
 
 export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
-  const { store, spawnMain, verify, broadcast, onSettled, validateCwd, commitWork, adviseDecision } = options;
+  const { store, spawnMain, verify, broadcast, onSettled, validateCwd, commitWork, adviseDecision, advisoryEnabled } = options;
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
   const timeoutMs = options.timeoutMs;
   const resumePrompt = options.resumePrompt ?? DEFAULT_RESUME_PROMPT;
@@ -364,7 +370,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         rounds,
         claudeSessionId: sessionId ?? undefined,
         turns: [...(cur?.turns ?? []), turn],
-        decisionPanel: adviseDecision ? { stage: 'pending', question, opinions: [], at: now() } : undefined,
+        decisionPanel: usePanelFor(cur ?? store.get(id)) ? { stage: 'pending', question, opinions: [], at: now() } : undefined,
       });
       releaseSlot(id); // waiting on the human; hold no concurrency slot
       // Consult the advisory panel in the background: the ticket is already
@@ -475,6 +481,12 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     return started;
   }
 
+  /** Whether the advisory panel may see this ticket at all. */
+  function usePanelFor(ticket: Ticket | undefined): boolean {
+    if (!adviseDecision || !ticket) return false;
+    return advisoryEnabled ? advisoryEnabled(ticket) : true;
+  }
+
   /**
    * Commit a ticket whose gate just passed. A commit failure is recorded on the
    * ticket and nothing more: the work was verified, and refusing to mark it done
@@ -501,6 +513,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     if (!adviseDecision) return;
     const parked = store.get(id);
     if (!parked || parked.state !== 'decision') return;
+    if (!usePanelFor(parked)) return; // this ticket's content may not leave the machine
     await apply(id, { decisionPanel: { stage: 'deciding', question, opinions: [], at: now() } });
 
     let panel: TicketDecisionPanel;

@@ -135,6 +135,7 @@ export interface HttpRouterOptions {
       };
       orchestrated?: boolean;
       autoCommit?: boolean;
+      panelReview?: boolean;
     }) => Promise<unknown>;
     retry: (id: string) => Promise<unknown | undefined>;
     /** Continue a `decision` ticket with a follow-up prompt. Undefined = unknown id. */
@@ -224,6 +225,8 @@ const TicketCreateBodySchema = z.object({
   orchestrated: z.boolean().optional(),
   // Opt out of the post-verification auto-commit. Omitted = on.
   autoCommit: z.boolean().optional(),
+  // Opt out of the external review panels. Omitted = on.
+  panelReview: z.boolean().optional(),
   // Closed enum, never free-form model/effort strings: the values become CLI
   // argv, so the allowlist lives at the boundary rather than downstream.
   preset: z.enum(TICKET_RUN_PRESET_IDS).optional(),

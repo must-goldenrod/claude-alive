@@ -222,3 +222,23 @@ describe('decision advisory panel', () => {
     expect(store.get(t.id)?.decisionPanel?.reason).toContain('server restarted');
   });
 });
+
+describe('advisory panel exclusion', () => {
+  it('parks with no panel record when the ticket may not leave the machine', async () => {
+    let called = false;
+    const runner = makeRunner({
+      spawnMain: () => ({ kill() {}, done: Promise.resolve(outcome('DECISION: A or B?')) }),
+      advisoryEnabled: () => false,
+      adviseDecision: async () => {
+        called = true;
+        return { stage: 'decided' as const, question: 'q', opinions: [], resolution: 'A', at: 1 };
+      },
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo', panelReview: false });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'decision');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(called).toBe(false);
+    expect(store.get(t.id)?.decisionPanel).toBeUndefined();
+  });
+});

@@ -31,8 +31,11 @@ export interface VerifierOptions {
   /**
    * Independent LiteLLM reviewers layered on top of the Claude gate. Omitted
    * (no LITELLM_KEY) = gate-only, which is the pre-panel behaviour exactly.
+   *
+   * A function form is resolved per ticket, so a ticket whose content may not
+   * leave the machine gets the gate alone while everything else gets the panel.
    */
-  panel?: Panel;
+  panel?: Panel | ((ticket: Ticket) => Panel | undefined);
   now?: () => number;
 }
 
@@ -112,10 +115,11 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
       if (!verdict) {
         throw new Error('verifier produced no parseable verdict');
       }
-      // No panel configured → the gate's verdict is the verdict, unchanged.
-      if (!options.panel) return verdict;
+      // No panel for this ticket → the gate's verdict is the verdict, unchanged.
+      const panel = typeof options.panel === 'function' ? options.panel(ticket) : options.panel;
+      if (!panel) return verdict;
       return reviewWithPanel(
-        { panel: options.panel, ...(options.now ? { now: options.now } : {}) },
+        { panel, ...(options.now ? { now: options.now } : {}) },
         ticket,
         mainResult,
         verdict,

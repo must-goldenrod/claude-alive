@@ -652,7 +652,11 @@
       "failed": "decision failed"
     },
     "autoCommit": "Commit when verified",
-    "autoCommitHint": "Commits locally after the gate passes. Never pushes."
+    "autoCommitHint": "Commits locally after the gate passes. Never pushes.",
+    "autoCommitRemoteHint": "Remote ticket — the agent is asked to commit on the host. Never pushes.",
+    "panelReview": "Cross-check with other models",
+    "panelReviewHint": "Sends the goal and the report to third-party models. Off = local gate only.",
+    "panelOffLabel": "Panel off — local gate only"
   },
   "spread": {
     "empty": "No open terminals",

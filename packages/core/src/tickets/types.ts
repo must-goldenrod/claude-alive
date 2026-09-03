@@ -211,6 +211,14 @@ export interface Ticket {
    * Undefined = enabled, which is the default.
    */
   autoCommit?: boolean;
+  /**
+   * Opt out of the external review panels (verification second opinion and
+   * decision advisory) for this ticket. Both panels send the goal and the
+   * agent's report to third-party model providers, so a ticket over sensitive
+   * code turns them off and falls back to the local Claude gate alone.
+   * Undefined = enabled.
+   */
+  panelReview?: boolean;
   failureReason?: TicketFailureReason;
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */
   claudeSessionId?: string;
@@ -256,6 +264,8 @@ export interface TicketCreateInput {
   preset?: TicketRunPreset;
   /** Opt out of the post-verification auto-commit. Omitted = enabled. */
   autoCommit?: boolean;
+  /** Opt out of the external review panels (nothing leaves the machine). Omitted = enabled. */
+  panelReview?: boolean;
 }
 
 /** States the UI renders as "in progress". */
