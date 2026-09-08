@@ -218,8 +218,17 @@ const TicketLocationSchema = z.object({
   label: z.string().max(120).optional(),
 });
 
+/**
+ * Local runs pass the goal as an argv element (`claude -p <goal>`), so the cap
+ * has to stay well under the OS argument limit (macOS kern.argmax = 1 MiB).
+ * 100k chars is ~300 KB even in all-3-byte UTF-8 (Korean), leaving room for the
+ * prompt prefix and the rest of the argv. The SSH executor feeds stdin instead
+ * and is not bound by this.
+ */
+const MAX_GOAL_CHARS = 100_000;
+
 const TicketCreateBodySchema = z.object({
-  goal: z.string().min(1).max(8000),
+  goal: z.string().min(1).max(MAX_GOAL_CHARS),
   cwd: z.string().min(1),
   location: TicketLocationSchema.optional(),
   orchestrated: z.boolean().optional(),
@@ -262,14 +271,25 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
-function readBody(req: IncomingMessage): Promise<string> {
+/**
+ * Read a request body, capped at MAX_BODY_BYTES. On overflow the caller gets a
+ * 413 (not a destroyed socket, which reaches the client as ECONNRESET and reads
+ * like "the server is down"), and the rest of the body is drained so the
+ * response can still be flushed. `res` is optional only for callers that have
+ * already answered.
+ */
+function readBody(req: IncomingMessage, res?: ServerResponse): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let totalLen = 0;
+    let overflowed = false;
     req.on('data', (chunk: Buffer) => {
+      if (overflowed) return; // draining: keep reading, keep nothing
       totalLen += chunk.length;
       if (totalLen > MAX_BODY_BYTES) {
-        req.destroy();
+        overflowed = true;
+        chunks.length = 0;
+        if (res) sendJson(res, 413, { error: `Payload too large (max ${MAX_BODY_BYTES} bytes)` }, req);
         reject(new Error('Body too large'));
         return;
       }
@@ -291,6 +311,8 @@ function isLocalOrigin(origin: string | undefined): boolean {
 }
 
 function sendJson(res: ServerResponse, status: number, data: unknown, req?: IncomingMessage): void {
+  // The 413 from readBody answers first; the route's own catch must not follow it.
+  if (res.headersSent || res.writableEnded) return;
   const origin = req?.headers.origin;
   const allowedOrigin = isLocalOrigin(origin) ? (origin ?? 'http://localhost') : '';
   res.writeHead(status, {
@@ -354,7 +376,7 @@ export function createHttpServer(options: HttpRouterOptions) {
 
     if (req.method === 'POST' && url.pathname === '/api/event') {
       try {
-        const body = await readBody(req);
+        const body = await readBody(req, res);
         const raw = JSON.parse(body) as Record<string, unknown>;
         const payload = normalizePayload(raw);
         onEvent(payload);
@@ -425,7 +447,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     const renameMatch = url.pathname.match(/^\/api\/agents\/([^/]+)\/name$/);
     if (req.method === 'PUT' && renameMatch) {
       try {
-        const body = await readBody(req);
+        const body = await readBody(req, res);
         const parsed = RenameBodySchema.safeParse(JSON.parse(body));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: name must be a string (max 100 chars) or null' }, req);
@@ -457,7 +479,7 @@ export function createHttpServer(options: HttpRouterOptions) {
       let parsedBody: unknown = null;
       if (req.method === 'POST') {
         try {
-          parsedBody = JSON.parse(await readBody(req));
+          parsedBody = JSON.parse(await readBody(req, res));
         } catch {
           sendJson(res, 400, { error: 'Invalid JSON' }, req);
           return;
@@ -482,7 +504,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     }
     if (tickets && req.method === 'POST' && url.pathname === '/api/tickets') {
       try {
-        const parsed = TicketCreateBodySchema.safeParse(JSON.parse(await readBody(req)));
+        const parsed = TicketCreateBodySchema.safeParse(JSON.parse(await readBody(req, res)));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
           return;
@@ -515,7 +537,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     const ticketReplyMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/reply$/);
     if (tickets?.reply && req.method === 'POST' && ticketReplyMatch) {
       try {
-        const parsed = JSON.parse(await readBody(req)) as { prompt?: unknown };
+        const parsed = JSON.parse(await readBody(req, res)) as { prompt?: unknown };
         const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
         if (!prompt) {
           sendJson(res, 400, { error: 'Invalid body: prompt is required' }, req);
@@ -533,7 +555,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     const ticketEvalMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/evaluate$/);
     if (tickets?.evaluate && req.method === 'POST' && ticketEvalMatch) {
       try {
-        const parsed = EvaluateBodySchema.safeParse(JSON.parse(await readBody(req)));
+        const parsed = EvaluateBodySchema.safeParse(JSON.parse(await readBody(req, res)));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: label must be good|bad|unrated' }, req);
           return;
@@ -550,7 +572,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     const ticketReflectMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/reflect$/);
     if (tickets?.setReflected && req.method === 'POST' && ticketReflectMatch) {
       try {
-        const parsed = ReflectBodySchema.safeParse(JSON.parse(await readBody(req)));
+        const parsed = ReflectBodySchema.safeParse(JSON.parse(await readBody(req, res)));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: reflected must be a boolean' }, req);
           return;
@@ -622,7 +644,7 @@ export function createHttpServer(options: HttpRouterOptions) {
       }
       if (req.method === 'POST' || req.method === 'DELETE') {
         const parsed = GitBranchBodySchema.safeParse(
-          JSON.parse(await readBody(req).catch(() => '{}') || '{}'),
+          JSON.parse(await readBody(req, res).catch(() => '{}') || '{}'),
         );
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: cwd and name are required' }, req);
@@ -654,7 +676,7 @@ export function createHttpServer(options: HttpRouterOptions) {
       try {
         const parsed = z
           .object({ ssh: SshTargetSchema, path: z.string().max(4096).optional() })
-          .safeParse(JSON.parse(await readBody(req)));
+          .safeParse(JSON.parse(await readBody(req, res)));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body: ssh target required' }, req);
           return;
@@ -744,7 +766,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // null name removes the entry. Broadcasts the new map over WS so every client stays in sync.
     if (req.method === 'PUT' && url.pathname === '/api/projects/names') {
       try {
-        const body = await readBody(req);
+        const body = await readBody(req, res);
         const parsed = ProjectNameBodySchema.safeParse(JSON.parse(body));
         if (!parsed.success) {
           sendJson(res, 400, { error: 'Invalid body' }, req);
