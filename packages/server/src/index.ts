@@ -1,5 +1,5 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
-import type { HookEventPayload, Ticket } from '@claude-alive/core';
+import type { HookEventPayload, Ticket, TicketLocation } from '@claude-alive/core';
 import { isRemoteLocation, editedPathFrom } from '@claude-alive/core';
 import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
@@ -451,6 +451,21 @@ for (const ticket of ticketStore.list()) {
   await mirrorTicket(ticket);
 }
 
+// Repositories recorded before `location` existed look local, whatever machine
+// they are on. Their ids were still hashed with the host key, so every known
+// ticket location is CHECKED against each id and only an exact reproduction
+// adopts it — a guess would mark the wrong repositories remote.
+{
+  const seen = new Map<string, TicketLocation>();
+  for (const ticket of ticketStore.list()) {
+    if (ticket.location && isRemoteLocation(ticket.location)) {
+      seen.set(JSON.stringify(ticket.location.ssh), ticket.location);
+    }
+  }
+  const adopted = runStore.backfillLocations([...seen.values()]);
+  if (adopted > 0) console.log(`[runs] adopted ssh location for ${adopted} repositories`);
+}
+
 // Drop ticket runs whose ticket is gone. Deletions before the removal broadcast
 // existed left these behind, and the store's retention cap can evict a ticket at
 // any time; either way the sidebar would keep listing — and counting as
@@ -483,7 +498,7 @@ const localAllowedRoots = process.env.CLAUDE_ALIVE_TICKET_ROOTS?.split(':').filt
 // accepts. Executors are built per spawn, so without this every run would
 // re-probe (an extra SSH round-trip per remote ticket).
 const runFlagCache = createFlagSupportCache();
-const executorFor = (location: import('@claude-alive/core').TicketLocation | undefined) =>
+const executorFor = (location: TicketLocation | undefined) =>
   resolveExecutor(location, { localAllowedRoots, flagCache: runFlagCache });
 
 // ── Review panel (litellm) ───────────────────────────────────────────────────

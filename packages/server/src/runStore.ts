@@ -1,8 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import type { Repository, Run, RunKind, RunMeta, RunState, RunTree, Worktree } from '@claude-alive/core';
+import type { Repository, Run, RunKind, RunMeta, RunState, RunTree, TicketLocation, Worktree } from '@claude-alive/core';
 import { mergeTouchedFiles } from '@claude-alive/core';
-import type { ResolvedLocation } from './gitResolver.js';
+import { repoIdFor } from '@claude-alive/core/runs/repoId';
+import { locationKeyFor, type ResolvedLocation } from './gitResolver.js';
 
 export interface RunUpsert {
   runId: string;
@@ -29,6 +30,14 @@ export interface RunStore {
    * behind offers actions on work that no longer exists.
    */
   remove(runId: string): boolean;
+  /**
+   * Attach a location to repositories recorded before the field existed.
+   *
+   * A repository's id is `sha1(locationKey::root)`, so a candidate host can be
+   * CHECKED rather than guessed: only a repo whose id reproduces under that
+   * host's key was created for it. Returns how many were adopted.
+   */
+  backfillLocations(candidates: readonly TicketLocation[]): number;
   /** Record a file this run wrote to. No-op for an unknown run or a repeat path. */
   recordTouchedFile(runId: string, path: string): Run | null;
   abandon(runId: string): Run | null;
@@ -109,6 +118,24 @@ export function createRunStore({ file }: { file: string }): RunStore {
         worktrees: [...worktrees.values()],
         runs: [...runs.values()],
       };
+    },
+
+    backfillLocations(candidates) {
+      const keyed = candidates
+        .map((location) => ({ location, key: locationKeyFor(location) }))
+        .filter((c): c is { location: TicketLocation; key: string } => c.key !== undefined);
+      if (keyed.length === 0) return 0;
+
+      let adopted = 0;
+      for (const [repoId, repo] of repositories) {
+        if (repo.location) continue;
+        const match = keyed.find((c) => repoIdFor(repo.root, c.key) === repoId);
+        if (!match) continue;
+        repositories.set(repoId, { ...repo, location: match.location });
+        adopted += 1;
+      }
+      if (adopted > 0) touch();
+      return adopted;
     },
 
     upsert(input) {

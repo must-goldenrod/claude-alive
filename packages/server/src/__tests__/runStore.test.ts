@@ -1,7 +1,8 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { repoIdFor } from '@claude-alive/core/runs/repoId';
 import { createRunStore, type RunStore } from '../runStore.js';
 import type { ResolvedLocation } from '../gitResolver.js';
 
@@ -202,5 +203,41 @@ describe('runStore', () => {
 
   it('recording on an unknown run returns null', () => {
     expect(store.recordTouchedFile('nope', '/a')).toBeNull();
+  });
+});
+
+describe('backfillLocations', () => {
+  const SSH = { kind: 'ssh' as const, ssh: { host: '10.0.0.2', user: 'dev' }, label: 'dev' };
+
+  /** A store whose file already holds pre-location records. */
+  async function seeded(repositories: unknown[]): Promise<RunStore> {
+    const file = join(await mkdtemp(join(tmpdir(), 'runs-')), 'runs.json');
+    await writeFile(file, JSON.stringify({ repositories, worktrees: [], runs: [] }), 'utf-8');
+    const store = createRunStore({ file });
+    await store.load();
+    return store;
+  }
+
+  it('adopts a host only for repositories whose id reproduces under it', async () => {
+    const remoteId = repoIdFor('/srv/app', 'ssh:dev@10.0.0.2');
+    const localId = repoIdFor('/r/alive');
+    const store = await seeded([
+      { repoId: remoteId, root: '/srv/app', name: 'app', isGit: true },
+      { repoId: localId, root: '/r/alive', name: 'alive', isGit: true },
+    ]);
+
+    expect(store.backfillLocations([SSH])).toBe(1);
+    const repos = store.tree().repositories;
+    expect(repos.find((r) => r.repoId === remoteId)?.location).toEqual(SSH);
+    expect(repos.find((r) => r.repoId === localId)?.location).toBeUndefined();
+  });
+
+  it('leaves an already-located repository alone and reports nothing to do', async () => {
+    const remoteId = repoIdFor('/srv/app', 'ssh:dev@10.0.0.2');
+    const store = await seeded([
+      { repoId: remoteId, root: '/srv/app', name: 'app', isGit: true, location: SSH },
+    ]);
+    expect(store.backfillLocations([SSH])).toBe(0);
+    expect(store.backfillLocations([])).toBe(0);
   });
 });
