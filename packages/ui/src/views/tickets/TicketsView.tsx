@@ -8,7 +8,7 @@ import { NewTicketForm } from './NewTicketForm.tsx';
 import { TicketDetailModal } from './TicketDetailModal.tsx';
 import { TodoList } from '../unified/TodoList.tsx';
 import { displayStatus, STATUS_COLOR, type DisplayStatus } from './ticketDisplay.ts';
-import { filterTicketsBySelection, selectedCwd, type RunLocationRef, type WorktreeLocationRef } from './ticketFilter.ts';
+import { filterTicketsBySelection, selectedTarget, type RepoLocationRef, type RunLocationRef, type WorktreeLocationRef } from './ticketFilter.ts';
 import type { Selection } from '../../state/selection.ts';
 import { OPEN_RUN_EVENT, type OpenRunIntent } from '../../state/openRun.ts';
 
@@ -21,6 +21,8 @@ interface TicketsViewProps {
   runs: readonly RunLocationRef[];
   /** Worktrees, used to place a ticket that has no run yet by its cwd. */
   worktrees: readonly WorktreeLocationRef[];
+  /** Repositories, which say whether a selected root is local or on an SSH host. */
+  repositories: readonly RepoLocationRef[];
   /** Worktree ids that are their repository's primary checkout. */
   primaryWorktreeIds: ReadonlySet<string>;
   /** Left edge of the shell's content area; the to-do dock starts past it. */
@@ -30,7 +32,7 @@ interface TicketsViewProps {
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
 export function TicketsView({
-  active, subscribeRaw, selection, runs, worktrees, primaryWorktreeIds, leftInset,
+  active, subscribeRaw, selection, runs, worktrees, repositories, primaryWorktreeIds, leftInset,
 }: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
@@ -41,11 +43,15 @@ export function TicketsView({
   // re-pick the folder you already clicked. This replaced the per-branch "+"
   // button, which fired the same prefill and therefore did nothing visible when
   // you were already on that branch.
-  const selectionCwd = useMemo(
-    () => selectedCwd(selection, worktrees, primaryWorktreeIds),
-    [selection, worktrees, primaryWorktreeIds],
+  // The path travels with its host: selecting an SSH checkout used to seed the
+  // composer with a remote path while the composer still said "Local", so the
+  // run was launched here against a directory this machine does not have.
+  const target = useMemo(
+    () => selectedTarget(selection, worktrees, repositories, primaryWorktreeIds),
+    [selection, worktrees, repositories, primaryWorktreeIds],
   );
-  const presetCwd = selectionCwd ?? undefined;
+  const presetCwd = target?.cwd;
+  const presetLocation = target?.location;
 
   // "Open" on a ticket run means this view's detail modal. The shell switches
   // to this view and we pick the ticket up here, where the modal already lives.
@@ -120,7 +126,7 @@ export function TicketsView({
           >
             {t('tickets.heroPrompt')}
           </h1>
-          <NewTicketForm onCreate={createTicket} presetCwd={presetCwd} />
+          <NewTicketForm onCreate={createTicket} presetCwd={presetCwd} presetLocation={presetLocation} />
         </div>
 
         {/* Board region: a single bordered surface holds the four status lanes.

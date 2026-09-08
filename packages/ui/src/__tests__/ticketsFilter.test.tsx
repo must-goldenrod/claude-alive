@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Ticket } from '@claude-alive/core';
-import { filterTicketsBySelection, selectedCwd } from '../views/tickets/ticketFilter.ts';
+import { filterTicketsBySelection, selectedCwd, selectedTarget } from '../views/tickets/ticketFilter.ts';
 import { EMPTY_SELECTION } from '../state/selection.ts';
 
 const ticket = (id: string, cwd: string): Ticket =>
@@ -88,5 +88,34 @@ describe('selectedCwd', () => {
 
   it('is null for a repository with no worktrees yet', () => {
     expect(selectedCwd({ ...EMPTY_SELECTION, repoId: 'nope' }, WTS)).toBeNull();
+  });
+});
+
+describe('selectedTarget', () => {
+  const WTS = [
+    { worktreeId: 'w1', repoId: 'local', path: '/r/alive' },
+    { worktreeId: 'w2', repoId: 'remote', path: '/srv/app' },
+  ];
+  const REPOS = [
+    { repoId: 'local' },
+    { repoId: 'remote', location: { kind: 'ssh' as const, ssh: { host: '10.0.0.2', user: 'build' }, label: 'builder' } },
+  ];
+
+  it('carries the ssh host along with a remote root', () => {
+    const out = selectedTarget({ ...EMPTY_SELECTION, repoId: 'remote' }, WTS, REPOS);
+    expect(out).toEqual({ cwd: '/srv/app', location: REPOS[1]!.location });
+  });
+
+  it('leaves a local root without a location', () => {
+    expect(selectedTarget({ ...EMPTY_SELECTION, repoId: 'local' }, WTS, REPOS)).toEqual({ cwd: '/r/alive' });
+  });
+
+  it('finds the host through a branch selection too', () => {
+    const out = selectedTarget({ ...EMPTY_SELECTION, repoId: 'remote', worktreeId: 'w2' }, WTS, REPOS);
+    expect(out?.location?.ssh?.host).toBe('10.0.0.2');
+  });
+
+  it('is null while nothing is selected', () => {
+    expect(selectedTarget(EMPTY_SELECTION, WTS, REPOS)).toBeNull();
   });
 });

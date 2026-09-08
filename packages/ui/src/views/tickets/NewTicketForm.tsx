@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TicketLocation, TicketRunPreset } from '@claude-alive/core';
+import type { SshTarget, TicketLocation, TicketRunPreset } from '@claude-alive/core';
 import type { TicketCreateFn } from './useTickets.ts';
 import { FolderPicker } from './FolderPicker.tsx';
 import { RemoteFolderPicker } from './RemoteFolderPicker.tsx';
@@ -14,23 +14,41 @@ interface NewTicketFormProps {
    * seeds the folder picker so starting a run from a branch skips the picker.
    */
   presetCwd?: string;
+  /**
+   * The machine that path is on, when the sidebar knows it.
+   *
+   * A remote root is just a string, and handing one to a local agent is how a
+   * ticket ended up pointed at a path that does not exist here. The path and
+   * the host travel together or not at all.
+   */
+  presetLocation?: TicketLocation;
   onCreate: TicketCreateFn;
 }
+
+/** Location id used when the sidebar's host is not among the saved presets. */
+const SIDEBAR_LOCATION = '__sidebar__';
 
 function pathBasename(p: string): string {
   return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? p;
 }
 
-export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
+/** `dev@host` / `host:port` — inlined (avoid a core runtime import in the browser bundle). */
+function sshDisplay(t: SshTarget): string {
+  const at = t.user ? `${t.user}@${t.host}` : t.host;
+  return t.port && t.port !== 22 ? `${at}:${t.port}` : at;
+}
+
+/** Same host, same user, same port — a preset that can execute this location. */
+function matchesTarget(preset: { host?: string; user?: string; port?: number }, t: SshTarget): boolean {
+  return preset.host === t.host
+    && (preset.user ?? undefined) === (t.user ?? undefined)
+    && (preset.port ?? 22) === (t.port ?? 22);
+}
+
+export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicketFormProps) {
   const { t } = useTranslation();
   const [goal, setGoal] = useState('');
   const [cwd, setCwd] = useState('');
-
-  // A newly supplied preset wins over whatever the picker held; the user just
-  // asked for that worktree explicitly.
-  useEffect(() => {
-    if (presetCwd) setCwd(presetCwd);
-  }, [presetCwd]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [remotePickerOpen, setRemotePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -46,6 +64,27 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
     return () => window.removeEventListener(SSH_PRESETS_CHANGED, onChange);
   }, []);
   const [locId, setLocId] = useState('local');
+
+  // A newly supplied preset wins over whatever the picker held; the user just
+  // asked for that worktree explicitly. The host moves with it: a remote root
+  // selected while the composer said "Local" was submitted as a local run and
+  // failed on a path this machine does not have.
+  const presetTarget = presetLocation?.kind === 'ssh' ? presetLocation.ssh : undefined;
+  const presetKey = presetTarget ? sshDisplay(presetTarget) : 'local';
+  useEffect(() => {
+    if (!presetCwd) return;
+    setCwd(presetCwd);
+    setError(null);
+    if (!presetTarget) {
+      setLocId('local');
+      return;
+    }
+    const known = loadPresets().find((p) => p.host && matchesTarget(p, presetTarget));
+    setLocId(known ? known.id : SIDEBAR_LOCATION);
+    // presetKey stands in for presetTarget: re-running on every new object
+    // identity would fight the user's own choice of location.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetCwd, presetKey]);
   // Default ON: orchestrated runs are the normal way tickets are executed here,
   // so the checkbox starts checked and stays a one-click opt-out.
   const [orchestrated, setOrchestrated] = useState(true);
@@ -58,8 +97,16 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
   // Which model/effort the agent runs with. `standard` reproduces the behaviour
   // tickets had before presets existed, so the default changes nothing.
   const [runPreset, setRunPreset] = useState<TicketRunPreset>(DEFAULT_RUN_PRESET);
-  const preset = sshHosts.find((p) => p.id === locId);
-  const isRemote = Boolean(preset);
+  // The sidebar's option exists only while the sidebar is offering one; falling
+  // back to Local keeps the select from rendering a blank value after the
+  // selection is cleared.
+  const effectiveLocId = locId === SIDEBAR_LOCATION && presetLocation === undefined ? 'local' : locId;
+  const preset = sshHosts.find((p) => p.id === effectiveLocId);
+  // The sidebar can name a host that was never saved as a preset (it comes from
+  // the run registry, not from localStorage). That location is still executable
+  // — the server only needs the target — so it is offered as its own option
+  // rather than silently downgraded to Local.
+  const usingSidebar = effectiveLocId === SIDEBAR_LOCATION;
 
   const location: TicketLocation | undefined = preset
     ? {
@@ -67,7 +114,10 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
         ssh: { host: preset.host!, user: preset.user, port: preset.port, identityFile: preset.identityFile },
         label: preset.label,
       }
-    : undefined;
+    : usingSidebar
+      ? presetLocation
+      : undefined;
+  const isRemote = location !== undefined;
 
   const canSubmit = goal.trim().length > 0 && cwd.length > 0 && !submitting;
 
@@ -119,9 +169,9 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
       <div style={{ display: 'flex', gap: 10 }}>
         {/* Execution location: Local, or a registered SSH host (headless claude
             over SSH). Shown only when host-bearing presets exist. */}
-        {sshHosts.length > 0 && (
+        {(sshHosts.length > 0 || usingSidebar) && (
           <select
-            value={locId}
+            value={effectiveLocId}
             onChange={(e) => {
               setLocId(e.target.value);
               setCwd(''); // local path vs remote path are not interchangeable
@@ -146,6 +196,11 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
                 ⬈ {p.label}
               </option>
             ))}
+            {usingSidebar && presetTarget && (
+              <option value={SIDEBAR_LOCATION}>
+                ⬈ {presetLocation?.label || sshDisplay(presetTarget)}
+              </option>
+            )}
           </select>
         )}
         {isRemote ? (
@@ -259,6 +314,16 @@ export function NewTicketForm({ onCreate, presetCwd }: NewTicketFormProps) {
           {submitting ? t('tickets.creating') : t('tickets.create')}
         </button>
       </div>
+      {/* The host is not a detail to bury in a dropdown: this is the line that
+          says a run will leave this machine. */}
+      {isRemote && location?.ssh && (
+        <div
+          data-testid="ticket-remote-note"
+          style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', color: 'var(--accent-purple, #bc8cff)' }}
+        >
+          ⬈ {t('tickets.runsOn', { target: sshDisplay(location.ssh) })}
+        </div>
+      )}
       {/* Which branch the run happens on. Local only: a remote checkout is not
           ours to move, and the hooks that would report the change are local. */}
       {!isRemote && cwd.length > 0 && <BranchPicker cwd={cwd} />}

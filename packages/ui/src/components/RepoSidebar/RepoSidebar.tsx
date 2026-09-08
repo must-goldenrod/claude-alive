@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { Run, RunTree } from '@claude-alive/core';
+import type { Run, RunTree, SshTarget } from '@claude-alive/core';
 import { Badge, Chevron, EmptyState, HierarchyIcon, StatusDot, space, text, toneColor, type BadgeTone } from '../ui/index.ts';
 import type { Selection, SelectionAction } from '../../state/selection.ts';
 import { isRepoExpanded, isWorktreeExpanded, type ExpandState } from '../../state/sidebarExpand.ts';
@@ -10,6 +10,12 @@ import {
   buildTree, oldestOpenAge, openCostUsd, runLastActivityAt,
   type RepoNode, type WorktreeNode,
 } from './runTree.ts';
+
+/** `dev@host` / `host:port` — inlined (avoid a core runtime import in the browser bundle). */
+function sshDisplay(t: SshTarget): string {
+  const at = t.user ? `${t.user}@${t.host}` : t.host;
+  return t.port && t.port !== 22 ? `${at}:${t.port}` : at;
+}
 
 const STATE_TONE: Record<Run['state'], BadgeTone> = {
   running: 'blue',
@@ -154,9 +160,16 @@ function RepoRow({
   now: number;
   onAction: (a: SelectionAction) => void;
 }) {
+  const { t } = useTranslation();
   const selected = selection.repoId === node.repo.repoId;
   const expanded = isRepoExpanded(expand, node.repo.repoId);
   const name = node.repo.name ?? node.repo.root;
+  // Local and remote checkouts sit in the same list and can even share a path,
+  // so the row has to say which machine it is on: a folder glyph for this disk,
+  // a rack for a host reached over SSH, plus the target itself on the right.
+  const ssh = node.repo.location?.kind === 'ssh' ? node.repo.location.ssh : undefined;
+  const remote = ssh !== undefined;
+  const host = ssh ? node.repo.location?.label || sshDisplay(ssh) : null;
 
   // One click, two effects: fold the branches under this repo, and point the
   // board and the ticket composer at it. Selecting is not a toggle — the
@@ -185,10 +198,33 @@ function RepoRow({
         }}
       >
         <Chevron expanded={expanded} />
-        <HierarchyIcon level="repo" color="var(--accent-purple)" />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span
+          data-testid={`repo-origin-${node.repo.repoId}`}
+          data-origin={remote ? 'ssh' : 'local'}
+          title={remote ? t('sidebar.originSsh', { target: ssh ? sshDisplay(ssh) : '' }) : t('sidebar.originLocal')}
+          style={{ display: 'flex', flexShrink: 0 }}
+        >
+          <HierarchyIcon
+            level={remote ? 'repo-remote' : 'repo'}
+            color={remote ? 'var(--accent-purple)' : 'var(--accent-blue)'}
+          />
+        </span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={node.repo.root}>
           {name}
         </span>
+        {host && (
+          <span
+            data-testid={`repo-host-${node.repo.repoId}`}
+            title={ssh ? sshDisplay(ssh) : undefined}
+            style={{
+              flexShrink: 0, maxWidth: 96, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-mono)', fontSize: text.xs, fontWeight: 500,
+              color: 'var(--accent-purple)', opacity: 0.85,
+            }}
+          >
+            {host}
+          </span>
+        )}
         <ActivityAge at={node.lastActivityAt} now={now} testId={`repo-age-${node.repo.repoId}`} />
         <span style={{ flexShrink: 0 }} data-testid={`repo-open-count-${node.repo.repoId}`}>
           <Badge tone={node.openCount > 0 ? 'amber' : 'neutral'}>{node.openCount}</Badge>

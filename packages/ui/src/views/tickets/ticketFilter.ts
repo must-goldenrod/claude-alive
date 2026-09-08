@@ -1,4 +1,4 @@
-import type { Ticket } from '@claude-alive/core';
+import type { Ticket, TicketLocation } from '@claude-alive/core';
 import type { Selection } from '../../state/selection.ts';
 
 /** Just the run fields this filter needs, so tests do not build whole Runs. */
@@ -13,6 +13,18 @@ export interface WorktreeLocationRef {
   worktreeId: string;
   repoId: string;
   path: string;
+}
+
+/** Just the repository fields needed to say which machine a path is on. */
+export interface RepoLocationRef {
+  repoId: string;
+  location?: TicketLocation;
+}
+
+/** A working directory together with the machine it exists on. */
+export interface SelectedTarget {
+  cwd: string;
+  location?: TicketLocation;
 }
 
 interface Placement {
@@ -65,6 +77,31 @@ export function selectedCwd(
   if (inRepo.length === 0) return null;
   const primary = inRepo.find((w) => primaryWorktreeIds.has(w.worktreeId));
   return (primary ?? inRepo[0]!).path;
+}
+
+/**
+ * The same selection, as a path AND the machine that path is on.
+ *
+ * A path alone is ambiguous — an SSH checkout's root is a string like any
+ * other, and handing one to a local agent points it at a directory this machine
+ * does not have. Callers that act on the selection (the ticket composer) must
+ * use this rather than `selectedCwd`.
+ */
+export function selectedTarget(
+  selection: Selection,
+  worktrees: readonly WorktreeLocationRef[],
+  repositories: readonly RepoLocationRef[] = [],
+  primaryWorktreeIds: ReadonlySet<string> = new Set(),
+): SelectedTarget | null {
+  const cwd = selectedCwd(selection, worktrees, primaryWorktreeIds);
+  if (cwd === null) return null;
+  // The worktree names the repo even when the filter was set by branch, so the
+  // location is found the same way in both cases.
+  const repoId = selection.worktreeId
+    ? worktrees.find((w) => w.worktreeId === selection.worktreeId)?.repoId
+    : selection.repoId;
+  const location = repositories.find((r) => r.repoId === repoId)?.location;
+  return location ? { cwd, location } : { cwd };
 }
 
 /**

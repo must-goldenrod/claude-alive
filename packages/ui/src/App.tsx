@@ -664,6 +664,7 @@ export default function App() {
                 selection={selection}
                 runs={runTree.runs}
                 worktrees={runTree.worktrees}
+                repositories={runTree.repositories}
                 primaryWorktreeIds={primaryWorktreeIds}
                 leftInset={insets.repo}
               />

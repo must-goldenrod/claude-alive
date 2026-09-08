@@ -1,6 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload, Ticket } from '@claude-alive/core';
-import { isRemoteLocation, sshTargetDisplay, editedPathFrom } from '@claude-alive/core';
+import { isRemoteLocation, editedPathFrom } from '@claude-alive/core';
 import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
@@ -396,11 +396,11 @@ await runStore.load();
 /** Mirror one ticket into the run registry, resolving its repo/worktree first. */
 async function mirrorTicket(ticket: Ticket): Promise<void> {
   try {
+    // Pass the whole location, not just its key: a remote ticket's cwd has to
+    // be probed ON the remote host, and the resolved repository records where
+    // it lives so the sidebar and the composer stop treating it as local.
     const location = await resolveCwd(ticket.cwd, {
-      locationKey:
-        ticket.location && isRemoteLocation(ticket.location) && ticket.location.ssh
-          ? `ssh:${sshTargetDisplay(ticket.location.ssh)}`
-          : undefined,
+      location: isRemoteLocation(ticket.location) ? ticket.location : undefined,
     });
     runStore.upsert(ticketToUpsert(ticket, location));
     fileEvaluatedRun(ticket);

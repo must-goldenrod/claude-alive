@@ -656,7 +656,8 @@
     "autoCommitRemoteHint": "Remote ticket — the agent is asked to commit on the host. Never pushes.",
     "panelReview": "Cross-check with other models",
     "panelReviewHint": "Sends the goal and the report to third-party models. Off = local gate only.",
-    "panelOffLabel": "Panel off — local gate only"
+    "panelOffLabel": "Panel off — local gate only",
+    "runsOn": "Runs on {{target}} over SSH"
   },
   "spread": {
     "empty": "No open terminals",
@@ -949,7 +950,9 @@
     "stateRunning": "running",
     "stateWaiting": "unfiled",
     "stateClosed": "closed",
-    "stateAbandoned": "abandoned"
+    "stateAbandoned": "abandoned",
+    "originLocal": "Local — on this machine",
+    "originSsh": "Remote over SSH — {{target}}"
   },
   "run": {
     "open": "Open",

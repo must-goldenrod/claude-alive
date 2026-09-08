@@ -6,6 +6,8 @@
  * work lives, whether it is still open, and what the human said when closing it.
  */
 
+import type { TicketLocation } from '../tickets/location.js';
+
 export type RunKind = 'ticket' | 'terminal' | 'agent';
 
 /** `waiting` = the run needs a human (ticket decision, agent waiting). */
@@ -18,6 +20,14 @@ export interface Repository {
   /** Human alias, when one was set. Falls back to the root's basename in the UI. */
   name?: string;
   isGit: boolean;
+  /**
+   * Where this checkout physically lives. Absent means the server's own machine
+   * — the only possibility before remote runs existed, so older records read as
+   * local. `root` is a path ON THAT MACHINE: without this field a remote root
+   * is indistinguishable from a local one, which is how a remote path ended up
+   * being handed to a local agent.
+   */
+  location?: TicketLocation;
 }
 
 export interface Worktree {

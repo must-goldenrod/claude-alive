@@ -84,6 +84,42 @@ describe('resolveCwd', () => {
     expect((await resolveCwd('/r/proj', { exec })).worktree.isPrimary).toBe(true);
   });
 
+  it('probes an ssh location on the remote host and records it on the repository', async () => {
+    const sshRun = vi.fn(async () => 'top=/srv/app\nbranch=main\ngitdir=/srv/app/.git\n');
+    const out = await resolveCwd('/srv/app/packages/api', {
+      location: { kind: 'ssh', ssh: { host: '10.0.0.2', user: 'build' }, label: 'builder' },
+      sshRun,
+    });
+    expect(out.repository.root).toBe('/srv/app');
+    expect(out.repository.isGit).toBe(true);
+    expect(out.repository.location?.ssh?.host).toBe('10.0.0.2');
+    expect(out.worktree.branch).toBe('main');
+    // One round trip, and the remote command carries the cwd being probed.
+    expect(sshRun).toHaveBeenCalledTimes(1);
+    expect(sshRun.mock.calls[0]![0].join(' ')).toContain("cd '/srv/app/packages/api'");
+  });
+
+  it('falls back to a non-git repository when the remote host answers nothing', async () => {
+    const out = await resolveCwd('/srv/missing', {
+      location: { kind: 'ssh', ssh: { host: '10.0.0.2' } },
+      sshRun: async () => '',
+    });
+    expect(out.repository.isGit).toBe(false);
+    expect(out.repository.root).toBe('/srv/missing');
+    expect(out.repository.location?.kind).toBe('ssh');
+  });
+
+  it('keeps a remote root apart from the identical local one', async () => {
+    const exec = fakeGit({ '/srv/app': { top: '/srv/app', branch: 'main' } });
+    const local = await resolveCwd('/srv/app', { exec });
+    const remote = await resolveCwd('/srv/app', {
+      location: { kind: 'ssh', ssh: { host: '10.0.0.2', user: 'build' } },
+      sshRun: async () => 'top=/srv/app\nbranch=main\ngitdir=/srv/app/.git\n',
+    });
+    expect(remote.repository.repoId).not.toBe(local.repository.repoId);
+    expect(local.repository.location).toBeUndefined();
+  });
+
   it('scopes remote paths by locationKey', async () => {
     const exec = fakeGit({ '/srv/app': { top: '/srv/app', branch: 'main' } });
     const local = await resolveCwd('/srv/app', { exec });

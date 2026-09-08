@@ -195,3 +195,34 @@ describe('RepoSidebar', () => {
     expect(screen.queryByText(/둘째 줄/)).not.toBeInTheDocument();
   });
 });
+
+describe('repository origin', () => {
+  const REMOTE: RunTree = {
+    repositories: [
+      { repoId: 'r1', root: '/r/alive', name: 'alive', isGit: true },
+      {
+        repoId: 'r2', root: '/srv/app', name: 'app', isGit: true,
+        location: { kind: 'ssh', ssh: { host: '10.0.0.2', user: 'build' }, label: 'builder' },
+      },
+    ],
+    worktrees: [
+      { worktreeId: 'w1', repoId: 'r1', path: '/r/alive', branch: 'main', isPrimary: true },
+      { worktreeId: 'w2', repoId: 'r2', path: '/srv/app', branch: 'main', isPrimary: true },
+    ],
+    runs: [],
+  };
+
+  it('marks a local checkout and an ssh one with different glyphs', () => {
+    setup({ tree: REMOTE });
+    expect(screen.getByTestId('repo-origin-r1')).toHaveAttribute('data-origin', 'local');
+    expect(screen.getByTestId('repo-origin-r2')).toHaveAttribute('data-origin', 'ssh');
+    expect(screen.getByTestId('repo-origin-r1').querySelector('[data-testid="hierarchy-icon-repo"]')).not.toBeNull();
+    expect(screen.getByTestId('repo-origin-r2').querySelector('[data-testid="hierarchy-icon-repo-remote"]')).not.toBeNull();
+  });
+
+  it('names the host on the remote row, and only there', () => {
+    setup({ tree: REMOTE });
+    expect(screen.getByTestId('repo-host-r2')).toHaveTextContent('builder');
+    expect(screen.queryByTestId('repo-host-r1')).toBeNull();
+  });
+});
