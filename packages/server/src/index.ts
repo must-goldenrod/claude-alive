@@ -627,7 +627,11 @@ const ticketRunner = createTicketRunner({
     const evaluation = await evalStore.upsertFromTicket(ticket);
     broadcaster.broadcast({ type: 'evaluation:update', evaluation });
   },
-  concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) || 3,
+  // 상한은 러너의 DEFAULT_CONCURRENCY 가 단일 출처다. env 는 양수일 때만 그것을 덮는다
+  // (0·빈값·비숫자는 무시). Env overrides the runner default only when positive.
+  ...(Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) > 0
+    ? { concurrency: Number(process.env.CLAUDE_ALIVE_TICKET_CONCURRENCY) }
+    : {}),
 });
 if (!process.env.CLAUDE_ALIVE_TICKET_ROOTS) {
   // bypassPermissions is RCE-equivalent; the ticket routes are loopback-only

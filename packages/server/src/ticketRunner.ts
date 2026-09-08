@@ -142,7 +142,7 @@ export interface TicketRunner {
   activeCount(): number;
 }
 
-const DEFAULT_CONCURRENCY = 3;
+const DEFAULT_CONCURRENCY = 10;
 const DEFAULT_RESUME_PROMPT =
   '직전 작업이 서버 재시작으로 중단되었습니다. 지금까지의 맥락을 이어받아 목표를 끝까지 완료하세요.';
 

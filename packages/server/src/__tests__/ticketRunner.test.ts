@@ -287,6 +287,33 @@ describe('TicketRunner lifecycle', () => {
     expect(store.list().every((t) => t.state === 'done')).toBe(true);
   });
 
+  it('defaults to 10 concurrent tickets when no limit is configured', async () => {
+    // The default is the only cap most installs ever see (the env override is
+    // opt-in), so a change to it must break a test rather than pass silently.
+    const defs = new Map<string, ReturnType<typeof deferred<MainOutcome>>>();
+    const { runner } = makeRunner({
+      spawnMain: (ticket) => {
+        const d = deferred<MainOutcome>();
+        defs.set(ticket.id, d);
+        return { kill() {}, done: d.promise };
+      },
+    });
+    const tickets = await Promise.all(
+      Array.from({ length: 12 }, (_, i) => store.create({ goal: `g${i}`, cwd: '/repo' })),
+    );
+    tickets.forEach((t) => runner.enqueue(t));
+
+    await until(() => defs.size === 10);
+    expect(runner.activeCount()).toBe(10);
+    expect(defs.size).toBe(10); // 2 of the 12 stay queued
+
+    for (let i = 0; i < 30 && !store.list().every((t) => t.state === 'done'); i++) {
+      for (const [id, d] of defs) if (store.get(id)?.state === 'running') d.resolve(okOutcome());
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(store.list().every((t) => t.state === 'done')).toBe(true);
+  });
+
   it('runs without any wallclock cap by default — a long ticket is never killed', async () => {
     // A ticket may legitimately run for a day. An unattended kill burns the
     // tokens already spent and leaves nothing to resume, so no timer is armed
