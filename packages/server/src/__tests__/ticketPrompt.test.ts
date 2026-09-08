@@ -66,3 +66,26 @@ describe('remote commit instruction', () => {
     expect(p.indexOf('git commit')).toBeLessThan(p.indexOf('HEADLINE:'));
   });
 });
+
+
+/**
+ * 13 decision questions in the audited corpus, 8 of them compound ("3건 선택
+ * 필요"). A compound question has no single label, so the panel's `choice` field
+ * comes back empty and the escalation is guaranteed before a model even reads it.
+ */
+describe('DECISION contract', () => {
+  it('asks for one question at a time, numbered', () => {
+    const p = buildMainPrompt('goal');
+    expect(p).toContain('한 번에 하나만 묻습니다');
+    expect(p).toContain('1. 2. 3.');
+    expect(p).toContain('숫자 하나로 답할 수 있게');
+  });
+
+  it('tells the agent to verify what it can instead of asking', () => {
+    expect(buildMainPrompt('goal')).toContain('스스로 확인할 수 있는 것은 묻지 말고');
+  });
+
+  it('reaches the orchestrator prompt too', () => {
+    expect(buildOrchestratorPrompt('goal', '', '/bin/ca-delegate', 'm')).toContain('한 번에 하나만 묻습니다');
+  });
+});

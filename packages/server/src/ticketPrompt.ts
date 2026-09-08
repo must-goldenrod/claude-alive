@@ -12,11 +12,21 @@ import { describeDelegateModels } from './orchestrator/delegateModels.js';
  * The mandatory trailing instruction. The agent ends with exactly one of two
  * markers: HEADLINE when the goal is done, or DECISION when it needs a human
  * choice to continue (parsed by extractHeadline / extractDecision).
+ *
+ * The one-question rule on DECISION is not style. A DECISION carrying three
+ * questions ("①…②…③… — 3건 선택 필요") cannot be answered with one label, so
+ * both the advisory panel and the human end up replying in prose that maps to no
+ * option at all. Asking the first question alone costs an extra round and makes
+ * every later answer machine-readable.
  */
 export const HEADLINE_INSTRUCTION =
   '\n\n---\n작업을 마친 뒤, 마지막 줄에 반드시 아래 중 하나만 출력하세요 (다른 말 없이):\n' +
   '- 목표를 끝냈으면:  HEADLINE: <핵심 결과 30자 이내 한 줄>\n' +
-  '- 사람의 결정·선택이 있어야 더 진행할 수 있으면:  DECISION: <무엇을 정해야 하는지와 선택지를 한 줄로>';
+  '- 사람의 결정·선택이 있어야 더 진행할 수 있으면:  DECISION: <무엇을 정해야 하는지와 선택지를 한 줄로>\n' +
+  'DECISION 규칙:\n' +
+  '- 한 번에 하나만 묻습니다. 정해야 할 것이 여러 건이면 뒤의 결정을 좌우하는 하나만 묻고, 나머지는 답을 받은 뒤 다시 묻습니다.\n' +
+  '- 선택지는 1. 2. 3. 으로 번호를 붙이고, 숫자 하나로 답할 수 있게 씁니다.\n' +
+  '- 스스로 확인할 수 있는 것은 묻지 말고 확인하세요. 사람만 아는 의도·권한·우선순위일 때만 묻습니다.';
 
 /**
  * Commit instruction for tickets the server cannot commit itself.
