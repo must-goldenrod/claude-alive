@@ -634,6 +634,7 @@
     "filesLabel": "files",
     "resolutionLabel": "Adopted",
     "tiebreakLabel": "Tiebreak",
+    "flaggedLabel": "Dissent",
     "escalationLabel": "Escalated",
     "reviewPhase": {
       "unverified": "unverified",

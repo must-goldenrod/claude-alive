@@ -18,6 +18,12 @@ import { describeDelegateModels } from './orchestrator/delegateModels.js';
  * both the advisory panel and the human end up replying in prose that maps to no
  * option at all. Asking the first question alone costs an extra round and makes
  * every later answer machine-readable.
+ *
+ * Neither is the consequences rule. Of the decisions a human actually answered,
+ * only 3 of 10 got a choice back; 5 came back as "explain it in more detail"
+ * — and those were exactly the questions that listed options without saying what
+ * picking one would do. The advisors see even less than the human does, so a
+ * question a person cannot answer is one the panel can only guess at.
  */
 export const HEADLINE_INSTRUCTION =
   '\n\n---\n작업을 마친 뒤, 마지막 줄에 반드시 아래 중 하나만 출력하세요 (다른 말 없이):\n' +
@@ -26,6 +32,8 @@ export const HEADLINE_INSTRUCTION =
   'DECISION 규칙:\n' +
   '- 한 번에 하나만 묻습니다. 정해야 할 것이 여러 건이면 뒤의 결정을 좌우하는 하나만 묻고, 나머지는 답을 받은 뒤 다시 묻습니다.\n' +
   '- 선택지는 1. 2. 3. 으로 번호를 붙이고, 숫자 하나로 답할 수 있게 씁니다.\n' +
+  '- 선택지마다 「고르면 무엇이 일어나는지」와 「되돌릴 수 있는지」를 한 줄로 덧붙입니다. ' +
+  '읽는 사람이 되물어야 한다면 그 질문은 아직 답할 수 없는 질문입니다.\n' +
   '- 스스로 확인할 수 있는 것은 묻지 말고 확인하세요. 사람만 아는 의도·권한·우선순위일 때만 묻습니다.';
 
 /**

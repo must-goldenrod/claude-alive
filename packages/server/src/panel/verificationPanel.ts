@@ -8,10 +8,17 @@
  * it is least likely to catch.
  *
  * This panel is the second half. Three models from three vendors judge the same
- * claim from the goal + report + gate verdict, with no filesystem access. They
+ * claim from the goal and the report alone, with no filesystem access. They
  * cannot confirm a fact the gate missed, but they can refuse a report that does
  * not actually answer the goal — which is the failure mode the gate shares with
  * the worker.
+ *
+ * The gate's verdict is deliberately withheld from them. It used to be in the
+ * prompt, and measured against records a human had overruled the panel then
+ * produced more false alarms on good work (2/21) than catches on bad (1/21);
+ * with the verdict removed the same models on the same records went to 0/21 and
+ * 2/21. An independent reviewer told the first reviewer passed is not
+ * independent, and the panel exists only for its independence.
  */
 import type { Ticket, TicketVerification, VerificationOpinion, PanelConsensus } from '@claude-alive/core';
 import { extractJsonObject, readString, type Panel, type PanelMemberResult } from './litellmPanel.js';
@@ -19,11 +26,12 @@ import { extractJsonObject, readString, type Panel, type PanelMemberResult } fro
 export const VERIFICATION_SYSTEM = [
   'You are an independent verification reviewer on a panel of several models.',
   'You are judging whether an autonomous agent ACTUALLY achieved the goal it was given.',
-  'You have NO filesystem access: judge only from the goal, the agent\'s report, and the',
-  'first reviewer\'s findings. Be strict about one thing above all — whether the report',
-  'answers the GOAL AS STATED. A report that is coherent but solves a different or smaller',
-  'problem than the goal must FAIL. Do not invent facts you cannot see; if the report is',
-  'too thin to judge, that is itself a FAIL.',
+  'You have NO filesystem access: judge only from the goal and the agent\'s own report.',
+  'Nobody else\'s verdict is shown to you — yours is meant to be independent.',
+  'Be strict about one thing above all — whether the report answers the GOAL AS STATED.',
+  'A report that is coherent but solves a different or smaller problem than the goal must',
+  'FAIL, and a goal with several parts must FAIL unless the report covers all of them.',
+  'Do not invent facts you cannot see; if the report is too thin to judge, that is a FAIL.',
   '',
   'Answer with ONE JSON object and nothing else:',
   '{"passed": true|false, "reason": "<one concise sentence, English or Korean>"}',
@@ -36,19 +44,13 @@ function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n…(truncated)`;
 }
 
-export function buildVerificationPanelPrompt(
-  goal: string,
-  report: string | null,
-  gate: { passed: boolean; reason: string },
-): string {
+export function buildVerificationPanelPrompt(goal: string, report: string | null): string {
   return [
     `GOAL:\n${goal}`,
     '',
     `AGENT REPORT:\n${report ? clip(report, MAX_REPORT_CHARS) : '(none)'}`,
     '',
-    `FIRST REVIEWER (had filesystem access) SAID: ${gate.passed ? 'PASS' : 'FAIL'} — ${gate.reason || '(no reason)'}`,
-    '',
-    'Do you agree the goal was achieved?',
+    'Did the agent achieve the goal?',
   ].join('\n');
 }
 
@@ -88,6 +90,12 @@ export function toOpinion(member: PanelMemberResult): VerificationOpinion {
  *  3. An empty panel (no key, everyone abstained) degrades to the gate alone.
  *     Losing the second opinion must not block completion; it is an addition to
  *     the gate, never a replacement for it.
+ *
+ * A lone dissenter loses the vote but is not thrown away: the verdict carries
+ * `flagged`. One seat is measurably stricter than the other two (across 72
+ * production votes: 24/24 pass, 23/1, 22/2), so a solo FAIL is the shape a real
+ * catch arrives in, and burying it in an unexpanded panel list is how the only
+ * discriminating vote gets lost.
  */
 export function mergeVerdict(
   gate: { passed: boolean; reason: string },
@@ -117,6 +125,7 @@ export function mergeVerdict(
     reason,
     gate,
     ...(opinions.length > 0 ? { panel: [...opinions] } : {}),
+    ...(passed && fails.length > 0 ? { flagged: true } : {}),
     consensus,
     at,
   };
@@ -143,7 +152,7 @@ export async function reviewWithPanel(
   try {
     const members = await deps.panel.run({
       system: VERIFICATION_SYSTEM,
-      user: buildVerificationPanelPrompt(ticket.goal, report, gate),
+      user: buildVerificationPanelPrompt(ticket.goal, report),
     });
     return mergeVerdict(gate, members.map(toOpinion), at);
   } catch {

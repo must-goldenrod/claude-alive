@@ -85,6 +85,12 @@ export interface TicketVerification {
   reason: string;
   gate?: { passed: boolean; reason: string };
   panel?: VerificationOpinion[];
+  /**
+   * The ticket passed, but at least one panel reviewer voted against it. A lone
+   * dissent cannot veto, and the strictest seat is the one that dissents alone,
+   * so this marks the result as worth a human glance rather than losing the vote.
+   */
+  flagged?: boolean;
   consensus?: PanelConsensus;
   at?: number;
 }

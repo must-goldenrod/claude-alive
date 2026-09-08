@@ -11,6 +11,8 @@ import {
   votersOf,
   MIN_DECISION_CONFIDENCE,
   NO_CONVERGENCE,
+  NEEDS_UNANIMITY,
+  needsUnanimity,
 } from '../panel/decisionPanel.js';
 import type { Panel } from '../panel/litellmPanel.js';
 import type { DecisionOpinion } from '@claude-alive/core';
@@ -316,5 +318,60 @@ describe('adviseDecision semantic tiebreak', () => {
     const out = await adviseDecision({ panel, now: () => 7 }, { goal: 'g', result: null }, 'q');
     expect(out.stage).toBe('decided');
     expect(calls).toBe(1);
+  });
+});
+
+
+describe('needsUnanimity', () => {
+  it('names actions a wrong answer cannot be walked back from', () => {
+    expect(needsUnanimity('PR #5 를 지금 머지할지', '')).toBe(true);
+    expect(needsUnanimity('', 'deploy to production now')).toBe(true);
+    expect(needsUnanimity('브랜치를 삭제해도 되는지', '')).toBe(true);
+    expect(needsUnanimity('', 'git push --force')).toBe(true);
+  });
+
+  it('leaves ordinary revertable work on the majority rule', () => {
+    expect(needsUnanimity('컬럼 순서를 어떻게 할지', '순서를 A→B 로 바꾼다')).toBe(false);
+    expect(needsUnanimity('누가 리뷰를 달지', '승인 권한이 있는 사람에게 리뷰를 요청한다')).toBe(false);
+    expect(needsUnanimity('문서를 어디에 둘지', 'docs/ 아래에 새 파일로 둔다')).toBe(false);
+  });
+});
+
+describe('adviseDecision unanimity gate on irreversible actions', () => {
+  const split = (choices: string[]): Panel => ({
+    models: ['a', 'b', 'c'],
+    run: async (req) =>
+      req.models?.length === 1
+        ? [{ model: 'a', content: '{"agree":[]}' }]
+        : choices.map((c, i) => ({
+            model: `m${i}`,
+            content: `{"choice":"${c}","recommendation":"옵션 ${c} — 지금 머지한다","rationale":"r","confidence":0.9}`,
+          })),
+  });
+
+  it('sends a 2-of-3 merge decision to the human instead of applying it', async () => {
+    const out = await adviseDecision({ panel: split(['1', '1', '2']), now: () => 1 }, { goal: 'g', result: null }, 'PR 를 지금 머지할지');
+    expect(out.stage).toBe('failed');
+    expect(out.reason).toBe(NEEDS_UNANIMITY);
+    expect(out.consensus).toEqual({ agree: 2, total: 3 });
+  });
+
+  it('applies the same decision when every advisor agreed', async () => {
+    const out = await adviseDecision({ panel: split(['1', '1', '1']), now: () => 1 }, { goal: 'g', result: null }, 'PR 를 지금 머지할지');
+    expect(out.stage).toBe('decided');
+  });
+
+  it('leaves a revertable 2-of-3 decision alone', async () => {
+    const panel: Panel = {
+      models: ['a', 'b', 'c'],
+      run: async () => [
+        { model: 'a', content: '{"choice":"1","recommendation":"컬럼 순서를 바꾼다","rationale":"r","confidence":0.9}' },
+        { model: 'b', content: '{"choice":"1","recommendation":"컬럼 순서를 A→B 로 바꾼다","rationale":"r","confidence":0.9}' },
+        { model: 'c', content: '{"choice":"2","recommendation":"그대로 둔다","rationale":"r","confidence":0.9}' },
+      ],
+    };
+    const out = await adviseDecision({ panel, now: () => 1 }, { goal: 'g', result: null }, '컬럼 순서를 어떻게 할지');
+    expect(out.stage).toBe('decided');
+    expect(out.consensus).toEqual({ agree: 2, total: 3 });
   });
 });

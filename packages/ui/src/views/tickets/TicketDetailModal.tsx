@@ -742,6 +742,23 @@ function VerificationReport({ ticket, t }: { ticket: Ticket; t: (key: string) =>
             {t('tickets.consensusLabel')} {v.consensus.agree}/{v.consensus.total}
           </span>
         )}
+        {/* Passed, but a reviewer voted against. A lone dissent cannot veto and
+            is the shape a real catch arrives in, so it is surfaced here rather
+            than left inside the collapsed panel list. */}
+        {v?.flagged && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: 'var(--accent-amber, #d29922)',
+              border: '1px solid var(--accent-amber, #d29922)',
+              borderRadius: 5,
+              padding: '1px 6px',
+            }}
+          >
+            {t('tickets.flaggedLabel')}
+          </span>
+        )}
         {/* Say so explicitly: a report with no reviewers listed must not read
             as "three models agreed" to someone skimming it. */}
         {ticket.panelReview === false && (

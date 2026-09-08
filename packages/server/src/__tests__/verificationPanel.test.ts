@@ -4,6 +4,7 @@ import {
   toOpinion,
   reviewWithPanel,
   buildVerificationPanelPrompt,
+  VERIFICATION_SYSTEM,
 } from '../panel/verificationPanel.js';
 import type { Panel, PanelMemberResult } from '../panel/litellmPanel.js';
 import type { VerificationOpinion } from '@claude-alive/core';
@@ -67,11 +68,40 @@ describe('mergeVerdict', () => {
 });
 
 describe('buildVerificationPanelPrompt', () => {
-  it('carries the goal, the report, and the first reviewer verdict', () => {
-    const p = buildVerificationPanelPrompt('add X', 'I added X', { passed: true, reason: 'saw the diff' });
+  it('carries the goal and the report', () => {
+    const p = buildVerificationPanelPrompt('add X', 'I added X');
     expect(p).toContain('add X');
     expect(p).toContain('I added X');
-    expect(p).toContain('PASS — saw the diff');
+  });
+
+  /**
+   * Measured on records a human overruled: with the gate verdict in the prompt
+   * the panel produced more false alarms on good work (2/21) than catches on bad
+   * (1/21); with it removed, 0/21 and 2/21.
+   */
+  it('withholds the first reviewer\'s verdict so the vote stays independent', () => {
+    const p = buildVerificationPanelPrompt('add X', 'I added X');
+    expect(p).not.toContain('FIRST REVIEWER');
+    expect(p).not.toContain('PASS');
+    expect(VERIFICATION_SYSTEM).not.toContain('first reviewer');
+  });
+});
+
+describe('a lone dissent is recorded rather than lost', () => {
+  it('flags a pass that one reviewer voted against', () => {
+    const v = mergeVerdict({ passed: true, reason: 'done' }, [fail('a'), pass('b'), pass('c')], 1);
+    expect(v.passed).toBe(true);
+    expect(v.flagged).toBe(true);
+  });
+
+  it('leaves an unanimous pass unflagged', () => {
+    expect(mergeVerdict({ passed: true, reason: 'done' }, [pass('a'), pass('b')], 1).flagged).toBeUndefined();
+  });
+
+  it('does not flag a verdict that already failed', () => {
+    const v = mergeVerdict({ passed: true, reason: 'done' }, [fail('a'), fail('b'), pass('c')], 1);
+    expect(v.passed).toBe(false);
+    expect(v.flagged).toBeUndefined();
   });
 });
 

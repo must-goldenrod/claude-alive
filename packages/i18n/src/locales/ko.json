@@ -634,6 +634,7 @@
     "filesLabel": "개 파일",
     "resolutionLabel": "채택",
     "tiebreakLabel": "동일성 판정",
+    "flaggedLabel": "이견 있음",
     "escalationLabel": "에스컬레이션",
     "reviewPhase": {
       "unverified": "검증 전",

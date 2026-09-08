@@ -103,6 +103,31 @@ export const MIN_DECISION_CONFIDENCE = 0.5;
 /** The one escalation the semantic tiebreak can still rescue. */
 export const NO_CONVERGENCE = 'advisors did not converge on one answer';
 
+/**
+ * Actions a wrong answer cannot be walked back from cheaply.
+ *
+ * A 2-of-3 majority is enough to pick a branch name; it is not enough to deploy
+ * to production or delete something. The panel sees less than the human it is
+ * standing in for — no filesystem, no history — so where the answer cannot be
+ * undone, the bar goes up to every advisor that voted, and anything short of
+ * that goes back to the human instead of being applied automatically.
+ *
+ * Deliberately narrow: an ordinary edit, a comment, a branch push or an approval
+ * request is revertable and is not listed. Merging is, because in this setup a
+ * merge to main triggers a production deploy.
+ */
+const IRREVERSIBLE =
+  /머지|merge|배포|deploy|릴리[즈스]|release|프로덕션|production|삭제|delete|drop|폐기|discard|force[-\s]?push|--force|롤백|rollback|revert/i;
+
+/** True when this decision names an action that unanimity should gate. */
+export function needsUnanimity(question: string, resolution: string): boolean {
+  return IRREVERSIBLE.test(question) || IRREVERSIBLE.test(resolution);
+}
+
+/** Escalation reason when a majority agreed but the action is not undoable. */
+export const NEEDS_UNANIMITY =
+  'advisors were not unanimous on an action that cannot be undone — a human decides';
+
 /** Advisors that actually produced an answer — the only ones with a vote. */
 export function votersOf(opinions: readonly DecisionOpinion[]): DecisionOpinion[] {
   return opinions.filter((o) => !o.error && o.recommendation);
@@ -262,6 +287,16 @@ export async function adviseDecision(
         outcome = settled.outcome;
         tiebreak = settled.tiebreak;
       }
+    }
+
+    // A split majority may not auto-apply something irreversible.
+    if (
+      outcome.stage === 'decided' &&
+      outcome.consensus.agree < outcome.consensus.total &&
+      needsUnanimity(question, outcome.resolution ?? '')
+    ) {
+      outcome = { stage: 'failed', consensus: outcome.consensus, reason: NEEDS_UNANIMITY };
+      tiebreak = undefined;
     }
 
     return {
