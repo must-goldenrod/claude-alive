@@ -33,32 +33,65 @@ describe('createLitellmClient', () => {
     expect(await client.checkConnection()).toEqual({ ok: false, error: 'HTTP 401' });
   });
 
-  // The grok and kimi routes answer 400 "MissingSessionID" without it, and the
-  // gateway forwards only what the body's extra_headers names.
-  it('chat carries a session id in extra_headers', async () => {
-    let seen: Record<string, unknown> | undefined;
+  // The grok/kimi-k3 routes answer 400 "MissingSessionID"; the glm routes answer
+  // 500 when the field IS present. So: plain first, session id only on demand.
+  it('chat sends no session id on the first attempt', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
     const client = createLitellmClient(
       { baseUrl: 'https://gw.example', apiKey: 'k', sessionId: 'ses-42' },
       { fetch: (async (_url: string, init: RequestInit) => {
-        seen = JSON.parse(init.body as string).extra_headers;
+        bodies.push(JSON.parse(init.body as string));
         return jsonResponse({ choices: [{ message: { content: 'ok' } }] });
       }) as typeof fetch },
     );
-    await client.chat('kimi-k3', [{ role: 'user', content: 'hi' }]);
-    expect(seen).toEqual({ [SESSION_HEADER]: 'ses-42' });
+    await client.chat('glm-5.3', [{ role: 'user', content: 'hi' }]);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).not.toHaveProperty('extra_headers');
+  });
+
+  it('chat retries once with a session id when the gateway asks for one', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const client = createLitellmClient(
+      { baseUrl: 'https://gw.example', apiKey: 'k', sessionId: 'ses-42' },
+      { fetch: (async (_url: string, init: RequestInit) => {
+        bodies.push(JSON.parse(init.body as string));
+        return bodies.length === 1
+          ? jsonResponse({ error: { message: 'MissingSessionID' } }, false, 400)
+          : jsonResponse({ choices: [{ message: { content: 'ok' } }] });
+      }) as typeof fetch },
+    );
+    const r = await client.chat('kimi-k3', [{ role: 'user', content: 'hi' }]);
+    expect(r.content).toBe('ok');
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]!.extra_headers).toEqual({ [SESSION_HEADER]: 'ses-42' });
   });
 
   it('chat generates a session id when none is configured', async () => {
-    let seen: Record<string, string> | undefined;
+    const bodies: Array<{ extra_headers?: Record<string, string> }> = [];
     const client = createLitellmClient(
       { baseUrl: 'https://gw.example', apiKey: 'k' },
       { fetch: (async (_url: string, init: RequestInit) => {
-        seen = JSON.parse(init.body as string).extra_headers;
-        return jsonResponse({ choices: [{ message: { content: 'ok' } }] });
+        bodies.push(JSON.parse(init.body as string));
+        return bodies.length === 1
+          ? jsonResponse({ error: { message: 'MissingSessionID' } }, false, 400)
+          : jsonResponse({ choices: [{ message: { content: 'ok' } }] });
       }) as typeof fetch },
     );
     await client.chat('grok-4.5', [{ role: 'user', content: 'hi' }]);
-    expect(seen?.[SESSION_HEADER]).toMatch(/^claude-alive-/);
+    expect(bodies[1]?.extra_headers?.[SESSION_HEADER]).toMatch(/^claude-alive-/);
+  });
+
+  it('chat does not retry a 400 that is about something else', async () => {
+    let calls = 0;
+    const client = createLitellmClient(
+      { baseUrl: 'https://gw.example', apiKey: 'k' },
+      { fetch: (async () => {
+        calls += 1;
+        return jsonResponse({ error: { message: 'Invalid model name' } }, false, 400);
+      }) as typeof fetch },
+    );
+    await expect(client.chat('nope', [{ role: 'user', content: 'hi' }])).rejects.toThrow(/HTTP 400/);
+    expect(calls).toBe(1);
   });
 
   it('chat returns content + usage', async () => {

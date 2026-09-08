@@ -19,13 +19,24 @@ export interface LitellmConfig {
 }
 
 /**
- * Some upstreams behind the gateway (the grok and kimi routes as of 2026-09-08)
- * reject a request that carries no session id with HTTP 400 "MissingSessionID",
- * and the header cannot be set on the HTTP request itself — litellm drops
- * client headers and only forwards what the body's `extra_headers` names. So it
- * travels in the body. Models that do not need it ignore it.
+ * Some upstreams behind the gateway (the grok and kimi-k3 routes as of
+ * 2026-09-08) reject a request that carries no session id with HTTP 400
+ * "MissingSessionID". The header cannot be set on the HTTP request — litellm
+ * drops client headers and forwards only what the body's `extra_headers` names
+ * — so it travels in the body.
+ *
+ * It is NOT sent by default: the glm routes and kimi-k2.7-code answer HTTP 500
+ * when the field is present. Which routes need it is gateway configuration and
+ * changes without notice, so this client does not keep a list — it sends the
+ * plain request and retries once with the session id when the gateway says
+ * that is what was missing.
  */
 export const SESSION_HEADER = 'x-opencode-session';
+
+/** True for the gateway's "this route needs a session id" rejection. */
+export function needsSessionId(status: number, body: string): boolean {
+  return status === 400 && (body.includes('MissingSessionID') || body.includes(SESSION_HEADER));
+}
 
 export interface LitellmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -103,15 +114,29 @@ export function createLitellmClient(config: LitellmConfig, deps: { fetch?: Fetch
     },
 
     async chat(model, messages, opts = {}) {
-      const res = await doFetch(`${base}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages, extra_headers: extraHeaders }),
-        ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
-      });
+      const post = (withSession: boolean) =>
+        doFetch(`${base}/v1/chat/completions`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages,
+            ...(withSession ? { extra_headers: extraHeaders } : {}),
+          }),
+          ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+        });
+
+      let res = await post(false);
       if (!res.ok) {
         const text = await res.text().catch(() => '');
-        throw new LitellmHttpError(res.status, text, res.headers?.get?.('retry-after') ?? null);
+        if (!needsSessionId(res.status, text)) {
+          throw new LitellmHttpError(res.status, text, res.headers?.get?.('retry-after') ?? null);
+        }
+        res = await post(true);
+        if (!res.ok) {
+          const retryText = await res.text().catch(() => '');
+          throw new LitellmHttpError(res.status, retryText, res.headers?.get?.('retry-after') ?? null);
+        }
       }
       const body = (await res.json()) as {
         model?: string;
