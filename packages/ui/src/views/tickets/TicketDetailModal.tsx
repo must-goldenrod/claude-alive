@@ -783,6 +783,13 @@ function VerificationReport({ ticket, t }: { ticket: Ticket; t: (key: string) =>
             {o.passed ? '✓' : '✗'}
           </span>{' '}
           {o.reason}
+          {/* The weakest point the reviewer named before voting. On a PASS this
+              is the useful half of the answer — it is where a human looks next. */}
+          {o.gap && (
+            <div style={{ opacity: 0.7, marginTop: 2 }}>
+              <span style={{ fontWeight: 600 }}>{t('tickets.gapLabel')}</span> {o.gap}
+            </div>
+          )}
         </ReportRow>
       ))}
 

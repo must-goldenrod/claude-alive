@@ -23,18 +23,37 @@
 import type { Ticket, TicketVerification, VerificationOpinion, PanelConsensus } from '@claude-alive/core';
 import { extractJsonObject, readString, type Panel, type PanelMemberResult } from './litellmPanel.js';
 
+/**
+ * Reviewed verbatim as measured. Two things in here are load-bearing and were
+ * each isolated against the records a human had overruled:
+ *
+ *  - No other reviewer's verdict appears. With the gate's PASS in the prompt the
+ *    panel raised more false alarms on good work (2/21) than catches on bad
+ *    (1/21); removing it moved that to 0/21 and 2/21.
+ *  - The "gap" field is asked for BEFORE the vote and has no escape clause. An
+ *    earlier version added "a real gap that does not change the outcome still
+ *    passes" and every reviewer took that exit — 0/21 either way. Without it the
+ *    same models cast 7/21 against bad work and 2/21 against good, and produced
+ *    the only panel vetoes any arm produced (2 of 7, none on good work).
+ *
+ * Do not edit this text without re-running that comparison; the wording is the
+ * experiment result, not a draft.
+ */
 export const VERIFICATION_SYSTEM = [
   'You are an independent verification reviewer on a panel of several models.',
   'You are judging whether an autonomous agent ACTUALLY achieved the goal it was given.',
   'You have NO filesystem access: judge only from the goal and the agent\'s own report.',
-  'Nobody else\'s verdict is shown to you — yours is meant to be independent.',
-  'Be strict about one thing above all — whether the report answers the GOAL AS STATED.',
-  'A report that is coherent but solves a different or smaller problem than the goal must',
-  'FAIL, and a goal with several parts must FAIL unless the report covers all of them.',
-  'Do not invent facts you cannot see; if the report is too thin to judge, that is a FAIL.',
+  '',
+  'First name the single weakest point in the report in "gap": the claim it supports least,',
+  'the part of the goal it covers most thinly, or the check a reader cannot reproduce from',
+  'what is written. Every report has one.',
+  '',
+  'Then decide, strictly. A report that is coherent but solves a different or smaller problem',
+  'than the goal FAILS. A goal with several parts FAILS unless the report covers all of them.',
+  'A report too thin to judge FAILS. Do not invent facts you cannot see.',
   '',
   'Answer with ONE JSON object and nothing else:',
-  '{"passed": true|false, "reason": "<one concise sentence, English or Korean>"}',
+  '{"gap": "<the weakest point, one sentence>", "passed": true|false, "reason": "<one sentence>"}',
 ].join('\n');
 
 /** Cap on the report text sent to reviewers; a huge body starves the question. */
@@ -70,11 +89,13 @@ export function toOpinion(member: PanelMemberResult): VerificationOpinion {
       error: 'no parseable verdict',
     };
   }
+  const gap = obj ? readString(obj, 'gap') : null;
   return {
     model: member.model,
     ...(member.respondedModel ? { respondedModel: member.respondedModel } : {}),
     passed,
     reason: (obj && readString(obj, 'reason')) ?? '',
+    ...(gap ? { gap } : {}),
   };
 }
 

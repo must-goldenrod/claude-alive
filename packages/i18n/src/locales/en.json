@@ -635,6 +635,7 @@
     "resolutionLabel": "Adopted",
     "tiebreakLabel": "Tiebreak",
     "flaggedLabel": "Dissent",
+    "gapLabel": "Weakest point:",
     "escalationLabel": "Escalated",
     "reviewPhase": {
       "unverified": "unverified",

@@ -60,6 +60,12 @@ export interface VerificationOpinion {
   respondedModel?: string;
   passed: boolean | null;
   reason: string;
+  /**
+   * The weakest point this reviewer found, named before it voted. Reviewers that
+   * must state a gap first vote against bad work far more often, and the text is
+   * useful on its own — a PASS with a gap is where a human looks next.
+   */
+  gap?: string;
   /** Why this reviewer abstained, when `passed` is null. */
   error?: string;
 }

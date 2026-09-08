@@ -85,6 +85,30 @@ describe('buildVerificationPanelPrompt', () => {
     expect(p).not.toContain('PASS');
     expect(VERIFICATION_SYSTEM).not.toContain('first reviewer');
   });
+
+  /**
+   * Asking for the weakest point before the verdict is what produced the only
+   * panel vetoes in the comparison (2 of 7 on overruled work, 0 of 7 on good).
+   * An earlier wording let a named gap still pass and every reviewer used it.
+   */
+  it('asks for the weakest point first, with no clause that excuses it', () => {
+    expect(VERIFICATION_SYSTEM).toContain('"gap"');
+    expect(VERIFICATION_SYSTEM.indexOf('gap')).toBeLessThan(VERIFICATION_SYSTEM.indexOf('Then decide'));
+    expect(VERIFICATION_SYSTEM).not.toMatch(/still PASS|does not change/i);
+  });
+});
+
+describe('toOpinion reads the gap', () => {
+  it('keeps the weakest point alongside the vote', () => {
+    const o = toOpinion({ model: 'm', content: '{"gap":"no diff shown","passed":true,"reason":"ok"}' });
+    expect(o).toMatchObject({ passed: true, reason: 'ok', gap: 'no diff shown' });
+  });
+
+  it('still reads a verdict from a reviewer that skipped the gap', () => {
+    const o = toOpinion({ model: 'm', content: '{"passed":false,"reason":"thin"}' });
+    expect(o).toMatchObject({ passed: false, reason: 'thin' });
+    expect(o.gap).toBeUndefined();
+  });
 });
 
 describe('a lone dissent is recorded rather than lost', () => {
