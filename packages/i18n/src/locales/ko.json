@@ -633,6 +633,7 @@
     "commitSkipped": "커밋 안 함",
     "filesLabel": "개 파일",
     "resolutionLabel": "채택",
+    "tiebreakLabel": "동일성 판정",
     "escalationLabel": "에스컬레이션",
     "reviewPhase": {
       "unverified": "검증 전",

@@ -838,6 +838,16 @@ function AdvisoryReport({ panel, t }: { panel: TicketDecisionPanel; t: (key: str
       </div>
 
       {panel.resolution && <ReportRow label={t('tickets.resolutionLabel')}>{panel.resolution}</ReportRow>}
+      {/* Labels disagreed and a model judged the answers equivalent — weaker
+          evidence than a label match, so it is shown rather than hidden. */}
+      {panel.tiebreak && (
+        <ReportRow label={t('tickets.tiebreakLabel')}>
+          <span style={{ fontFamily: 'var(--font-mono, monospace)', opacity: 0.7, marginRight: 6 }}>
+            {shortModel(panel.tiebreak.model)}
+          </span>
+          {panel.tiebreak.why}
+        </ReportRow>
+      )}
       {panel.reason && <ReportRow label={t('tickets.escalationLabel')}>{panel.reason}</ReportRow>}
 
       {answered.map((o) => (

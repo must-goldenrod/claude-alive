@@ -137,6 +137,12 @@ export interface TicketDecisionPanel {
   consensus?: PanelConsensus;
   /** Why the panel could not decide — shown to the human who takes over. */
   reason?: string;
+  /**
+   * Present when label matching found no majority and a semantic tiebreak did.
+   * Recorded because the two are not equally strong: labels are mechanical, a
+   * tiebreak is one more model's judgement about what the others meant.
+   */
+  tiebreak?: { model: string; why?: string };
   at: number;
 }
 

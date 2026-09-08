@@ -633,6 +633,7 @@
     "commitSkipped": "not committed",
     "filesLabel": "files",
     "resolutionLabel": "Adopted",
+    "tiebreakLabel": "Tiebreak",
     "escalationLabel": "Escalated",
     "reviewPhase": {
       "unverified": "unverified",
