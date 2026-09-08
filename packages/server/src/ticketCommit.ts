@@ -11,8 +11,16 @@
  * the party whose claim is under review, so "did you commit?" cannot be left to
  * it. Three things are never done here — pushing, branching, and committing a
  * ticket that failed — because all three are hard to walk back from.
+ *
+ * What it commits is bounded twice, because the wide version of this is worse
+ * than not running at all: only paths under the ticket's own cwd, and among
+ * those, only ones written after the run started. A checkpoint hook already
+ * commits most tickets' work, so by the time this runs the tree is usually clean
+ * and anything still dirty is more likely to be somebody else's.
  */
 import { execFile } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Ticket, TicketCommit } from '@claude-alive/core';
 
 export interface GitExecResult {
@@ -23,6 +31,28 @@ export interface GitExecResult {
 
 /** Injectable git runner (tests stub it; production shells out). */
 export type GitExec = (args: readonly string[], cwd: string) => Promise<GitExecResult>;
+
+/** Injectable mtime probe. Returns null when the path is gone. */
+export type MtimeProbe = (path: string) => Promise<number | null>;
+
+export const defaultMtime: MtimeProbe = async (path) => {
+  try {
+    return (await stat(path)).mtimeMs;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Ceiling on an auto-commit.
+ *
+ * A read-only ticket once committed 365 files: it swept a directory that had
+ * been left dirty by other work. Past this many changed files the sweep is more
+ * likely than the ticket, so nothing is committed and the tree is left for a
+ * human — the outcome the feature exists to avoid, but far cheaper to undo than
+ * a 365-file commit sitting in history.
+ */
+export const MAX_AUTO_COMMIT_FILES = 50;
 
 export const defaultGitExec: GitExec = (args, cwd) =>
   new Promise((resolveExec) => {
@@ -74,9 +104,63 @@ export interface TicketCommitter {
   commit(ticket: Ticket): Promise<TicketCommit>;
 }
 
-export function createTicketCommitter(deps: { git?: GitExec; now?: () => number } = {}): TicketCommitter {
+/** One changed path from `git status --porcelain=v1 -z --no-renames`. */
+export interface StatusEntry {
+  /** Repository-root-relative, which is what porcelain always reports. */
+  path: string;
+  deleted: boolean;
+}
+
+/**
+ * Parse porcelain v1 in `-z` mode. `--no-renames` is what makes this safe to
+ * split naively: with renames on, one record carries two NUL-separated paths and
+ * the second would be misread as a status code.
+ */
+export function parseStatusPaths(z: string): StatusEntry[] {
+  return z
+    .split('\0')
+    .filter((entry) => entry.length > 3)
+    .map((entry) => ({ path: entry.slice(3), deleted: entry[0] === 'D' || entry[1] === 'D' }));
+}
+
+/**
+ * The changes this ticket is actually responsible for.
+ *
+ * A file whose content is older than the run was left behind by something else —
+ * a previous ticket that never committed, an editor session, another agent — and
+ * committing it puts someone else's work under this ticket's verdict. Deletions
+ * carry no mtime, so they are kept: a half-committed rename is worse than a
+ * slightly wide commit, and `--no-renames` makes deletions the rare half.
+ */
+export async function changedSince(
+  entries: readonly StatusEntry[],
+  root: string,
+  since: number | undefined,
+  mtime: MtimeProbe,
+): Promise<string[]> {
+  if (since === undefined) return entries.map((e) => e.path);
+  const kept: string[] = [];
+  for (const entry of entries) {
+    if (entry.deleted) {
+      kept.push(entry.path);
+      continue;
+    }
+    const at = await mtime(join(root, entry.path));
+    if (at === null || at >= since) kept.push(entry.path);
+  }
+  return kept;
+}
+
+export interface TicketCommitterDeps {
+  git?: GitExec;
+  now?: () => number;
+  mtime?: MtimeProbe;
+}
+
+export function createTicketCommitter(deps: TicketCommitterDeps = {}): TicketCommitter {
   const git = deps.git ?? defaultGitExec;
   const now = deps.now ?? Date.now;
+  const mtime = deps.mtime ?? defaultMtime;
 
   return {
     async commit(ticket) {
@@ -90,22 +174,44 @@ export function createTicketCommitter(deps: { git?: GitExec; now?: () => number 
       const isRepo = await git(['rev-parse', '--is-inside-work-tree'], ticket.cwd);
       if (isRepo.code !== 0 || isRepo.stdout.trim() !== 'true') return skip('not a git repository');
 
-      // Stage only this ticket's subtree. `git add -A` alone is repository-wide
-      // and would sweep in unrelated edits from elsewhere in the repo.
-      const staged = await git(['add', '-A', '--', '.'], ticket.cwd);
+      // Porcelain paths are root-relative, so staging has to run from the root
+      // even though the survey is scoped to the ticket's own subtree by `-- .`.
+      const top = await git(['rev-parse', '--show-toplevel'], ticket.cwd);
+      const root = top.code === 0 && top.stdout.trim() ? top.stdout.trim() : ticket.cwd;
+
+      const status = await git(
+        ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames', '--', '.'],
+        ticket.cwd,
+      );
+      if (status.code !== 0) return skip(`git status failed: ${oneLine(status.stderr)}`);
+
+      const entries = parseStatusPaths(status.stdout);
+      if (entries.length === 0) return skip('nothing to commit — working tree clean');
+
+      const paths = await changedSince(entries, root, ticket.startedAt, mtime);
+      if (paths.length === 0) return skip('nothing changed while the ticket ran');
+      if (paths.length > MAX_AUTO_COMMIT_FILES) {
+        return skip(
+          `${paths.length} files changed (cap ${MAX_AUTO_COMMIT_FILES}) — left uncommitted for review`,
+        );
+      }
+
+      const staged = await git(['add', '--', ...paths], root);
       if (staged.code !== 0) return { committed: false, skipped: `git add failed: ${oneLine(staged.stderr)}`, at };
 
-      const names = await git(['diff', '--cached', '--name-only'], ticket.cwd);
+      const names = await git(['diff', '--cached', '--name-only', '--', ...paths], root);
       const files = names.stdout.split('\n').filter(Boolean).length;
       if (files === 0) return skip('nothing to commit — working tree clean');
 
       const message = buildCommitMessage(ticket);
-      const done = await git(['commit', '-m', message], ticket.cwd);
+      // Commit exactly these paths: anything staged elsewhere in the repo before
+      // the ticket ran is not this ticket's to claim.
+      const done = await git(['commit', '-m', message, '--', ...paths], root);
       if (done.code !== 0) {
         return { committed: false, message, files, skipped: `git commit failed: ${oneLine(done.stderr || done.stdout)}`, at };
       }
 
-      const sha = await git(['rev-parse', '--short', 'HEAD'], ticket.cwd);
+      const sha = await git(['rev-parse', '--short', 'HEAD'], root);
       return {
         committed: true,
         ...(sha.code === 0 && sha.stdout.trim() ? { sha: sha.stdout.trim() } : {}),
