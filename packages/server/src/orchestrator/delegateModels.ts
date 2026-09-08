@@ -1,5 +1,6 @@
 /**
- * The delegation model catalogue (spec §2, extended 2026-08-10).
+ * The delegation model catalogue (spec §2, extended 2026-08-10, re-probed
+ * 2026-09-08 against the live gateway).
  *
  * The gateway exposes a dozen models from four families; the orchestrator used
  * to be told about exactly one. This table names them, gives each a short alias
@@ -10,6 +11,12 @@
  * Fallback order per entry is "closest capability first": a `-go2` twin (same
  * upstream model on a second route) before a same-tier model from another
  * vendor, and a Gemini flash as the always-cheap last resort.
+ *
+ * Every id here answered a live chat call on 2026-09-08. Two ids the gateway
+ * still lists are deliberately absent because they answer an error on every
+ * attempt — `grok-4.5-go2` (upstream returns a response the gateway cannot
+ * parse) and `translategemma` (its upstream serves a Cloudflare Access login
+ * page) — so naming them in a fallback chain would only spend an attempt.
  *
  * Unknown ids are NOT rejected anywhere — the gateway's catalogue rotates, so an
  * id absent from this table is passed through to the API as-is.
@@ -30,10 +37,14 @@ export interface DelegateModelSpec {
   readonly fallbacks: readonly string[];
 }
 
-const GEMINI_LITE = 'gemini/gemini-3.1-flash-lite-preview';
-const GEMINI_FLASH = 'gemini/gemini-3.6-flash';
+const GEMINI_LITE = 'gemini/gemini-3.5-flash-lite';
+const GEMINI_FLASH = 'gemini/gemini-3.7-flash';
+const GEMINI_FLASH_36 = 'gemini/gemini-3.6-flash';
 const GEMINI_FLASH_35 = 'gemini/gemini-3.5-flash';
 const GEMINI_PRO = 'gemini/gemini-3.1-pro-preview';
+const GLM = 'glm-5.3';
+const GLM_FLASH = 'glm-5.3-flash';
+const GLM_52 = 'glm-5.2';
 
 export const DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
   {
@@ -41,70 +52,84 @@ export const DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
     aliases: ['lite', 'flash-lite', 'fast'],
     kind: 'fast',
     note: '가장 싸고 빠름 — 대량 분류·요약·추출',
-    fallbacks: [GEMINI_FLASH_35, GEMINI_FLASH, 'glm-5.2'],
+    fallbacks: [GEMINI_FLASH_35, GEMINI_FLASH, GLM_FLASH],
   },
   {
     id: GEMINI_FLASH,
     aliases: ['flash', 'gemini'],
     kind: 'fast',
-    note: '범용 빠름 + 롱컨텍스트',
-    fallbacks: [GEMINI_FLASH_35, GEMINI_LITE, 'glm-5.2'],
+    note: '범용 빠름 + 롱컨텍스트 (최신 flash)',
+    fallbacks: [GEMINI_FLASH_36, GEMINI_FLASH_35, GLM_FLASH],
+  },
+  {
+    id: GEMINI_FLASH_36,
+    aliases: ['flash-3.6'],
+    kind: 'fast',
+    note: '이전 세대 flash (flash 대체용)',
+    fallbacks: [GEMINI_FLASH, GEMINI_FLASH_35, GLM_FLASH],
   },
   {
     id: GEMINI_FLASH_35,
     aliases: ['flash-3.5'],
     kind: 'fast',
-    note: '이전 세대 flash (flash 대체용)',
-    fallbacks: [GEMINI_FLASH, GEMINI_LITE, 'glm-5.2'],
+    note: '구세대 flash (최후의 flash 경로)',
+    fallbacks: [GEMINI_FLASH, GEMINI_FLASH_36, GEMINI_LITE],
   },
   {
     id: GEMINI_PRO,
     aliases: ['pro', 'gemini-pro'],
     kind: 'reasoning',
     note: '고난도 추론·긴 분석',
-    fallbacks: ['grok-4.5', 'glm-5.2', GEMINI_FLASH],
+    fallbacks: [GLM, 'grok-4.5', GEMINI_FLASH],
   },
   {
     id: 'grok-4.5',
     aliases: ['grok'],
     kind: 'reasoning',
     note: '범용 추론 — 다른 관점의 2차 의견',
-    fallbacks: ['grok-4.5-go2', 'glm-5.2', GEMINI_PRO],
-  },
-  {
-    id: 'grok-4.5-go2',
-    aliases: ['grok-go2'],
-    kind: 'reasoning',
-    note: 'grok-4.5의 보조 경로',
-    fallbacks: ['grok-4.5', 'glm-5.2', GEMINI_PRO],
+    fallbacks: [GLM, GEMINI_PRO, 'kimi-k3'],
   },
   {
     id: 'kimi-k3',
     aliases: ['kimi', 'k3'],
     kind: 'code',
     note: '코드·에이전틱 작업',
-    fallbacks: ['kimi-k3-go2', 'kimi-k2.7-code', 'glm-5.2', GEMINI_PRO],
+    fallbacks: ['kimi-k3-go2', 'kimi-k2.7-code', GLM, GEMINI_PRO],
   },
   {
     id: 'kimi-k3-go2',
     aliases: ['kimi-go2', 'k3-go2'],
     kind: 'code',
     note: 'kimi-k3의 보조 경로',
-    fallbacks: ['kimi-k3', 'kimi-k2.7-code', 'glm-5.2', GEMINI_PRO],
+    fallbacks: ['kimi-k3', 'kimi-k2.7-code', GLM, GEMINI_PRO],
   },
   {
     id: 'kimi-k2.7-code',
     aliases: ['kimi-code', 'k2-code'],
     kind: 'code',
     note: '코드 특화 (이전 세대)',
-    fallbacks: ['kimi-k3', 'glm-5.2', GEMINI_PRO],
+    fallbacks: ['kimi-k3', GLM, GEMINI_PRO],
   },
   {
-    id: 'glm-5.2',
+    id: GLM,
     aliases: ['glm'],
     kind: 'reasoning',
-    note: '범용 추론 + 긴 컨텍스트',
-    fallbacks: [GEMINI_PRO, 'grok-4.5', GEMINI_FLASH],
+    note: '범용 추론 + 긴 컨텍스트 (최신 GLM)',
+    fallbacks: [GLM_52, GEMINI_PRO, 'grok-4.5'],
+  },
+  {
+    id: GLM_FLASH,
+    aliases: ['glm-flash'],
+    kind: 'fast',
+    note: 'GLM 고속 — 싼 대량 처리의 비-Gemini 경로',
+    fallbacks: [GLM, GEMINI_FLASH, GEMINI_LITE],
+  },
+  {
+    id: GLM_52,
+    aliases: ['glm2', 'glm-5.2'],
+    kind: 'reasoning',
+    note: '이전 세대 GLM (glm 대체용)',
+    fallbacks: [GLM, GEMINI_PRO, GEMINI_FLASH],
   },
   {
     id: 'gemma4',
@@ -112,13 +137,6 @@ export const DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
     kind: 'utility',
     note: '로컬 소형 모델 (ollama)',
     fallbacks: [GEMINI_LITE],
-  },
-  {
-    id: 'translategemma',
-    aliases: ['translate'],
-    kind: 'utility',
-    note: '번역 특화',
-    fallbacks: [GEMINI_FLASH, GEMINI_LITE],
   },
 ]);
 
@@ -129,7 +147,7 @@ export const DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
  */
 export const DEFAULT_FALLBACK_TAIL: readonly string[] = Object.freeze([
   GEMINI_FLASH,
-  'glm-5.2',
+  GLM,
   GEMINI_LITE,
 ]);
 

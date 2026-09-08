@@ -25,9 +25,16 @@ describe('seedAutoLabel', () => {
     expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'verification-inconclusive' }))).toBe('unrated');
   });
 
+  /**
+   * Of 8 human-labelled gate FAILs, 6 were overturned to good and 1 confirmed
+   * bad — the FAIL verdict is not strong enough to label the work by itself.
+   */
+  it('does not label the work from a gate FAIL alone', () => {
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'verification-failed' }))).toBe('unrated');
+  });
+
   it('still marks a failure of the work itself bad', () => {
     expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'error' }))).toBe('bad');
-    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'verification-failed' }))).toBe('bad');
     expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'timeout' }))).toBe('bad');
   });
 

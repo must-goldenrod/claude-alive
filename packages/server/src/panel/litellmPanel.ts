@@ -46,6 +46,13 @@ export interface Panel {
  * Same-family models share the same blind spots, so a panel of Gemini variants
  * would agree with itself and prove nothing. Three is the smallest roster that
  * can produce a 2-of-3 majority when one member abstains.
+ *
+ * What actually answers is not always what is named here. `grok-4.5` and
+ * `kimi-k3` have been rejected by the gateway on every call so far, and both
+ * seats have run their whole history on the first fallback (`glm-5.2` and
+ * `kimi-k2.7-code`). That is the fallback working as designed and the vendor
+ * spread survives it, but read `respondedModel`, not this list, when asking who
+ * reviewed something.
  */
 export const DEFAULT_PANEL_MODELS: readonly string[] = Object.freeze([
   'gemini/gemini-3.1-pro-preview',

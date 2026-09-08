@@ -61,6 +61,7 @@ import { createBackendRegistry } from './orchestrator/backends.js';
 import { ensureDelegateCli, resolveDelegateModel } from './orchestrator/delegateCli.js';
 import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
+import { verificationHealth, formatVerificationHealth } from './verificationHealth.js';
 import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
 import { loadServerEnv, SERVER_ENV_FILE } from './serverEnv.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
@@ -442,6 +443,12 @@ async function refreshAfterCheckout(cwd: string): Promise<void> {
 
 const evalStore = createEvalStore();
 await evalStore.load();
+{
+  // Printed once so a gate that has started failing is visible without anyone
+  // going looking for it (see verificationHealth.ts).
+  const health = formatVerificationHealth(verificationHealth(evalStore.list()));
+  if (health) console.log(health);
+}
 
 // Backfill every ticket that predates the registry so the sidebar is populated
 // on first boot rather than only after the next ticket changes state. Runs

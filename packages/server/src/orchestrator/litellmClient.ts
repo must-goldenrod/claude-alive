@@ -6,10 +6,26 @@
  * server env only and is never sent to the browser. `fetch` is injectable so the
  * client is testable without network.
  */
+import { randomUUID } from 'node:crypto';
+
 export interface LitellmConfig {
   baseUrl: string;
   apiKey: string;
+  /**
+   * Session id forwarded to the gateway as `x-opencode-session` (see
+   * {@link SESSION_HEADER}). Defaults to a per-client random id.
+   */
+  sessionId?: string;
 }
+
+/**
+ * Some upstreams behind the gateway (the grok and kimi routes as of 2026-09-08)
+ * reject a request that carries no session id with HTTP 400 "MissingSessionID",
+ * and the header cannot be set on the HTTP request itself — litellm drops
+ * client headers and only forwards what the body's `extra_headers` names. So it
+ * travels in the body. Models that do not need it ignore it.
+ */
+export const SESSION_HEADER = 'x-opencode-session';
 
 export interface LitellmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -70,6 +86,8 @@ export function createLitellmClient(config: LitellmConfig, deps: { fetch?: Fetch
   const doFetch = deps.fetch ?? fetch;
   const base = trimBase(config.baseUrl);
   const authHeaders = { Authorization: `Bearer ${config.apiKey}` };
+  const sessionId = config.sessionId?.trim() || `claude-alive-${randomUUID()}`;
+  const extraHeaders = { [SESSION_HEADER]: sessionId };
 
   return {
     async checkConnection() {
@@ -88,7 +106,7 @@ export function createLitellmClient(config: LitellmConfig, deps: { fetch?: Fetch
       const res = await doFetch(`${base}/v1/chat/completions`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages }),
+        body: JSON.stringify({ model, messages, extra_headers: extraHeaders }),
         ...(opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
       });
       if (!res.ok) {

@@ -68,34 +68,42 @@ export const MIN_EVAL_WEIGHT = 1;
 export const MAX_EVAL_WEIGHT = 5;
 
 /**
- * Failure reasons that say nothing about the work.
+ * Failures that say nothing reliable about the work, so no label is seeded.
  *
- * A ticket the operator cancelled, one the server killed by restarting, and one
- * that never started because its cwd was refused are all operational events. In
- * the audited dataset they were the majority of every `bad` the loop had never
- * been shown to a human — a label the guide then teaches future runs to avoid,
- * from a run that produced no work to judge. `verification-inconclusive` belongs
- * here too: the reviewer broke, not the agent.
+ * Two different reasons land here.
+ *
+ * Operational: a ticket the operator cancelled, one the server killed by
+ * restarting, one whose cwd was refused, one whose reviewer itself broke. There
+ * is no work to judge, and in the audited dataset these were the bulk of every
+ * `bad` no human had ever seen.
+ *
+ * And `verification-failed`, which is not operational but is not evidence
+ * either. The gate's two verdicts are not equally reliable: of 221 human-labelled
+ * PASSes, 212 were confirmed good (96.8%), but of the 8 human-labelled FAILs, 6
+ * were overturned to good and only 1 confirmed bad. Seeding `bad` from a verdict
+ * that a human reverses three times in four records a judgement the evidence does
+ * not support. The gate still fails the ticket — it just no longer labels it.
  */
-const OPERATIONAL_FAILURES: ReadonlySet<TicketFailureReason> = new Set([
+const NOT_A_VERDICT_ON_THE_WORK: ReadonlySet<TicketFailureReason> = new Set([
   'cancelled',
   'interrupted',
   'cwd-not-allowed',
   'verification-inconclusive',
+  'verification-failed',
 ]);
 
 /**
  * Provisional label from a finished ticket's outcome:
  * - done + verification passed → good
- * - failed on the work itself (error, verification-failed, timeout) → bad
- * - failed for an operational reason → unrated, so it never shapes a guide
+ * - failed because the agent itself did not deliver (error, timeout) → bad
+ * - failed for a reason that is not a judgement of the work → unrated
  * - anything else (done without a passing verdict, still active) → unrated
  */
 export function seedAutoLabel(ticket: Pick<Ticket, 'state' | 'verification' | 'failureReason'>): EvalLabel {
   if (ticket.state === 'done' && ticket.verification?.passed === true) return 'good';
   if (ticket.state !== 'failed') return 'unrated';
   // An unrecorded reason predates the distinction; treat it as a real failure.
-  return ticket.failureReason && OPERATIONAL_FAILURES.has(ticket.failureReason) ? 'unrated' : 'bad';
+  return ticket.failureReason && NOT_A_VERDICT_ON_THE_WORK.has(ticket.failureReason) ? 'unrated' : 'bad';
 }
 
 /** Clamp an arbitrary weight input into the valid 1..5 integer range. */

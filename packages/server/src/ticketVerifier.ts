@@ -4,11 +4,19 @@
  * strict JSON verdict. Because the process is invisible to the user, completion
  * is fail-closed: if the verifier can't produce a parseable verdict, the runner
  * treats the ticket as failed('verification-inconclusive'), never done.
+ *
+ * Fail-closed only works if the closure is rare and explicable. Measured over
+ * 266 verified tickets it was neither: 14 (5.3%) ended inconclusive, every one of
+ * them with a complete agent report, and all 14 recorded the same sentence —
+ * "verification could not be completed" — because the cause was thrown away. So
+ * this file now does three things it did not: retry once (the gate is a separate
+ * process and its failures are mostly transient), carry the actual cause in the
+ * error, and parse the verdict as tolerantly as the panel parses its own.
  */
 import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/core';
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
 import { reviewWithPanel } from './panel/verificationPanel.js';
-import type { Panel } from './panel/litellmPanel.js';
+import { extractJsonObject, type Panel } from './panel/litellmPanel.js';
 
 export interface Verifier {
   /** Resolves with a verdict, or throws if no parseable verdict could be obtained. */
@@ -37,7 +45,12 @@ export interface VerifierOptions {
    */
   panel?: Panel | ((ticket: Ticket) => Panel | undefined);
   now?: () => number;
+  /** Where a failed gate attempt is reported. Injectable so tests stay quiet. */
+  log?: (message: string) => void;
 }
+
+/** How many times the gate is asked before the ticket is called inconclusive. */
+export const GATE_ATTEMPTS = 2;
 
 export function buildVerificationPrompt(goal: string, mainResult: string | null, orchestrated = false): string {
   const orchestrationNote = orchestrated
@@ -65,27 +78,45 @@ export function buildVerificationPrompt(goal: string, mainResult: string | null,
   ].join('\n');
 }
 
-/** Tolerant verdict extractor: accepts a bare object or one embedded in surrounding text. */
+/**
+ * Tolerant verdict extractor.
+ *
+ * The old flat-brace scan (`/\{[^{}]*"passed"[^{}]*\}/`) could not see a verdict
+ * that carried any nested object, and a `reason` containing a brace broke it
+ * outright — a parse failure that reads to the user as "the work failed". The
+ * panel already had a parser for exactly this job (fenced blocks, prose around
+ * the object, last object first), so the gate uses that one instead of a second,
+ * weaker copy.
+ */
 export function extractVerdict(text: string | null): TicketVerification | null {
   if (!text) return null;
-  const candidates: string[] = [];
   const trimmed = text.trim();
-  candidates.push(trimmed);
-  // Also try the last {...} block in case the model wrapped it in prose.
-  const matches = trimmed.match(/\{[^{}]*"passed"[^{}]*\}/g);
-  if (matches) candidates.push(...matches.reverse());
-
-  for (const c of candidates) {
+  const obj = extractJsonObject(trimmed);
+  if (obj && typeof obj.passed === 'boolean') {
+    return { passed: obj.passed, reason: typeof obj.reason === 'string' ? obj.reason : '' };
+  }
+  // Last resort: the flat scan, which finds a verdict buried among other objects
+  // that the balanced scan would have picked over it.
+  for (const c of (trimmed.match(/\{[^{}]*"passed"[^{}]*\}/g) ?? []).reverse()) {
     try {
-      const obj = JSON.parse(c) as Record<string, unknown>;
-      if (typeof obj.passed === 'boolean') {
-        return { passed: obj.passed, reason: typeof obj.reason === 'string' ? obj.reason : '' };
+      const flat = JSON.parse(c) as Record<string, unknown>;
+      if (typeof flat.passed === 'boolean') {
+        return { passed: flat.passed, reason: typeof flat.reason === 'string' ? flat.reason : '' };
       }
     } catch {
       // try next candidate
     }
   }
   return null;
+}
+
+/** What the gate returned when it produced no verdict, short enough to store. */
+export function describeGateFailure(outcome: HeadlessOutcome): string {
+  const body = (outcome.result?.result ?? '').trim();
+  const stderr = outcome.stderr.trim();
+  if (body) return `verifier answered without a parseable verdict: ${body.slice(0, 300)}`;
+  if (stderr) return `verifier produced no output (exit ${outcome.exitCode}): ${stderr.slice(0, 300)}`;
+  return `verifier produced no output (exit ${outcome.exitCode})`;
 }
 
 export function createVerifier(options: VerifierOptions = {}): Verifier {
@@ -96,25 +127,54 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
     options.run ??
     (({ goal, cwd }) => runHeadlessClaude({ goal, cwd, permissionMode: 'bypassPermissions' }).done);
 
+  const log = options.log ?? ((msg: string) => console.warn(msg));
+
   return {
     async verify(ticket, mainResult) {
-      const outcome = await run({
-        goal: buildVerificationPrompt(ticket.goal, mainResult, ticket.orchestrated),
-        cwd: ticket.cwd,
-        location: ticket.location,
-        orchestrated: ticket.orchestrated,
-        // The gate inherits the ticket's run profile. A verifier weaker than the
-        // agent it judges would quietly hollow out the completion gate, so a
-        // `deep` ticket is verified deeply and a `fast` one cheaply.
-        flags: {
-          ...(ticket.requestedModel ? { model: ticket.requestedModel } : {}),
-          ...(ticket.effort ? { effort: ticket.effort } : {}),
-        },
-      });
-      const verdict = extractVerdict(outcome.result?.result ?? null);
-      if (!verdict) {
-        throw new Error('verifier produced no parseable verdict');
+      const ask = (): Promise<HeadlessOutcome> =>
+        run({
+          goal: buildVerificationPrompt(ticket.goal, mainResult, ticket.orchestrated),
+          cwd: ticket.cwd,
+          location: ticket.location,
+          orchestrated: ticket.orchestrated,
+          // The gate inherits the ticket's run profile. A verifier weaker than the
+          // agent it judges would quietly hollow out the completion gate, so a
+          // `deep` ticket is verified deeply and a `fast` one cheaply.
+          flags: {
+            ...(ticket.requestedModel ? { model: ticket.requestedModel } : {}),
+            ...(ticket.effort ? { effort: ticket.effort } : {}),
+          },
+        });
+
+      // Two attempts. The gate is a separate `claude` process on the far side of
+      // a network and a CLI; when it produces nothing that is almost always a
+      // transient failure of that process, not a judgement about the work — and
+      // failing the ticket on it discards work that was already finished.
+      let cause = '';
+      for (let attempt = 1; attempt <= GATE_ATTEMPTS; attempt += 1) {
+        let outcome: HeadlessOutcome;
+        try {
+          outcome = await ask();
+        } catch (e) {
+          cause = `verifier could not be started: ${e instanceof Error ? e.message : String(e)}`;
+          log(`[verify] ticket #${ticket.seq} attempt ${attempt}/${GATE_ATTEMPTS}: ${cause}`);
+          continue;
+        }
+        const verdict = extractVerdict(outcome.result?.result ?? null);
+        if (verdict) return await withPanel(ticket, mainResult, verdict);
+        cause = describeGateFailure(outcome);
+        log(`[verify] ticket #${ticket.seq} attempt ${attempt}/${GATE_ATTEMPTS}: ${cause}`);
       }
+      throw new Error(cause || 'verifier produced no parseable verdict');
+    },
+  };
+
+  async function withPanel(
+    ticket: Ticket,
+    mainResult: string | null,
+    verdict: TicketVerification,
+  ): Promise<TicketVerification> {
+    {
       // No panel for this ticket → the gate's verdict is the verdict, unchanged.
       const panel = typeof options.panel === 'function' ? options.panel(ticket) : options.panel;
       if (!panel) return verdict;
@@ -124,6 +184,6 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
         mainResult,
         verdict,
       );
-    },
-  };
+    }
+  }
 }

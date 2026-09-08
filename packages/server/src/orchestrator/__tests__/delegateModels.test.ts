@@ -54,7 +54,7 @@ describe('buildDelegateChain', () => {
   });
 
   it('takes an explicit multi-model chain literally', () => {
-    expect(buildDelegateChain('grok, kimi ,glm')).toEqual(['grok-4.5', 'kimi-k3', 'glm-5.2']);
+    expect(buildDelegateChain('grok, kimi ,glm')).toEqual(['grok-4.5', 'kimi-k3', 'glm-5.3']);
   });
 
   it('pins to one model under --no-fallback', () => {
@@ -64,17 +64,50 @@ describe('buildDelegateChain', () => {
   it('lets CA_DELEGATE_FALLBACKS replace the tail', () => {
     expect(buildDelegateChain('kimi', { fallbackOverride: 'glm, flash' })).toEqual([
       'kimi-k3',
-      'glm-5.2',
-      'gemini/gemini-3.6-flash',
+      'glm-5.3',
+      'gemini/gemini-3.7-flash',
     ]);
   });
 
   it('dedupes when the override repeats the primary', () => {
-    expect(buildDelegateChain('glm', { fallbackOverride: 'glm-5.2, grok' })).toEqual(['glm-5.2', 'grok-4.5']);
+    expect(buildDelegateChain('glm', { fallbackOverride: 'glm, grok' })).toEqual(['glm-5.3', 'grok-4.5']);
   });
 
   it('returns nothing for an empty request', () => {
     expect(buildDelegateChain('   ')).toEqual([]);
+  });
+});
+
+describe('gateway alignment', () => {
+  // The gateway's catalogue rotates; these are the ids probed live on
+  // 2026-09-08. A retired id here means a delegation spends an attempt on a
+  // model the gateway answers 400 for, so the table must track the gateway.
+  const GATEWAY_IDS = [
+    'gemini/gemini-3.7-flash',
+    'gemini/gemini-3.6-flash',
+    'gemini/gemini-3.5-flash',
+    'gemini/gemini-3.5-flash-lite',
+    'gemini/gemini-3.1-pro-preview',
+    'glm-5.3',
+    'glm-5.3-flash',
+    'glm-5.2',
+    'grok-4.5',
+    'kimi-k3',
+    'kimi-k3-go2',
+    'kimi-k2.7-code',
+    'gemma4',
+  ];
+
+  it('names only ids the gateway serves', () => {
+    const served = new Set(GATEWAY_IDS);
+    for (const m of DELEGATE_MODELS) expect(served.has(m.id), m.id).toBe(true);
+  });
+
+  it('keeps a newest-first entry for every family', () => {
+    const ids = DELEGATE_MODELS.map((m) => m.id);
+    for (const newest of ['gemini/gemini-3.7-flash', 'glm-5.3', 'kimi-k3', 'grok-4.5']) {
+      expect(ids).toContain(newest);
+    }
   });
 });
 

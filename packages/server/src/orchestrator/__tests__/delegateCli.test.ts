@@ -178,11 +178,11 @@ describe('runDelegateCli fallback', () => {
       cooldowns: memoryCooldowns(),
       chat: async (model) => {
         tried.push(model);
-        if (model !== 'glm-5.2') throw rateLimited();
+        if (model !== 'glm-5.3') throw rateLimited();
         return { content: 'ok' };
       },
     });
-    expect(tried).toEqual(['grok-4.5', 'kimi-k3', 'glm-5.2']);
+    expect(tried).toEqual(['grok-4.5', 'kimi-k3', 'glm-5.3']);
   });
 
   it('stops immediately on an auth failure instead of walking the chain', async () => {

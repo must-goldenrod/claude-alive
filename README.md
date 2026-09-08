@@ -134,7 +134,7 @@ npm uninstall -g claude-alive
 | `CLAUDE_ALIVE_PORT` | `3141` | Server port / 서버 포트 |
 | `LITELLM_KEY` | — | litellm gateway key; enables the orchestrator's `ca-delegate` sub-agent tool / 오케스트레이터 위임 도구 활성화 |
 | `LITELLM_BASE_URL` | `https://litellm.must.codes` | litellm gateway base URL / 게이트웨이 주소 |
-| `CA_DELEGATE_MODEL` | `gemini/gemini-3.1-flash-lite-preview` | Default delegation model / 기본 위임 모델 |
+| `CA_DELEGATE_MODEL` | `gemini/gemini-3.5-flash-lite` | Default delegation model / 기본 위임 모델 |
 | `CA_DELEGATE_FALLBACKS` | per-model table | Comma-separated fallback chain used for every model / 모든 모델에 적용할 대체 체인 |
 | `CA_DELEGATE_TIMEOUT_MS` | `180000` | Per-attempt timeout before falling back / 시도별 타임아웃 |
 

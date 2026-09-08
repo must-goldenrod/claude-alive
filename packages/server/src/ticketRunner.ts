@@ -423,9 +423,12 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       } else {
         await fail(id, 'verification-failed', verdict.reason || 'goal not met', verdict);
       }
-    } catch {
+    } catch (e) {
       if (store.get(id)?.state === 'verifying') {
-        await fail(id, 'verification-inconclusive', 'verification could not be completed');
+        // Carry the gate's own words. Every inconclusive ticket used to record
+        // the same sentence, which made 14 of them unexplainable after the fact.
+        const cause = e instanceof Error && e.message ? e.message : 'verification could not be completed';
+        await fail(id, 'verification-inconclusive', cause);
       } else {
         releaseSlot(id);
       }

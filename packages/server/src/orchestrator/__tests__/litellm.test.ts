@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createLitellmClient } from '../litellmClient.js';
+import { createLitellmClient, SESSION_HEADER } from '../litellmClient.js';
 import { createBackendRegistry } from '../backends.js';
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -31,6 +31,34 @@ describe('createLitellmClient', () => {
       { fetch: (async () => jsonResponse({}, false, 401)) as typeof fetch },
     );
     expect(await client.checkConnection()).toEqual({ ok: false, error: 'HTTP 401' });
+  });
+
+  // The grok and kimi routes answer 400 "MissingSessionID" without it, and the
+  // gateway forwards only what the body's extra_headers names.
+  it('chat carries a session id in extra_headers', async () => {
+    let seen: Record<string, unknown> | undefined;
+    const client = createLitellmClient(
+      { baseUrl: 'https://gw.example', apiKey: 'k', sessionId: 'ses-42' },
+      { fetch: (async (_url: string, init: RequestInit) => {
+        seen = JSON.parse(init.body as string).extra_headers;
+        return jsonResponse({ choices: [{ message: { content: 'ok' } }] });
+      }) as typeof fetch },
+    );
+    await client.chat('kimi-k3', [{ role: 'user', content: 'hi' }]);
+    expect(seen).toEqual({ [SESSION_HEADER]: 'ses-42' });
+  });
+
+  it('chat generates a session id when none is configured', async () => {
+    let seen: Record<string, string> | undefined;
+    const client = createLitellmClient(
+      { baseUrl: 'https://gw.example', apiKey: 'k' },
+      { fetch: (async (_url: string, init: RequestInit) => {
+        seen = JSON.parse(init.body as string).extra_headers;
+        return jsonResponse({ choices: [{ message: { content: 'ok' } }] });
+      }) as typeof fetch },
+    );
+    await client.chat('grok-4.5', [{ role: 'user', content: 'hi' }]);
+    expect(seen?.[SESSION_HEADER]).toMatch(/^claude-alive-/);
   });
 
   it('chat returns content + usage', async () => {
