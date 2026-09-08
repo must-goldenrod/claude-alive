@@ -68,15 +68,34 @@ export const MIN_EVAL_WEIGHT = 1;
 export const MAX_EVAL_WEIGHT = 5;
 
 /**
+ * Failure reasons that say nothing about the work.
+ *
+ * A ticket the operator cancelled, one the server killed by restarting, and one
+ * that never started because its cwd was refused are all operational events. In
+ * the audited dataset they were the majority of every `bad` the loop had never
+ * been shown to a human — a label the guide then teaches future runs to avoid,
+ * from a run that produced no work to judge. `verification-inconclusive` belongs
+ * here too: the reviewer broke, not the agent.
+ */
+const OPERATIONAL_FAILURES: ReadonlySet<TicketFailureReason> = new Set([
+  'cancelled',
+  'interrupted',
+  'cwd-not-allowed',
+  'verification-inconclusive',
+]);
+
+/**
  * Provisional label from a finished ticket's outcome:
  * - done + verification passed → good
- * - failed → bad
+ * - failed on the work itself (error, verification-failed, timeout) → bad
+ * - failed for an operational reason → unrated, so it never shapes a guide
  * - anything else (done without a passing verdict, still active) → unrated
  */
-export function seedAutoLabel(ticket: Pick<Ticket, 'state' | 'verification'>): EvalLabel {
+export function seedAutoLabel(ticket: Pick<Ticket, 'state' | 'verification' | 'failureReason'>): EvalLabel {
   if (ticket.state === 'done' && ticket.verification?.passed === true) return 'good';
-  if (ticket.state === 'failed') return 'bad';
-  return 'unrated';
+  if (ticket.state !== 'failed') return 'unrated';
+  // An unrecorded reason predates the distinction; treat it as a real failure.
+  return ticket.failureReason && OPERATIONAL_FAILURES.has(ticket.failureReason) ? 'unrated' : 'bad';
 }
 
 /** Clamp an arbitrary weight input into the valid 1..5 integer range. */

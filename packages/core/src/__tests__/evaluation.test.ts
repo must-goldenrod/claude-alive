@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { seedAutoLabel, clampWeight, DEFAULT_EVAL_WEIGHT } from '../tickets/evaluation.js';
 import type { Ticket } from '../tickets/types.js';
 
-function ticket(partial: Partial<Ticket>): Pick<Ticket, 'state' | 'verification'> {
+function ticket(partial: Partial<Ticket>): Pick<Ticket, 'state' | 'verification' | 'failureReason'> {
   return { state: 'done', ...partial } as Ticket;
 }
 
@@ -14,6 +14,21 @@ describe('seedAutoLabel', () => {
   it('labels a failed ticket bad regardless of verification', () => {
     expect(seedAutoLabel(ticket({ state: 'failed' }))).toBe('bad');
     expect(seedAutoLabel(ticket({ state: 'failed', verification: { passed: true, reason: 'x' } }))).toBe('bad');
+  });
+
+  // 28 of the 44 `bad` records in the audited dataset were auto-labelled from a
+  // failure that produced no work to judge, and the guide learns from labels.
+  it('does not blame the agent for an operational abort', () => {
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'cancelled' }))).toBe('unrated');
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'interrupted' }))).toBe('unrated');
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'cwd-not-allowed' }))).toBe('unrated');
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'verification-inconclusive' }))).toBe('unrated');
+  });
+
+  it('still marks a failure of the work itself bad', () => {
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'error' }))).toBe('bad');
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'verification-failed' }))).toBe('bad');
+    expect(seedAutoLabel(ticket({ state: 'failed', failureReason: 'timeout' }))).toBe('bad');
   });
 
   it('labels a done ticket without a passing verdict unrated', () => {

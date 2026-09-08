@@ -245,6 +245,8 @@ const EvaluateBodySchema = z.object({
   label: z.enum(['good', 'bad', 'unrated']),
   weight: z.number().int().min(1).max(5).optional(),
   note: z.string().max(2000).optional(),
+  // Omitted, the bias gate follows the label; sent, it wins.
+  reflected: z.boolean().optional(),
 });
 
 const ReflectBodySchema = z.object({

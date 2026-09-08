@@ -151,3 +151,56 @@ describe('createEvalStore bias-reflection gate', () => {
     expect(await store.setReflected('nope', true)).toBeUndefined();
   });
 });
+
+
+describe('bias gate follows the label', () => {
+  it('reflects a good label so the guide is not left empty', async () => {
+    const store = makeStore();
+    await store.upsertFromTicket(ticket());
+    const out = await store.setLabel('t1', { label: 'good' });
+    expect(out?.reflected).toBe(true);
+    expect(store.guideFor('/proj/a').text).toContain('do the thing');
+  });
+
+  it('keeps a bad label out of the guide until it says why', async () => {
+    const store = makeStore();
+    await store.upsertFromTicket(ticket());
+    expect((await store.setLabel('t1', { label: 'bad' }))?.reflected).toBe(false);
+    expect((await store.setLabel('t1', { label: 'bad', note: '범위를 벗어남' }))?.reflected).toBe(true);
+  });
+
+  it('lets the caller override the default either way', async () => {
+    const store = makeStore();
+    await store.upsertFromTicket(ticket());
+    expect((await store.setLabel('t1', { label: 'good', reflected: false }))?.reflected).toBe(false);
+    expect((await store.setLabel('t1', { label: 'unrated', reflected: true }))?.reflected).toBe(true);
+  });
+
+  it('drops an unrated record back out of the guide', async () => {
+    const store = makeStore();
+    await store.upsertFromTicket(ticket());
+    await store.setLabel('t1', { label: 'good' });
+    expect((await store.setLabel('t1', { label: 'unrated' }))?.reflected).toBe(false);
+  });
+});
+
+describe('routeKey grouping', () => {
+  it('treats case and trailing-slash variants of one directory as one route', async () => {
+    const store = makeStore();
+    await store.upsertFromTicket(ticket({ id: 'a', cwd: '/Users/me/Projects/block', goal: 'first' }));
+    await store.upsertFromTicket(ticket({ id: 'b', cwd: '/users/me/projects/block/', goal: 'second' }));
+    await store.setLabel('a', { label: 'good' });
+    await store.setLabel('b', { label: 'good' });
+
+    const guide = store.guideFor('/Users/me/Projects/block');
+    expect(guide.goodCount).toBe(2);
+    expect(store.guideFor('/users/me/projects/block').goodCount).toBe(2);
+  });
+
+  it('still keeps different directories apart', async () => {
+    const store = makeStore();
+    await store.upsertFromTicket(ticket({ id: 'a', cwd: '/proj/a' }));
+    await store.setLabel('a', { label: 'good' });
+    expect(store.guideFor('/proj/b').goodCount).toBe(0);
+  });
+});

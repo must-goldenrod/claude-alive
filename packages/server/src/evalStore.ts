@@ -33,6 +33,41 @@ export interface EvalLabelInput {
   label: EvalLabel;
   weight?: number;
   note?: string;
+  /** Override {@link reflectedForLabel}. Omit to take the label's default. */
+  reflected?: boolean;
+}
+
+/**
+ * Whether labelling a record should also feed it back into the route's guide.
+ *
+ * The bias gate was built opt-in and then never opted into: across 273 records
+ * only 30 were ever reflected, all in one week, and every route created since
+ * has an empty guide. The judgement the gate wanted from a human is the same one
+ * the label already carries — "this is how work here should go" — so the label
+ * now carries it, and `reflected` on the input still overrides.
+ *
+ * A `bad` record is the exception. It teaches by counter-example, and a
+ * counter-example with no note reads as "avoid this goal", which is not what the
+ * human meant. Without a note it is recorded and stays out of the guide.
+ */
+export function reflectedForLabel(input: EvalLabelInput, existingNote?: string): boolean {
+  if (input.reflected !== undefined) return input.reflected;
+  if (input.label === 'good') return true;
+  if (input.label === 'bad') return Boolean((input.note ?? existingNote ?? '').trim());
+  return false;
+}
+
+/**
+ * Grouping key for a route.
+ *
+ * `guideFor` matches on the ticket's cwd verbatim, and macOS hands back the same
+ * directory in whatever case the caller typed — one project in the audited data
+ * was split across `/users/…` and `/Users/…`, halving both guides. The stored
+ * route keeps its original spelling; only the comparison is normalized.
+ */
+export function routeKey(route: string): string {
+  const trimmed = route.replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1');
+  return trimmed.toLowerCase();
 }
 
 export interface EvalStore {
@@ -41,7 +76,11 @@ export interface EvalStore {
   get(ticketId: string): TicketEvaluation | undefined;
   /** Create or refresh a record from a finished ticket. Preserves a human label. */
   upsertFromTicket(ticket: Ticket): Promise<TicketEvaluation>;
-  /** Apply a human label/weight/note. Returns undefined if the id is unknown. */
+  /**
+   * Apply a human label/weight/note. Also sets the bias gate from the label
+   * (see {@link reflectedForLabel}) unless the input names it explicitly.
+   * Returns undefined if the id is unknown.
+   */
   setLabel(ticketId: string, input: EvalLabelInput): Promise<TicketEvaluation | undefined>;
   /** Toggle the bias-reflection gate. Returns undefined if the id is unknown. */
   setReflected(ticketId: string, reflected: boolean): Promise<TicketEvaluation | undefined>;
@@ -79,7 +118,8 @@ export function createEvalStore(options: EvalStoreOptions = {}): EvalStore {
   }
 
   function evalsForRoute(route: string): TicketEvaluation[] {
-    return [...records.values()].filter((e) => e.route === route);
+    const key = routeKey(route);
+    return [...records.values()].filter((e) => routeKey(e.route) === key);
   }
 
   return {
@@ -159,6 +199,7 @@ export function createEvalStore(options: EvalStoreOptions = {}): EvalStore {
         humanLabeled: true,
         weight: input.weight === undefined ? existing.weight : clampWeight(input.weight),
         note: input.note ?? existing.note,
+        reflected: reflectedForLabel(input, existing.note),
         updatedAt: now(),
       };
       records.set(ticketId, next);
