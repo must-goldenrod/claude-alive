@@ -348,7 +348,20 @@ rev1은 서버 하드닝만 다뤘다. 현재 UI에 `Authorization`/토큰 관�
 
 브라우저 실측(Playwright, 3195): 셸 로드 → 인증 오버레이 표시 → 로컬 토큰 입력 → 리로드(경고 없음) → 대시보드 렌더 + WS `client connected`. 토큰 이전 WS 는 `rejected upgrade (unauthenticated)` 3회.
 
-### 10.8 남은 것
+### 10.8 원격 터미널 3단계 (2026-09-09 추가)
+
+관전과 조작이 코드상 이미 분리돼 있었다 — `terminal:attach` 는 출력 구독일 뿐이고 타이핑은 `terminal:input` 이다. 그래서 하나의 스위치가 아니라 3단계로 열었다: `CLAUDE_ALIVE_REMOTE_TERMINAL=off|watch|input|shell`, 기본 `off`, 인식 못 하는 값도 `off`.
+
+| 레벨 | 추가되는 것 | 토큰 유출 시 |
+|---|---|---|
+| off | (티켓만) | 허용 디렉터리에 작업 큐잉 |
+| watch | 세션 목록·대화·pty 출력(GET + `terminal:attach`) | 코드·프롬프트 유출 |
+| input | `terminal:input`·`terminal:resize` | 이 기계에서 코드 실행 |
+| shell | `terminal:spawn`·`terminal:close` | 이 기계의 셸 |
+
+`shell` 로 부팅하면 그 사실과 폐기 방법을 로그에 남긴다. 실측(3188, shell): 폰 크기 브라우저에서 새 터미널 스폰 → `echo`·`pwd`·`whoami` 실행·출력 확인. 소켓 레벨 테스트로 4개 레벨 × 3개 메시지의 허용/거부를 고정했다.
+
+### 10.9 남은 것
 1. 원격 상태변경 감사 로그(§4.7) — 미착수.
 2. 앱 알림(DECISION 티켓 대기) — 미착수. 현재는 앱이 폴링하거나 WS 를 열어두어야 한다.
 3. 토큰 만료 — 폐기(`token revoke`)만 있고 TTL 은 없다.

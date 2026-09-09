@@ -609,6 +609,7 @@ claude-alive token revoke phone
 | `CLAUDE_ALIVE_TICKET_ROOTS` | Colon-separated directories a ticket may run in. Required in remote mode. |
 | `CLAUDE_ALIVE_REMOTE_SSH_HOSTS` | Hosts a remote device may target with an SSH ticket. Empty = none. |
 | `CLAUDE_ALIVE_TRUST_LOOPBACK=1` | Keep trusting loopback in remote mode. Only safe when nothing proxies to the port. |
+| `CLAUDE_ALIVE_REMOTE_TERMINAL` | `off` (default) / `watch` / `input` / `shell`. See below. |
 
 **What a device token can do**: list and create tickets, cancel/retry/reply to
 them, read `/api/status`, list the projects and branches under the ticket roots,
@@ -616,6 +617,19 @@ and read the live WebSocket stream. **What it cannot do**: open a terminal
 (`terminal:*` is refused on a device connection), browse the filesystem, read
 prompt history, run git writes, or post events. Everything not on the allowlist
 answers 403.
+
+**Terminal access from a device** is off by default and graduated, because the
+three steps are different powers rather than one bigger one:
+
+| Level | A device may | A stolen token means |
+|---|---|---|
+| `off` | tickets only | someone can queue work in the allowlisted directories |
+| `watch` | read the session list, conversations, and live pty output | your code and prompts are readable |
+| `input` | type into a pty that is already open | code execution on this machine |
+| `shell` | start and kill ptys | a shell on this machine |
+
+기기의 터미널 접근은 기본적으로 꺼져 있고 3단계로 나뉜다. `input` 이상은 기기
+토큰이 이 기계에서의 코드 실행과 같아진다 — SSH 키처럼 다뤄야 한다.
 
 **Transport**: the server speaks HTTP, not HTTPS. Put it on a private network —
 [Tailscale](https://tailscale.com/) is the least work — rather than forwarding a

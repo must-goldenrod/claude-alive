@@ -64,8 +64,12 @@ Turning it on changes the model rather than widening it:
   without a token, because a browser cannot put a header on a navigation or a
   `<script src>`. The shell is this repository's published code and holds no
   data; everything it then requests — the API, the socket, `/health` — is gated
-- A device connection to the WebSocket may read the stream but not send
-  `terminal:*`; terminals stay local
+- A device connection to the WebSocket may read the stream. Terminal access is
+  a separate, graduated opt-in (`CLAUDE_ALIVE_REMOTE_TERMINAL`, default `off`):
+  `watch` adds the read-only session surface and pty output, `input` lets a
+  device type into a pty that is already open, and `shell` lets it start one.
+  `input` and `shell` make a device token equivalent to code execution on this
+  machine — treat them as you would an SSH key
 - Tickets created by a device must fall inside the cwd allowlist, and SSH-located
   tickets require the host to be named in `CLAUDE_ALIVE_REMOTE_SSH_HOSTS`
 - Tokens are compared in constant time, never logged, and a source address is
