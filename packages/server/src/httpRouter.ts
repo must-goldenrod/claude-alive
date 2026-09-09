@@ -294,6 +294,7 @@ const REMOTE_DISABLED: RemoteAccessConfig = {
   tokens: [],
   ticketRoots: [],
   sshHosts: [],
+  terminalLevel: 'off',
 };
 
 const SECURITY_HEADERS: Record<string, string> = {

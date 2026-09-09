@@ -939,6 +939,7 @@ const usagePoller = new UsageLimitsPoller();
 
 const broadcaster = new WSBroadcaster({
   getSnapshot,
+  remoteTerminalLevel: remoteAccess.terminalLevel,
   getUsageLimits: () => usagePoller.latest(),
   getRunTree: () => runStore.tree(),
   getTickets: () => ticketStore.list(),
@@ -1137,6 +1138,13 @@ httpServer.listen(PORT, HOST, () => {
     const labels = remoteAccess.tokens.map((t) => t.label).join(', ');
     console.log(`[server] remote access ON — device tokens: ${labels}`);
     console.log(`[server] ticket roots: ${remoteAccess.ticketRoots.join(', ')}`);
+    console.log(`[server] remote terminal: ${remoteAccess.terminalLevel}`);
+    if (remoteAccess.terminalLevel === 'shell') {
+      console.warn(
+        '[server] CLAUDE_ALIVE_REMOTE_TERMINAL=shell — a device token can start a shell on this ' +
+          'machine. Revoke it (claude-alive token revoke <label>) and restart if a device is lost.',
+      );
+    }
     if (remoteAccess.trustLoopback) {
       console.warn(
         '[server] CLAUDE_ALIVE_TRUST_LOOPBACK=1 — anything reaching this server through a local ' +

@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream';
 import type { RunTree, Ticket, UsageLimitsSnapshot, WSServerMessage, WSClientMessage } from '@claude-alive/core';
 import { parseClientMessage } from './wsClientSchema.js';
 import { isRemoteWsMessageAllowed, selectWsProtocol } from './wsAuth.js';
+import type { RemoteTerminalLevel } from './remoteTerminal.js';
 
 const MAX_CLIENTS = 50;
 
@@ -29,6 +30,8 @@ export interface WSBroadcasterOptions {
   maxClients?: number;
   onClientMessage?: (ws: WebSocket, msg: WSClientMessage) => void;
   onClientDisconnect?: (ws: WebSocket) => void;
+  /** How much of the terminal a device connection may drive. Default: none. */
+  remoteTerminalLevel?: RemoteTerminalLevel;
 }
 
 /** Per-connection facts the upgrade established. */
@@ -50,6 +53,7 @@ export class WSBroadcaster {
   private onClientDisconnect?: WSBroadcasterOptions['onClientDisconnect'];
   /** Connections that authenticated as a remote device rather than as this machine. */
   private remoteClients = new WeakSet<WebSocket>();
+  private remoteTerminalLevel: RemoteTerminalLevel;
 
   constructor(options: WSBroadcasterOptions) {
     this.getSnapshot = options.getSnapshot;
@@ -59,6 +63,7 @@ export class WSBroadcaster {
     this.maxClients = options.maxClients ?? MAX_CLIENTS;
     this.onClientMessage = options.onClientMessage;
     this.onClientDisconnect = options.onClientDisconnect;
+    this.remoteTerminalLevel = options.remoteTerminalLevel ?? 'off';
     // A browser that offers a subprotocol disconnects unless the server names
     // one back, and the token rides the subprotocol — so echo it.
     this.wss = new WebSocketServer({ noServer: true, handleProtocols: selectWsProtocol });
@@ -84,9 +89,10 @@ export class WSBroadcaster {
           console.warn('[ws] dropped invalid client message');
           return;
         }
-        if (this.remoteClients.has(ws) && !isRemoteWsMessageAllowed(msg.type)) {
-          // A device token buys the read stream, not a PTY.
-          console.warn(`[ws] refused ${msg.type} from a remote client`);
+        if (this.remoteClients.has(ws) && !isRemoteWsMessageAllowed(msg.type, this.remoteTerminalLevel)) {
+          // Above the configured level: the device may watch but not type, or
+          // type but not spawn. The level is set once, at boot.
+          console.warn(`[ws] refused ${msg.type} from a remote client (level=${this.remoteTerminalLevel})`);
           return;
         }
         if (msg.type === 'ping') {

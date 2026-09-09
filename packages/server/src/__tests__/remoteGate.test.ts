@@ -202,3 +202,12 @@ describe('remote mode on — the dashboard shell boots without a token', () => {
     expect((await fetch(`${base}/health`)).status).toBe(401);
   });
 })
+
+describe('watch-level HTTP routes', () => {
+  it('are closed while the terminal level is off', async () => {
+    // `base` runs at the default level: reading a session is not part of the
+    // ticket surface a device gets for free.
+    const res = await fetch(`${base}/api/v2/workspace-tree`, { headers: auth(DEVICE) });
+    expect(res.status).toBe(403);
+  });
+})

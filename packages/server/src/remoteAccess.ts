@@ -16,6 +16,11 @@
  */
 import { timingSafeEqual } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
+import {
+  parseRemoteTerminalLevel,
+  remoteWatchRoutes,
+  type RemoteTerminalLevel,
+} from './remoteTerminal.js';
 
 /**
  * Shortest token accepted in remote mode. A remote-reachable ticket API is
@@ -54,6 +59,11 @@ export interface RemoteAccessConfig {
    * which a tunnelled attacker cannot read. Absent = no such caller exists.
    */
   localToken?: string;
+  /**
+   * How far into the terminal a device may reach: none, watch, type, or spawn.
+   * See remoteTerminal.ts — each step is a different power, not a bigger one.
+   */
+  terminalLevel: RemoteTerminalLevel;
 }
 
 export type ConfigResult =
@@ -173,8 +183,13 @@ const REMOTE_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'GET', pattern: /^\/ws$/ },
 ];
 
-export function isRemoteAllowed(method: string, pathname: string): boolean {
-  return REMOTE_ROUTES.some((r) => r.method === method && r.pattern.test(pathname));
+export function isRemoteAllowed(
+  method: string,
+  pathname: string,
+  terminalLevel: RemoteTerminalLevel = 'off',
+): boolean {
+  if (REMOTE_ROUTES.some((r) => r.method === method && r.pattern.test(pathname))) return true;
+  return remoteWatchRoutes(terminalLevel).some((r) => r.method === method && r.pattern.test(pathname));
 }
 
 export interface AuthLimiterOptions {
@@ -311,7 +326,7 @@ export function authorizeRequest(
   limiter?.succeed(key);
 
   const fullAccess = label === 'local' && config.localToken !== undefined;
-  if (!fullAccess && !isRemoteAllowed(input.method, input.pathname)) {
+  if (!fullAccess && !isRemoteAllowed(input.method, input.pathname, config.terminalLevel)) {
     return { kind: 'reject', status: 403, error: 'Route is not available to remote callers' };
   }
   return { kind: 'token', label, fullAccess };
@@ -325,6 +340,7 @@ export function authorizeRequest(
  */
 export function loadRemoteAccessConfig(env: NodeJS.ProcessEnv): ConfigResult {
   const enabled = truthy(env.CLAUDE_ALIVE_REMOTE);
+  const terminalLevel = parseRemoteTerminalLevel(env.CLAUDE_ALIVE_REMOTE_TERMINAL);
   const explicitHost = env.CLAUDE_ALIVE_HOST?.trim();
   const host = explicitHost || (enabled ? '0.0.0.0' : '127.0.0.1');
   const errors: string[] = [];
@@ -368,6 +384,7 @@ export function loadRemoteAccessConfig(env: NodeJS.ProcessEnv): ConfigResult {
       tokens,
       ticketRoots,
       sshHosts,
+      terminalLevel,
       ...(env.CLAUDE_ALIVE_LOCAL_TOKEN?.trim() ? { localToken: env.CLAUDE_ALIVE_LOCAL_TOKEN.trim() } : {}),
     },
   };

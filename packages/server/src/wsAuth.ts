@@ -20,6 +20,7 @@ import {
   type RemoteAccessConfig,
 } from './remoteAccess.js';
 import { isAllowedWsOrigin } from './wsOrigin.js';
+import { remoteWsMessageAllowed, type RemoteTerminalLevel } from './remoteTerminal.js';
 import type { IncomingHttpHeaders } from 'node:http';
 
 export interface UpgradeInput {
@@ -106,12 +107,10 @@ export function selectWsProtocol(offered: Set<string>): string | false {
 }
 
 /**
- * Message types a device connection may send. Everything else on the socket is
- * `terminal:*`, which spawns or drives a PTY — the one capability that turns a
- * stolen token into a shell, so it stays local no matter how good the token is.
+ * What a device connection may send, given the configured terminal level.
+ * `off` leaves the socket read-only, which is the default; the other levels are
+ * documented in remoteTerminal.ts.
  */
-const REMOTE_WS_MESSAGE_TYPES: ReadonlySet<string> = new Set(['ping', 'request:snapshot']);
-
-export function isRemoteWsMessageAllowed(type: string): boolean {
-  return REMOTE_WS_MESSAGE_TYPES.has(type);
+export function isRemoteWsMessageAllowed(type: string, level: RemoteTerminalLevel = 'off'): boolean {
+  return remoteWsMessageAllowed(type, level);
 }
