@@ -22,6 +22,14 @@ export interface DelegateErrorVerdict {
 const RETIRED_MODEL_MS = 60 * 60_000;
 const RETIRED_MODEL_RE = /invalid model|model[_ ]not[_ ]found|does not exist|no deployments|no such model/i;
 
+/**
+ * A 403 that is about the model, not the key. The gateway answers
+ * `PermissionDeniedError: Model is blocked` for an id the key may no longer use
+ * — a retired preview, say — and that says nothing about its peers, so the
+ * chain must continue. Anything else at 403 is treated as a credential problem.
+ */
+const BLOCKED_MODEL_RE = /model is blocked|model_?blocked|not allowed to (use|access) (this )?model/i;
+
 export function classifyDelegateError(e: unknown): DelegateErrorVerdict {
   if (e instanceof LitellmHttpError) {
     const message = e.message;
@@ -32,6 +40,10 @@ export function classifyDelegateError(e: unknown): DelegateErrorVerdict {
         status: e.status,
         message,
       };
+    }
+    if (e.status === 403 && BLOCKED_MODEL_RE.test(e.body)) {
+      // One model is off-limits for this key; its peers are not.
+      return { retryable: true, cooldownMs: RETIRED_MODEL_MS, status: e.status, message };
     }
     if (e.status === 401 || e.status === 403) {
       // Credentials, not capacity: every model behind this key fails the same way.

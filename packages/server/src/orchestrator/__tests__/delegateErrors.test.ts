@@ -40,4 +40,18 @@ describe('classifyDelegateError', () => {
     expect(v.retryable).toBe(true);
     expect(v.message).toContain('timeout');
   });
+
+  // A pinned id the key may no longer use (a retired preview) answers 403, and
+  // every delegation that names no model started there — the chain must survive it.
+  it('treats a blocked model as one model failing, not the key', () => {
+    const v = classifyDelegateError(
+      new LitellmHttpError(403, '{"error":{"message":"litellm.PermissionDeniedError: Model is blocked"}}'),
+    );
+    expect(v.retryable).toBe(true);
+    expect(v.cooldownMs).toBe(60 * 60_000);
+  });
+
+  it('still stops the chain on a 403 that is not about the model', () => {
+    expect(classifyDelegateError(new LitellmHttpError(403, 'Forbidden')).retryable).toBe(false);
+  });
 });
