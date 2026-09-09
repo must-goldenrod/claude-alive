@@ -60,6 +60,9 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   // back-and-forth. The decision panel (when pending) lives separately at the bottom.
   const showResult = !!ticket.result;
   const decision = isDecision && ticket.decisionQuestion ? parseDecisionOptions(ticket.decisionQuestion) : null;
+  // The 5-point rating is docked at the bottom too, so a settled ticket can be
+  // rated without scrolling back down through the report.
+  const showEvalDock = !!evaluation && !!onEvaluate;
 
   // ESC closes the modal.
   useEffect(() => {
@@ -89,7 +92,7 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        padding: 24,
+        padding: 20,
       }}
     >
       <div
@@ -98,15 +101,15 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
           background: 'var(--bg-secondary, #161b22)',
           border: '1px solid var(--border-default, #30363d)',
           borderRadius: 14,
-          width: 'min(760px, 100%)',
-          maxHeight: '85vh',
+          width: 'min(1180px, 100%)',
+          maxHeight: '88vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', borderBottom: '1px solid var(--border-default, #30363d)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', borderBottom: '1px solid var(--border-default, #30363d)', flexShrink: 0 }}>
           <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 13, opacity: 0.6 }}>#{ticket.seq}</span>
           <span style={badgeStyle}>{projectName(ticket.cwd)}</span>
           <span style={{ marginLeft: 'auto', fontSize: 12, fontFamily: 'var(--font-mono, monospace)', opacity: 0.6 }}>
@@ -130,8 +133,8 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: 20, overflowY: 'auto' }}>
+        {/* Body — scrolls under the pinned dock below */}
+        <div style={{ padding: 20, overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
           <Section label={t('tickets.goalLabel')}>
             <div style={{ fontSize: 14, lineHeight: 1.5, color: 'var(--text-primary, #e6edf3)' }}>{ticket.goal}</div>
           </Section>
@@ -175,30 +178,11 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
 
-          {evaluation && onEvaluate && (
-            <Section label={t('tickets.evaluateLabel')}>
-              <EvalSection ticketId={ticket.id} evaluation={evaluation} onEvaluate={onEvaluate} onClose={onClose} t={t} />
-            </Section>
-          )}
-
           {/* Advisory panel sits directly above the question it was asked, so a
               human taking over reads the models' attempt before their own. */}
           {ticket.decisionPanel && (
             <Section label={t('tickets.advisoryLabel')}>
               <AdvisoryReport panel={ticket.decisionPanel} t={t} />
-            </Section>
-          )}
-
-          {/* The decision itself lives at the bottom, after all the context above. */}
-          {decision && (
-            <Section label={t('tickets.decisionLabel')}>
-              <DecisionPanel
-                decision={decision}
-                color={decisionColor}
-                pickable={!!onReply}
-                onPick={(o) => setReplyText(`${o.key}) ${o.text}`)}
-                t={t}
-              />
             </Section>
           )}
 
@@ -210,6 +194,42 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
             </Section>
           )}
         </div>
+
+        {/* Action dock — pinned above the composer/actions so what the human has to
+            answer (or rate) stays on screen while the context above scrolls. */}
+        {(decision || showEvalDock) && (
+          <div
+            style={{
+              flexShrink: 0,
+              borderTop: `1px solid ${decision ? `color-mix(in srgb, ${decisionColor} 45%, var(--border-default, #30363d))` : 'var(--border-default, #30363d)'}`,
+              background: 'var(--bg-secondary, #161b22)',
+              padding: '12px 20px',
+              maxHeight: '40vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+            }}
+          >
+            {decision && (
+              <DockSection label={t('tickets.decisionLabel')}>
+                <DecisionPanel
+                  decision={decision}
+                  color={decisionColor}
+                  pickable={!!onReply}
+                  onPick={(o) => setReplyText(`${o.key}) ${o.text}`)}
+                  t={t}
+                />
+              </DockSection>
+            )}
+
+            {evaluation && onEvaluate && (
+              <DockSection label={t('tickets.evaluateLabel')}>
+                <EvalSection ticketId={ticket.id} evaluation={evaluation} onEvaluate={onEvaluate} onClose={onClose} t={t} />
+              </DockSection>
+            )}
+          </div>
+        )}
 
         {/* Reply composer — only while a decision is pending */}
         {isDecision && onReply && (
@@ -225,7 +245,7 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
         )}
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border-default, #30363d)' }}>
+        <div style={{ display: 'flex', gap: 8, padding: '14px 20px', borderTop: '1px solid var(--border-default, #30363d)', flexShrink: 0 }}>
           {isActive && (
             <button type="button" onClick={() => onCancel(ticket.id)} style={btnStyle}>
               {t('tickets.cancel')}
@@ -618,7 +638,7 @@ function ReplyComposer({
   };
 
   return (
-    <div style={{ display: 'flex', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--border-default, #30363d)', alignItems: 'flex-end' }}>
+    <div style={{ display: 'flex', gap: 8, padding: '12px 20px', borderTop: '1px solid var(--border-default, #30363d)', alignItems: 'flex-end', flexShrink: 0 }}>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -657,6 +677,18 @@ function ReplyComposer({
       >
         {sending ? t('tickets.sending') : t('tickets.send')}
       </button>
+    </div>
+  );
+}
+
+/** Section header for the pinned bottom dock — same label, no bottom margin. */
+function DockSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary, #8b949e)' }}>
+        {label}
+      </div>
+      {children}
     </div>
   );
 }
