@@ -30,7 +30,7 @@ export interface MobileAppProps {
  */
 export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
   const { t } = useTranslation();
-  const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } =
+  const { tickets, evaluations, refresh, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } =
     useTickets(true, subscribeRaw);
   const [screen, setScreen] = useState<'list' | 'compose'>('list');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -83,6 +83,7 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
         onRetry={() => { void retryTicket(open.id); }}
         onDelete={() => { void deleteTicket(open.id); setOpenId(null); }}
         onEvaluate={(label: EvalLabel, weight: number) => { void evaluateTicket(open.id, { label, weight }); }}
+        onRefresh={refresh}
       />
     );
   }
@@ -121,6 +122,7 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
         connected={connected}
         onOpen={setOpenId}
         onNew={() => setScreen('compose')}
+        onRefresh={refresh}
       />
     );
 

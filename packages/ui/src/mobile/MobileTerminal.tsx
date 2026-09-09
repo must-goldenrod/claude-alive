@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS, screen, topBar, secondaryButton, input, TYPE, clamp1 } from './styles.ts';
+import { PullToRefresh } from './PullToRefresh.tsx';
 
 export interface MobileTerminalProps {
   title: string;
@@ -14,6 +15,8 @@ export interface MobileTerminalProps {
   onBack: () => void;
   onSend: (data: string) => void;
   onKey: (sequence: string) => void;
+  /** Re-attach and replay the scrollback — the only refresh a live pty has. */
+  onRefresh?: () => void | Promise<void>;
 }
 
 /**
@@ -38,7 +41,7 @@ const KEYS: ReadonlyArray<{ label: string; sequence: string }> = [
  * keyboard is worse than useless — but "read what it said, answer the prompt,
  * press Ctrl-C" is what a phone is actually for.
  */
-export function MobileTerminal({ title, subtitle, output, canType, exited, onBack, onSend, onKey }: MobileTerminalProps) {
+export function MobileTerminal({ title, subtitle, output, canType, exited, onBack, onSend, onKey, onRefresh }: MobileTerminalProps) {
   const { t } = useTranslation();
   const [line, setLine] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
@@ -71,7 +74,7 @@ export function MobileTerminal({ title, subtitle, output, canType, exited, onBac
         </span>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 12, background: '#000' }}>
+      <PullToRefresh onRefresh={onRefresh} style={{ padding: 12, background: '#000' }}>
         <pre
           style={{ ...TYPE.code, margin: 0, color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
         >
@@ -81,7 +84,7 @@ export function MobileTerminal({ title, subtitle, output, canType, exited, onBac
           <p style={{ ...TYPE.meta, color: '#e5534b', marginTop: 12 }}>{t('mobile.terminalGone')}</p>
         )}
         <div ref={endRef} />
-      </div>
+      </PullToRefresh>
 
       {canType ? (
         <div style={{ borderTop: `1px solid ${COLORS.border}`, padding: '8px 12px calc(8px + env(safe-area-inset-bottom))', flexShrink: 0 }}>

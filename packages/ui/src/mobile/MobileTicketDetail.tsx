@@ -10,6 +10,7 @@ import { useNow } from '../views/dashboard/hooks/useNow.ts';
 import { formatAge } from '../utils/age.ts';
 import { COLORS, screen, topBar, body, primaryButton, secondaryButton, actionBar, input, TYPE, clamp1 } from './styles.ts';
 import { Section, Panel, InfoRows, Badge } from './parts.tsx';
+import { PullToRefresh } from './PullToRefresh.tsx';
 import type { MobileReplyFn } from './types.ts';
 
 export interface MobileTicketDetailProps {
@@ -21,6 +22,8 @@ export interface MobileTicketDetailProps {
   onRetry: () => void;
   onDelete: () => void;
   onEvaluate: (label: EvalLabel, weight: number) => void;
+  /** Refetch this ticket, for the pull gesture. */
+  onRefresh?: () => void | Promise<void>;
 }
 
 const SETTLED = new Set(['done', 'failed']);
@@ -91,7 +94,7 @@ const RATINGS: ReadonlyArray<{ label: EvalLabel; weight: number; textKey: string
  * because a phone that shows less than the desktop makes you go find a laptop.
  */
 export function MobileTicketDetail({
-  ticket, evaluation, onBack, onReply, onCancel, onRetry, onDelete, onEvaluate,
+  ticket, evaluation, onBack, onReply, onCancel, onRetry, onDelete, onEvaluate, onRefresh,
 }: MobileTicketDetailProps) {
   const { t } = useTranslation();
   const now = useNow();
@@ -156,7 +159,7 @@ export function MobileTicketDetail({
         </div>
       </div>
 
-      <div style={{ ...body, paddingBottom: 96 }}>
+      <PullToRefresh onRefresh={onRefresh} style={{ ...body, paddingBottom: 96 }}>
         <Section label={t('tickets.goalLabel')}>
           <div style={{ ...TYPE.body, whiteSpace: 'pre-wrap' }}>{ticket.goal}</div>
         </Section>
@@ -271,7 +274,7 @@ export function MobileTicketDetail({
             )}
           </Section>
         )}
-      </div>
+      </PullToRefresh>
 
       <div style={actionBar}>
         {settled ? (

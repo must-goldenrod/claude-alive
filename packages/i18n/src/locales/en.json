@@ -1067,6 +1067,9 @@
     "deleteTicket": "Delete",
     "deleteConfirm": "Delete this ticket?",
     "ratingLabel": "Rating",
-    "home": "Home — tickets"
+    "home": "Home — tickets",
+    "pullToRefresh": "Pull to refresh",
+    "releaseToRefresh": "Release to refresh",
+    "refreshing": "Refreshing…"
   }
 }

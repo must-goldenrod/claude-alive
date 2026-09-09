@@ -1066,6 +1066,9 @@
     "deleteTicket": "삭제",
     "deleteConfirm": "이 티켓을 삭제할까요?",
     "ratingLabel": "평가",
-    "home": "홈 — 티켓으로"
+    "home": "홈 — 티켓으로",
+    "pullToRefresh": "당겨서 새로고침",
+    "releaseToRefresh": "놓으면 새로고침",
+    "refreshing": "새로고침 중…"
   }
 }

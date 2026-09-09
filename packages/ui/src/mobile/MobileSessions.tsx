@@ -81,26 +81,25 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
   const [exited, setExited] = useState(false);
   const [picking, setPicking] = useState(false);
 
+  const reload = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v2/workspace-tree`);
+      if (!res.ok) return;
+      setSessions(flattenTree((await res.json()) as Tree));
+    } catch {
+      /* offline; the next tick retries */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // The catalog is fetched rather than pushed: `v2:catalog-changed` carries no
   // payload, so one poll covers both that signal and a dropped socket.
   useEffect(() => {
-    let stop = false;
-    const load = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/v2/workspace-tree`);
-        if (!res.ok) return;
-        const tree = (await res.json()) as Tree;
-        if (!stop) setSessions(flattenTree(tree));
-      } catch {
-        /* offline; the next tick retries */
-      } finally {
-        if (!stop) setLoading(false);
-      }
-    };
-    void load();
-    const timer = setInterval(load, POLL_MS);
-    return () => { stop = true; clearInterval(timer); };
-  }, []);
+    void reload();
+    const timer = setInterval(() => void reload(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [reload]);
 
   // Terminal frames ride the shared socket; only this tab's are ours.
   useEffect(() => {
@@ -167,6 +166,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
         onBack={close}
         onSend={(data) => attachedTab && send({ type: 'terminal:input', tabId: attachedTab, data })}
         onKey={(sequence) => attachedTab && send({ type: 'terminal:input', tabId: attachedTab, data: sequence })}
+        onRefresh={attachedTab ? () => { setOutput(''); send({ type: 'terminal:attach', tabId: attachedTab }); } : undefined}
       />
     );
   }
@@ -184,6 +184,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
           const session = sessions.find((s) => s.sessionId === id);
           if (session) void openSession(session);
         }}
+        onRefresh={reload}
       />
       {terminalLevel === 'shell' && (
         <div style={actionBar}>

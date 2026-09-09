@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation } from '@claude-alive/core';
 import { displayStatus, STATUS_COLOR, projectName, ticketLastActivityAt } from '../views/tickets/ticketDisplay.ts';
 import { COLORS, screen, body, card, chip, primaryButton, actionBar, TYPE, clamp1, clamp2 } from './styles.ts';
+import { PullToRefresh } from './PullToRefresh.tsx';
 
 export interface MobileTicketListProps {
   tickets: Ticket[];
@@ -11,6 +12,8 @@ export interface MobileTicketListProps {
   onNew: () => void;
   /** Live socket state; a disconnected phone is showing stale rows. */
   connected?: boolean;
+  /** Refetch, for the pull gesture. Absent = the gesture does nothing. */
+  onRefresh?: () => void | Promise<void>;
 }
 
 type Filter = 'all' | 'active' | 'decision' | 'done';
@@ -28,7 +31,7 @@ const MATCHES: Record<Filter, (t: Ticket) => boolean> = {
  * Those are the only ones where nothing moves until you act, and on a phone you
  * are usually opening the app precisely because something is stuck.
  */
-export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connected = true }: MobileTicketListProps) {
+export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connected = true, onRefresh }: MobileTicketListProps) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -82,7 +85,7 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
         ))}
       </div>
 
-      <div style={body}>
+      <PullToRefresh onRefresh={onRefresh} style={body}>
         {rows.length === 0 ? (
           <p style={{ ...TYPE.body, color: COLORS.muted, textAlign: 'center', marginTop: 48 }}>{t('mobile.empty')}</p>
         ) : (
@@ -103,7 +106,7 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
             );
           })
         )}
-      </div>
+      </PullToRefresh>
 
       <div style={actionBar}>
         <button style={primaryButton} onClick={onNew}>{t('mobile.newTicket')}</button>

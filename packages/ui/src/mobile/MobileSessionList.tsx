@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectName } from '../views/tickets/ticketDisplay.ts';
 import { COLORS, screen, body, card, TYPE, clamp1, clamp2 } from './styles.ts';
+import { PullToRefresh } from './PullToRefresh.tsx';
 
 export interface MobileSession {
   sessionId: string;
@@ -17,6 +18,8 @@ export interface MobileSessionListProps {
   sessions: MobileSession[];
   loading: boolean;
   onOpen: (sessionId: string) => void;
+  /** Refetch, for the pull gesture. */
+  onRefresh?: () => void | Promise<void>;
 }
 
 /** States that mean the session is doing something right now. */
@@ -53,7 +56,7 @@ function stateColor(state: string): string {
  * A session that is mid-tool is the one you opened the phone to look at; a
  * stopped one from last week is not, however recently it was touched.
  */
-export function MobileSessionList({ sessions, loading, onOpen }: MobileSessionListProps) {
+export function MobileSessionList({ sessions, loading, onOpen, onRefresh }: MobileSessionListProps) {
   const { t } = useTranslation();
 
   const rows = useMemo(() => {
@@ -68,7 +71,7 @@ export function MobileSessionList({ sessions, loading, onOpen }: MobileSessionLi
   return (
     <div style={{ ...screen, position: 'relative' }}>
       {/* No title bar — the tab above names this list. */}
-      <div style={{ ...body, paddingTop: 12, paddingBottom: 24 }}>
+      <PullToRefresh onRefresh={onRefresh} style={{ ...body, paddingTop: 12, paddingBottom: 24 }}>
         {loading && rows.length === 0 ? (
           <p style={{ ...TYPE.body, color: COLORS.muted, textAlign: 'center', marginTop: 48 }}>{t('mobile.sessionsLoading')}</p>
         ) : rows.length === 0 ? (
@@ -94,7 +97,7 @@ export function MobileSessionList({ sessions, loading, onOpen }: MobileSessionLi
             </button>
           ))
         )}
-      </div>
+      </PullToRefresh>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import '@claude-alive/i18n';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { Ticket } from '@claude-alive/core';
 import { MobileTicketList } from '../MobileTicketList.tsx';
@@ -74,5 +74,17 @@ describe('MobileTicketList', () => {
   it('says so when there is nothing, rather than showing a blank screen', () => {
     render(<MobileTicketList tickets={[]} evaluations={{}} onOpen={() => {}} onNew={() => {}} />);
     expect(screen.getByText(/아직 티켓이 없습니다|No tickets yet/)).toBeInTheDocument();
+  });
+});
+
+describe('MobileTicketList — pull to refresh', () => {
+  it('refetches when the list is pulled down from the top', async () => {
+    const onRefresh = vi.fn(async () => {});
+    render(<MobileTicketList tickets={[ticket({})]} evaluations={{}} onOpen={() => {}} onNew={() => {}} onRefresh={onRefresh} />);
+    const pane = screen.getByTestId('pull-scroll');
+    fireEvent.touchStart(pane, { touches: [{ clientY: 0, clientX: 0 }] });
+    fireEvent.touchMove(pane, { touches: [{ clientY: 140, clientX: 0 }] });
+    fireEvent.touchEnd(pane, { changedTouches: [{ clientY: 140, clientX: 0 }] });
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
   });
 });
