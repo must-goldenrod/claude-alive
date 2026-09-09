@@ -1033,6 +1033,24 @@
     "sending": "보내는 중…",
     "cancelTicket": "취소",
     "retryTicket": "재시도",
-    "offline": "서버와 연결이 끊겼습니다"
+    "offline": "서버와 연결이 끊겼습니다",
+    "tabTickets": "티켓",
+    "tabSessions": "세션",
+    "sessionsEmpty": "실행 중인 세션이 없습니다",
+    "sessionsLoading": "불러오는 중…",
+    "conversationEmpty": "아직 대화가 없습니다",
+    "openTerminal": "터미널 열기",
+    "terminalTitle": "터미널",
+    "terminalInput": "명령 입력",
+    "terminalSend": "전송",
+    "terminalNew": "새 터미널",
+    "terminalAttaching": "연결 중…",
+    "terminalGone": "이 터미널은 종료되었습니다",
+    "terminalReadOnly": "읽기 전용 — 입력이 허용되지 않았습니다",
+    "roleUser": "나",
+    "roleAssistant": "에이전트",
+    "roleTool": "도구",
+    "roleSystem": "시스템",
+    "needsApproval": "승인 대기"
   }
 }

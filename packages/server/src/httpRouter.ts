@@ -924,6 +924,11 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/remote/capabilities') {
+      sendJson(res, 200, { terminal: accessPolicy.terminalLevel, remote: accessPolicy.enabled }, req);
+      return;
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/remote/branches') {
       const cwd = url.searchParams.get('cwd') ?? '';
       if (!remoteBranches) {

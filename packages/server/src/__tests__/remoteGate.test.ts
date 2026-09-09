@@ -14,6 +14,7 @@ const remoteConfig: RemoteAccessConfig = {
   ticketRoots: ['/tmp'],
   sshHosts: [],
   localToken: LOCAL,
+  terminalLevel: 'off',
 };
 
 const promptRouter = vi.fn((_req: unknown, res: { writeHead: (n: number) => void; end: (s: string) => void }) => {
@@ -209,5 +210,17 @@ describe('watch-level HTTP routes', () => {
     // ticket surface a device gets for free.
     const res = await fetch(`${base}/api/v2/workspace-tree`, { headers: auth(DEVICE) });
     expect(res.status).toBe(403);
+  });
+})
+
+describe('GET /api/remote/capabilities', () => {
+  it('tells the device what this server will let it do', async () => {
+    const res = await fetch(`${base}/api/remote/capabilities`, { headers: auth(DEVICE) });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ terminal: 'off', remote: true });
+  });
+
+  it('needs a token like everything else', async () => {
+    expect((await fetch(`${base}/api/remote/capabilities`)).status).toBe(401);
   });
 })

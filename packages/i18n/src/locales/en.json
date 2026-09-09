@@ -1034,6 +1034,24 @@
     "sending": "Sending…",
     "cancelTicket": "Cancel",
     "retryTicket": "Retry",
-    "offline": "Disconnected from the server"
+    "offline": "Disconnected from the server",
+    "tabTickets": "Tickets",
+    "tabSessions": "Sessions",
+    "sessionsEmpty": "No sessions running",
+    "sessionsLoading": "Loading…",
+    "conversationEmpty": "Nothing said yet",
+    "openTerminal": "Open terminal",
+    "terminalTitle": "Terminal",
+    "terminalInput": "Type a command",
+    "terminalSend": "Send",
+    "terminalNew": "New terminal",
+    "terminalAttaching": "Attaching…",
+    "terminalGone": "This terminal has exited",
+    "terminalReadOnly": "Read-only — input is not permitted",
+    "roleUser": "You",
+    "roleAssistant": "Agent",
+    "roleTool": "Tool",
+    "roleSystem": "System",
+    "needsApproval": "Awaiting approval"
   }
 }

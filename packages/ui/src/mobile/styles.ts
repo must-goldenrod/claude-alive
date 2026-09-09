@@ -18,7 +18,9 @@ export const COLORS = {
 } as const;
 
 export const screen: CSSProperties = {
-  position: 'fixed',
+  // Absolute, not fixed: the shell may put a tab bar above these screens, and a
+  // fixed child would sit on top of it.
+  position: 'absolute',
   inset: 0,
   display: 'flex',
   flexDirection: 'column',

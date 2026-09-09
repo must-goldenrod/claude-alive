@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { TicketRunPreset } from '@claude-alive/core';
+import { useTranslation } from 'react-i18next';
+import type { TicketRunPreset, WSClientMessage } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../App.tsx';
 import { useTickets } from '../views/tickets/useTickets.ts';
 import { MobileTicketList } from './MobileTicketList.tsx';
@@ -7,12 +8,16 @@ import { MobileTicketCompose } from './MobileTicketCompose.tsx';
 import type { MobileProject } from './types.ts';
 import { MobileTicketDetail } from './MobileTicketDetail.tsx';
 import { mergeProjects } from './mobileProjects.ts';
+import { MobileSessions } from './MobileSessions.tsx';
+import { parseCapabilities, type RemoteCapabilities } from './capabilities.ts';
+import { COLORS } from './styles.ts';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
 export interface MobileAppProps {
   subscribeRaw: RawMessageSubscribe;
   connected: boolean;
+  send: (msg: WSClientMessage) => void;
 }
 
 /**
@@ -23,11 +28,25 @@ export interface MobileAppProps {
  * the analytics have no place on a 390px screen and, for a remote device, the
  * server refuses most of them anyway.
  */
-export function MobileApp({ subscribeRaw, connected }: MobileAppProps) {
+export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
+  const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket } = useTickets(true, subscribeRaw);
   const [screen, setScreen] = useState<'list' | 'compose'>('list');
   const [openId, setOpenId] = useState<string | null>(null);
   const [allowed, setAllowed] = useState<MobileProject[]>([]);
+  const [tab, setTab] = useState<'tickets' | 'sessions'>('tickets');
+  const [caps, setCaps] = useState<RemoteCapabilities>({ terminal: 'off', remote: false });
+
+  // Asked once: which controls this server will honour. A local-only server
+  // answers 401/404 here and the sessions tab simply stays hidden.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/remote/capabilities`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (!cancelled && data) setCaps(parseCapabilities(data)); })
+      .catch(() => { /* older server, or offline */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // The allowlist the server will actually accept. A local-only server answers
   // with an empty list (or 503), and the composer then falls back to history.
@@ -76,13 +95,46 @@ export function MobileApp({ subscribeRaw, connected }: MobileAppProps) {
     );
   }
 
+  const sessionsAvailable = caps.terminal !== 'off';
+
+  const body =
+    tab === 'sessions' && sessionsAvailable ? (
+      <MobileSessions subscribeRaw={subscribeRaw} send={send} terminalLevel={caps.terminal} />
+    ) : (
+      <MobileTicketList
+        tickets={tickets}
+        evaluations={evaluations}
+        connected={connected}
+        onOpen={setOpenId}
+        onNew={() => setScreen('compose')}
+      />
+    );
+
   return (
-    <MobileTicketList
-      tickets={tickets}
-      evaluations={evaluations}
-      connected={connected}
-      onOpen={setOpenId}
-      onNew={() => setScreen('compose')}
-    />
+    <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: COLORS.bg }}>
+      {/* The switcher only appears when there is somewhere else to go: on a
+          server that never opened the session surface, a dead tab confuses. */}
+      {sessionsAvailable && (
+        <div role="tablist" style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COLORS.border}` }}>
+          {(['tickets', 'sessions'] as const).map((id) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              style={{
+                flex: 1, minHeight: 44, border: 'none', cursor: 'pointer', fontSize: 14,
+                background: 'transparent',
+                color: tab === id ? COLORS.accent : COLORS.muted,
+                borderBottom: `2px solid ${tab === id ? COLORS.accent : 'transparent'}`,
+              }}
+            >
+              {t(id === 'tickets' ? 'mobile.tabTickets' : 'mobile.tabSessions')}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{body}</div>
+    </div>
   );
 }

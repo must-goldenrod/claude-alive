@@ -577,7 +577,7 @@ export default function App() {
   // A phone gets its own screens rather than a squeezed dashboard: the sidebar
   // alone is 280px of a 390px viewport and the header controls sit past x=850,
   // so below 768px the desktop layout is not cramped, it is cut off.
-  if (isPhone) return <MobileApp subscribeRaw={subscribeRaw} connected={connected} />;
+  if (isPhone) return <MobileApp subscribeRaw={subscribeRaw} connected={connected} send={send} />;
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

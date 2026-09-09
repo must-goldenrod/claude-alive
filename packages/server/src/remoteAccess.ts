@@ -178,6 +178,9 @@ const REMOTE_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'GET', pattern: /^\/api\/evaluations$/ },
   { method: 'GET', pattern: /^\/api\/remote\/projects$/ },
   { method: 'GET', pattern: /^\/api\/remote\/branches$/ },
+  // What this server will let the device do. Without it the app cannot tell a
+  // refused message from a broken connection — both are silence on the socket.
+  { method: 'GET', pattern: /^\/api\/remote\/capabilities$/ },
   // The live stream. Read-only for a device: `terminal:*` is refused per
   // connection in wsAuth, not here, because the allowlist is path-shaped.
   { method: 'GET', pattern: /^\/ws$/ },
