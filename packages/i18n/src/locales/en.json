@@ -1052,6 +1052,19 @@
     "roleAssistant": "Agent",
     "roleTool": "Tool",
     "roleSystem": "System",
-    "needsApproval": "Awaiting approval"
+    "needsApproval": "Awaiting approval",
+    "statusBadgeVerified": "Verified",
+    "statusBadgeFlagged": "Flagged",
+    "statusBadgeVerifying": "Verifying",
+    "statusBadgeUnverified": "Unverified",
+    "locationLocal": "Local",
+    "locationSsh": "SSH",
+    "settingsLabel": "Settings",
+    "branchLabel": "Branch",
+    "pickFolder": "Pick a folder",
+    "sheetClose": "Close",
+    "deleteTicket": "Delete",
+    "deleteConfirm": "Delete this ticket?",
+    "ratingLabel": "Rating"
   }
 }

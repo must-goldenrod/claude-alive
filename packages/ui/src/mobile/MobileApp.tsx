@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TicketRunPreset, WSClientMessage } from '@claude-alive/core';
+import type { EvalLabel, WSClientMessage } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../App.tsx';
 import { useTickets } from '../views/tickets/useTickets.ts';
 import { MobileTicketList } from './MobileTicketList.tsx';
@@ -30,7 +30,8 @@ export interface MobileAppProps {
  */
 export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
   const { t } = useTranslation();
-  const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket } = useTickets(true, subscribeRaw);
+  const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } =
+    useTickets(true, subscribeRaw);
   const [screen, setScreen] = useState<'list' | 'compose'>('list');
   const [openId, setOpenId] = useState<string | null>(null);
   const [allowed, setAllowed] = useState<MobileProject[]>([]);
@@ -75,10 +76,13 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
     return (
       <MobileTicketDetail
         ticket={open}
+        evaluation={evaluations[open.id] ?? null}
         onBack={() => setOpenId(null)}
         onReply={(prompt) => replyTicket(open.id, prompt)}
         onCancel={() => { void cancelTicket(open.id); }}
         onRetry={() => { void retryTicket(open.id); }}
+        onDelete={() => { void deleteTicket(open.id); setOpenId(null); }}
+        onEvaluate={(label: EvalLabel, weight: number) => { void evaluateTicket(open.id, { label, weight }); }}
       />
     );
   }
@@ -88,8 +92,11 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
       <MobileTicketCompose
         projects={projects}
         onCancel={() => setScreen('list')}
-        onCreate={(goal: string, cwd: string, preset: TicketRunPreset) =>
-          createTicket(goal, cwd, undefined, undefined, preset)
+        onCreate={(draft) =>
+          createTicket(
+            draft.goal, draft.cwd, draft.location, draft.orchestrated,
+            draft.preset, draft.autoCommit, draft.panelReview,
+          )
         }
       />
     );
@@ -112,28 +119,45 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', flexDirection: 'column', background: COLORS.bg }}>
-      {/* The switcher only appears when there is somewhere else to go: on a
-          server that never opened the session surface, a dead tab confuses. */}
-      {sessionsAvailable && (
-        <div role="tablist" style={{ display: 'flex', flexShrink: 0, borderBottom: `1px solid ${COLORS.border}` }}>
-          {(['tickets', 'sessions'] as const).map((id) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={tab === id}
-              onClick={() => setTab(id)}
-              style={{
-                flex: 1, minHeight: 44, border: 'none', cursor: 'pointer', fontSize: 14,
-                background: 'transparent',
-                color: tab === id ? COLORS.accent : COLORS.muted,
-                borderBottom: `2px solid ${tab === id ? COLORS.accent : 'transparent'}`,
-              }}
-            >
-              {t(id === 'tickets' ? 'mobile.tabTickets' : 'mobile.tabSessions')}
-            </button>
-          ))}
+      {/* One bar carries both the product mark and the top-level switch, so a
+          phone spends no vertical space on a header that only says the name. */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+          padding: '6px 12px', borderBottom: `1px solid ${COLORS.border}`,
+        }}
+      >
+        <div role="tablist" style={{ display: 'flex', gap: 4 }}>
+          {(['tickets', 'sessions'] as const).map((id) => {
+            if (id === 'sessions' && !sessionsAvailable) return null;
+            return (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={tab === id}
+                onClick={() => setTab(id)}
+                style={{
+                  minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 13,
+                  border: `1px solid ${tab === id ? COLORS.accent : 'transparent'}`,
+                  background: tab === id ? COLORS.accent : 'transparent',
+                  color: tab === id ? '#0d1117' : COLORS.muted,
+                }}
+              >
+                {t(id === 'tickets' ? 'mobile.tabTickets' : 'mobile.tabSessions')}
+              </button>
+            );
+          })}
         </div>
-      )}
+        <span
+          style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
+            fontSize: 13, fontWeight: 600, letterSpacing: '-0.02em', color: COLORS.text,
+          }}
+        >
+          claude-alive
+          <img src="/favicon.svg" alt="claude-alive logo" width={18} height={18} style={{ display: 'block', borderRadius: 4 }} />
+        </span>
+      </div>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{body}</div>
     </div>
   );

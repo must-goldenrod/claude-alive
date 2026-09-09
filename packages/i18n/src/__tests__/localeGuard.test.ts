@@ -41,9 +41,11 @@ describe('locale parity', () => {
  * metric labels in the archive view). The ceiling stops it getting worse; lower
  * it as strings are migrated to `t()`. Raised 13→20 when the archive view merged
  * in; 20→22 for TicketDissection's inline `=> Promise<…>` type annotations, which
- * the checker's JSX heuristic false-flags as the word "Promise" (not real UI text).
+ * the checker's JSX heuristic false-flags as the word "Promise" (not real UI text);
+ * 22→24 for the phone header's brand mark and its alt text, the same untranslated
+ * product name HeaderBar already carries.
  */
-const RAW_TEXT_CEILING = 22;
+const RAW_TEXT_CEILING = 24;
 
 function tsxFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {

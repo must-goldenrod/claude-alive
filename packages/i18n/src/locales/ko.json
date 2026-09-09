@@ -1051,6 +1051,19 @@
     "roleAssistant": "에이전트",
     "roleTool": "도구",
     "roleSystem": "시스템",
-    "needsApproval": "승인 대기"
+    "needsApproval": "승인 대기",
+    "statusBadgeVerified": "검증완료",
+    "statusBadgeFlagged": "이견있음",
+    "statusBadgeVerifying": "검증중",
+    "statusBadgeUnverified": "미검증",
+    "locationLocal": "로컬",
+    "locationSsh": "SSH",
+    "settingsLabel": "설정",
+    "branchLabel": "브랜치",
+    "pickFolder": "폴더 선택",
+    "sheetClose": "닫기",
+    "deleteTicket": "삭제",
+    "deleteConfirm": "이 티켓을 삭제할까요?",
+    "ratingLabel": "평가"
   }
 }
