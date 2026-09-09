@@ -636,6 +636,7 @@
     "tiebreakLabel": "동일성 판정",
     "flaggedLabel": "이견 있음",
     "gapLabel": "약한 지점:",
+    "coverageLabel": "목표 커버리지:",
     "escalationLabel": "에스컬레이션",
     "reviewPhase": {
       "unverified": "검증 전",

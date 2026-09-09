@@ -446,7 +446,7 @@ await evalStore.load();
 {
   // Printed once so a gate that has started failing is visible without anyone
   // going looking for it (see verificationHealth.ts).
-  const health = formatVerificationHealth(verificationHealth(evalStore.list()));
+  const health = formatVerificationHealth(verificationHealth(evalStore.list(), ticketStore.list()));
   if (health) console.log(health);
 }
 

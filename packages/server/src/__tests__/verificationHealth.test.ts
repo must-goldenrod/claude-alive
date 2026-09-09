@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { verificationHealth, formatVerificationHealth } from '../verificationHealth.js';
-import type { TicketEvaluation } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation } from '@claude-alive/core';
 
 const rec = (over: Partial<TicketEvaluation>): TicketEvaluation =>
   ({
@@ -59,5 +59,30 @@ describe('formatVerificationHealth', () => {
     expect(line).toContain('verified 2');
     expect(line).toContain('inconclusive 1 (50.0%)');
     expect(line).toContain('PASS confirmed 1/1');
+  });
+});
+
+
+describe('goal-coverage adoption', () => {
+  const tk = (coverage?: string): Ticket =>
+    ({
+      id: 't', seq: 1, goal: 'g', cwd: '/r', state: 'done', createdAt: 0,
+      verification: { passed: true, reason: 'ok', gate: { passed: true, reason: 'ok', ...(coverage ? { coverage } : {}) } },
+    }) as Ticket;
+
+  it('counts gate verdicts that named the least-covered part of the goal', () => {
+    const h = verificationHealth([], [tk('B is untouched'), tk(), tk('nothing on the docs')]);
+    expect(h.coverage).toEqual({ named: 2, verdicts: 3 });
+  });
+
+  it('reports nothing when no gate verdict is retained', () => {
+    expect(verificationHealth([], []).coverage).toBeNull();
+  });
+
+  it('puts the ratio in the line so a silent regression is visible', () => {
+    const line = formatVerificationHealth(
+      verificationHealth([rec({ verdictPassed: true })], [tk('B is untouched'), tk()]),
+    );
+    expect(line).toContain('goal coverage stated 1/2');
   });
 });

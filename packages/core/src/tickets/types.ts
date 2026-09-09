@@ -89,7 +89,13 @@ export interface PanelConsensus {
 export interface TicketVerification {
   passed: boolean;
   reason: string;
-  gate?: { passed: boolean; reason: string };
+  /**
+   * The Claude reviewer that inspected the working directory. `coverage` is the
+   * part of the goal it judged least covered, stated before it voted — stored so
+   * a later audit can ask whether the gate is judging the goal or only checking
+   * that the report's claims are true, which is what it used to do.
+   */
+  gate?: { passed: boolean; reason: string; coverage?: string };
   panel?: VerificationOpinion[];
   /**
    * The ticket passed, but at least one panel reviewer voted against it. A lone

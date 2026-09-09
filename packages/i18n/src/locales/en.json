@@ -636,6 +636,7 @@
     "tiebreakLabel": "Tiebreak",
     "flaggedLabel": "Dissent",
     "gapLabel": "Weakest point:",
+    "coverageLabel": "Goal coverage:",
     "escalationLabel": "Escalated",
     "reviewPhase": {
       "unverified": "unverified",

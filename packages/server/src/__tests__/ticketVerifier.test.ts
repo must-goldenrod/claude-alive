@@ -43,6 +43,39 @@ describe('extractVerdict', () => {
   });
 });
 
+/**
+ * Across 30 stored gate verdicts, 20 opened with "verified independently" and
+ * none mentioned the goal — the gate was checking that the report's claims were
+ * true, not that the goal was met.
+ */
+describe('the gate is asked about the goal, not only about the report', () => {
+  it('asks which part of the goal is least covered, before the verdict', () => {
+    const p = buildVerificationPrompt('do A and B', 'I did A');
+    expect(p).toContain('COVERAGE');
+    expect(p.indexOf('COVERAGE')).toBeLessThan(p.indexOf('Then the verdict'));
+    expect(p).toContain('"coverage"');
+  });
+
+  it('says outright that true claims are not enough', () => {
+    const p = buildVerificationPrompt('g', 'r');
+    expect(p).toContain('necessary but not');
+    expect(p).toContain('Do not pass something');
+    expect(p).toContain('FAILS unless the work covers all of them');
+  });
+
+  it('keeps the coverage sentence with the verdict', () => {
+    expect(extractVerdict('{"coverage":"B is untouched","passed":false,"reason":"only A"}')).toEqual({
+      passed: false,
+      reason: 'only A',
+      coverage: 'B is untouched',
+    });
+  });
+
+  it('still reads a verdict from a gate that skipped coverage', () => {
+    expect(extractVerdict('{"passed":true,"reason":"ok"}')).toEqual({ passed: true, reason: 'ok' });
+  });
+});
+
 describe('buildVerificationPrompt', () => {
   it('embeds the goal and reported result and demands JSON', () => {
     const p = buildVerificationPrompt('add feature X', 'I added X');

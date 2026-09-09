@@ -12,7 +12,7 @@
  * auto-label is seeded from the verdict itself and would grade the gate on its
  * own homework.
  */
-import type { TicketEvaluation } from '@claude-alive/core';
+import type { Ticket, TicketEvaluation } from '@claude-alive/core';
 
 export interface VerificationHealth {
   /** Tickets that reached the gate at all. */
@@ -23,11 +23,20 @@ export interface VerificationHealth {
   passPrecision: { good: number; judged: number } | null;
   /** FAIL verdicts a human confirmed, over FAIL verdicts a human judged. */
   failPrecision: { bad: number; judged: number } | null;
+  /**
+   * Gate verdicts that named the least-covered part of the goal, over verdicts
+   * retained. The gate used to answer "are the report's claims true" instead of
+   * "was the goal met"; this is how you see whether it still does.
+   */
+  coverage: { named: number; verdicts: number } | null;
 }
 
 const JUDGED = (e: TicketEvaluation): boolean => e.humanLabeled && (e.label === 'good' || e.label === 'bad');
 
-export function verificationHealth(evals: readonly TicketEvaluation[]): VerificationHealth {
+export function verificationHealth(
+  evals: readonly TicketEvaluation[],
+  tickets: readonly Ticket[] = [],
+): VerificationHealth {
   const reachedGate = evals.filter(
     (e) => e.verdictPassed !== undefined || e.failureReason === 'verification-inconclusive',
   );
@@ -36,11 +45,14 @@ export function verificationHealth(evals: readonly TicketEvaluation[]): Verifica
   const passes = evals.filter((e) => e.verdictPassed === true && JUDGED(e));
   const fails = evals.filter((e) => e.failureReason === 'verification-failed' && JUDGED(e));
 
+  const gated = tickets.filter((t) => t.verification?.gate);
+
   return {
     verified: reachedGate.length,
     inconclusive,
     passPrecision: passes.length > 0 ? { good: passes.filter((e) => e.label === 'good').length, judged: passes.length } : null,
     failPrecision: fails.length > 0 ? { bad: fails.filter((e) => e.label === 'bad').length, judged: fails.length } : null,
+    coverage: gated.length > 0 ? { named: gated.filter((t) => t.verification?.gate?.coverage).length, verdicts: gated.length } : null,
   };
 }
 
@@ -52,5 +64,6 @@ export function formatVerificationHealth(h: VerificationHealth): string | null {
   const parts = [`verified ${h.verified}`, `inconclusive ${h.inconclusive} (${pct(h.inconclusive, h.verified)})`];
   if (h.passPrecision) parts.push(`PASS confirmed ${h.passPrecision.good}/${h.passPrecision.judged}`);
   if (h.failPrecision) parts.push(`FAIL confirmed ${h.failPrecision.bad}/${h.failPrecision.judged}`);
+  if (h.coverage) parts.push(`goal coverage stated ${h.coverage.named}/${h.coverage.verdicts}`);
   return `[verify] gate health — ${parts.join(' · ')}`;
 }

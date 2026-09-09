@@ -12,6 +12,16 @@
  * this file now does three things it did not: retry once (the gate is a separate
  * process and its failures are mostly transient), carry the actual cause in the
  * error, and parse the verdict as tolerantly as the panel parses its own.
+ *
+ * The prompt asks for goal COVERAGE before the verdict for a measured reason.
+ * Across 30 stored gate verdicts, 20 opened with some form of "verified
+ * independently" and NOT ONE mentioned the goal: the gate had been checking
+ * whether the report's claims were true, which is a different question from
+ * whether the goal was met. That is what its 96.8% PASS precision actually
+ * measures, and it is why the seven PASSes a human overturned were all reports
+ * that were accurate about the wrong work. Asking for the weakest-covered part
+ * first is the same lever that moved the LiteLLM panel from 0 vetoes to 2-of-7
+ * on exactly those records.
  */
 import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/core';
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
@@ -66,15 +76,27 @@ export function buildVerificationPrompt(goal: string, mainResult: string | null,
     : [];
   return [
     'You are a strict verification agent. An autonomous agent was given a goal and reported a result.',
-    'Independently inspect the working directory (build, tests, files, git diff as needed) and decide',
-    'whether the goal was ACTUALLY achieved. Do not trust the report — verify.',
+    'Independently inspect the working directory (build, tests, files, git diff as needed). Do not',
+    'trust the report — verify.',
     ...orchestrationNote,
     '',
     `GOAL: ${goal}`,
     `REPORTED RESULT: ${mainResult ?? '(none)'}`,
     '',
+    'Answer TWO questions, in this order.',
+    '',
+    'First, COVERAGE: restate the goal as its separate parts and say which part the work covers',
+    'least. Every goal has one. Checking that the report\'s claims are TRUE is necessary but not',
+    'sufficient — a report can be accurate about work that answers a different or smaller question',
+    'than the one asked.',
+    '',
+    'Then the verdict. A goal with several parts FAILS unless the work covers all of them. Work that',
+    'is real and correct but answers a different question than the goal FAILS. Do not pass something',
+    'because its claims check out.',
+    '',
     'Output ONLY a single JSON object on its own line, no prose, of the exact form:',
-    '{"passed": true|false, "reason": "<one concise sentence>"}',
+    '{"coverage": "<the least-covered part of the goal, one sentence>", "passed": true|false,',
+    ' "reason": "<one concise sentence>"}',
   ].join('\n');
 }
 
@@ -93,7 +115,11 @@ export function extractVerdict(text: string | null): TicketVerification | null {
   const trimmed = text.trim();
   const obj = extractJsonObject(trimmed);
   if (obj && typeof obj.passed === 'boolean') {
-    return { passed: obj.passed, reason: typeof obj.reason === 'string' ? obj.reason : '' };
+    return {
+      passed: obj.passed,
+      reason: typeof obj.reason === 'string' ? obj.reason : '',
+      ...(typeof obj.coverage === 'string' && obj.coverage ? { coverage: obj.coverage } : {}),
+    };
   }
   // Last resort: the flat scan, which finds a verdict buried among other objects
   // that the balanced scan would have picked over it.

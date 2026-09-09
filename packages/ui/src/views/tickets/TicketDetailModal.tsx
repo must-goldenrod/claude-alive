@@ -774,6 +774,13 @@ function VerificationReport({ ticket, t }: { ticket: Ticket; t: (key: string) =>
             {v.gate.passed ? '✓' : '✗'}
           </span>{' '}
           {v.gate.reason}
+          {/* Which part of the goal the reviewer judged least covered, stated
+              before it voted. On a pass this is the part worth re-reading. */}
+          {v.gate.coverage && (
+            <div style={{ opacity: 0.7, marginTop: 2 }}>
+              <span style={{ fontWeight: 600 }}>{t('tickets.coverageLabel')}</span> {v.gate.coverage}
+            </div>
+          )}
         </ReportRow>
       )}
 
