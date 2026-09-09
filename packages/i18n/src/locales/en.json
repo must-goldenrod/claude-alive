@@ -1001,5 +1001,12 @@
       "gitFailed": "git refused: {{message}}",
       "network": "Could not reach the server."
     }
+  },
+  "auth": {
+    "title": "Sign in to claude-alive",
+    "body": "This server requires a token. Paste the device token from `claude-alive token new`, or reopen the dashboard from `claude-alive start`.",
+    "placeholder": "Device token",
+    "submit": "Connect",
+    "invalid": "That token was refused. Check it and try again."
   }
 }

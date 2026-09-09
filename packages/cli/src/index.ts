@@ -6,8 +6,13 @@ import {
   augmentPath,
   formatDoctorReport,
   runDoctor,
+  addDeviceToken,
+  listDeviceTokens,
+  revokeDeviceToken,
+  readEnvValue,
   type CommandRunner,
 } from '@claude-alive/core';
+import { randomBytes } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, execFileSync, execFile } from 'node:child_process';
@@ -19,12 +24,52 @@ import {
   mkdirSync,
   openSync,
   existsSync,
+  chmodSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
 
 const ALIVE_DIR = join(homedir(), '.claude-alive');
 const PID_FILE = join(ALIVE_DIR, 'server.pid');
 const LOG_FILE = join(ALIVE_DIR, 'server.log');
+const ENV_FILE = join(ALIVE_DIR, '.env');
+
+/** Env-file text, or '' when there is no file yet. */
+function readEnvFile(): string {
+  try {
+    return readFileSync(ENV_FILE, 'utf-8');
+  } catch {
+    return '';
+  }
+}
+
+/** Write the env file 0600: it holds the tokens that stand in for loopback trust. */
+function writeEnvFile(text: string): void {
+  mkdirSync(ALIVE_DIR, { recursive: true });
+  writeFileSync(ENV_FILE, text, { mode: 0o600 });
+  try {
+    chmodSync(ENV_FILE, 0o600);
+  } catch {
+    // Filesystem without POSIX modes; the write above already asked for 0600.
+  }
+}
+
+/**
+ * The server's own token, for CLI calls. Once remote mode is on, `/api/status`
+ * needs authentication even from this machine — a tunnelled request would
+ * otherwise be indistinguishable from this one.
+ */
+function localToken(): string | undefined {
+  return readEnvValue(readEnvFile(), 'CLAUDE_ALIVE_LOCAL_TOKEN') || undefined;
+}
+
+/** Read `--flag value` or `--flag=value` out of argv. */
+function flagValue(argv: readonly string[], flag: string): string | undefined {
+  const inline = argv.find((a) => a.startsWith(`${flag}=`));
+  if (inline) return inline.slice(flag.length + 1);
+  const index = argv.indexOf(flag);
+  if (index !== -1 && argv[index + 1] && !argv[index + 1]!.startsWith('-')) return argv[index + 1];
+  return undefined;
+}
 
 function readPid(): number | null {
   try {
@@ -222,6 +267,10 @@ switch (command) {
     const noOpen = args.includes('--no-open');
     const port = process.env.CLAUDE_ALIVE_PORT ?? '3141';
     const url = `http://localhost:${port}`;
+    // Remote mode is opt-in on the command line as well as in the env file, so
+    // "expose this server" is always something someone typed.
+    const remote = args.includes('--remote');
+    const host = flagValue(args, '--host');
 
     const existingPid = readPid();
     if (existingPid) {
@@ -235,6 +284,11 @@ switch (command) {
     const child = spawn('node', [serverEntryPath()], {
       detached: true,
       stdio: ['ignore', logFd, logFd],
+      env: {
+        ...process.env,
+        ...(remote ? { CLAUDE_ALIVE_REMOTE: '1' } : {}),
+        ...(host ? { CLAUDE_ALIVE_HOST: host } : {}),
+      },
     });
     writeFileSync(PID_FILE, String(child.pid));
     child.unref();
@@ -243,12 +297,26 @@ switch (command) {
     console.log(`  Dashboard: ${url}`);
     console.log(`  Logs:      ${LOG_FILE}`);
 
-    if (!noOpen) {
-      // Wait briefly for the server to bind :3141 before opening the browser —
-      // otherwise the user sees a Chrome "site can't be reached" page and has
-      // to refresh. 800ms is enough for the bundled server on cold start.
-      setTimeout(() => openBrowser(url), 800);
-    }
+    // The server refuses to boot on an unsafe remote configuration, and a
+    // detached child's exit is invisible — so check, and show why.
+    setTimeout(() => {
+      if (!readPid()) {
+        console.error('\nThe server exited immediately. Last log lines:');
+        try {
+          console.error(readFileSync(LOG_FILE, 'utf-8').split('\n').slice(-12).join('\n'));
+        } catch {
+          console.error('  (no log file)');
+        }
+        process.exit(1);
+      }
+      if (!noOpen) {
+        // In remote mode the dashboard needs the local token to get past the
+        // gate, and a browser cannot set a header — hand it over in the URL
+        // once; the page moves it into localStorage and strips it.
+        const token = localToken();
+        openBrowser(remote && token ? `${url}/?token=${encodeURIComponent(token)}` : url);
+      }
+    }, 900);
     break;
   }
 
@@ -269,12 +337,61 @@ switch (command) {
     const pid = readPid();
     let aliveStatus: unknown = null;
     try {
-      const res = await fetch(`http://localhost:${port}/api/status`);
-      aliveStatus = await res.json();
+      // With remote mode on this call needs the token like any other caller.
+      const token = localToken();
+      const res = await fetch(`http://localhost:${port}/api/status`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      aliveStatus = res.ok ? await res.json() : { running: false, status: res.status };
     } catch {
       aliveStatus = { running: false };
     }
     console.log(JSON.stringify({ pid, ...((aliveStatus as Record<string, unknown>) ?? {}) }, null, 2));
+    break;
+  }
+
+  case 'token': {
+    const sub = process.argv[3] ?? 'list';
+    const text = readEnvFile();
+    if (sub === 'list') {
+      const tokens = listDeviceTokens(text);
+      // Labels only. Printing a value on `list` would put it in scrollback and
+      // shell history for every later session.
+      console.log(tokens.length === 0 ? 'No device tokens.' : tokens.map((t) => `  ${t.label}`).join('\n'));
+      console.log(localToken() ? '\nLocal token: present (used by hooks, CLI and the dashboard).' : '\nLocal token: not yet generated (created on the first remote start).');
+      break;
+    }
+    if (sub === 'new') {
+      const label = process.argv[4] ?? 'device';
+      const value = randomBytes(32).toString('base64url');
+      try {
+        writeEnvFile(addDeviceToken(text, label, value));
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      }
+      console.log(`Device token for "${label}":\n\n  ${value}\n`);
+      console.log('Shown once — store it in the app now. It is saved in ~/.claude-alive/.env.');
+      console.log('Restart the server for it to take effect: claude-alive stop && claude-alive start --remote');
+      break;
+    }
+    if (sub === 'revoke') {
+      const label = process.argv[4];
+      if (!label) {
+        console.error('Usage: claude-alive token revoke <label>');
+        process.exit(1);
+      }
+      const next = revokeDeviceToken(text, label);
+      if (next === text) {
+        console.error(`No device token labelled "${label}".`);
+        process.exit(1);
+      }
+      writeEnvFile(next);
+      console.log(`Revoked "${label}". Restart the server to drop it: claude-alive stop && claude-alive start --remote`);
+      break;
+    }
+    console.error(`Unknown token subcommand "${sub}". Use new|list|revoke.`);
+    process.exit(1);
     break;
   }
 
@@ -333,8 +450,13 @@ Usage:
   claude-alive uninstall    Remove hooks (prompt data preserved at ~/.think-prompt/)
   claude-alive start        Start the dashboard server (:3141) and open the UI
                             (pass --no-open to skip browser launch)
+                            (--remote opens it to other devices; --host <addr> to pick
+                             the interface. Remote mode needs a device token and
+                             CLAUDE_ALIVE_TICKET_ROOTS, or the server refuses to boot.)
   claude-alive stop         Stop the server
   claude-alive status       Show server status
+  claude-alive token        new <label>|list|revoke <label> — device tokens for
+                            remote access from the app
   claude-alive autostart    enable|disable|status — macOS launchd plist
   claude-alive doctor       Detect installed agent runtimes and adapter status
                             (pass --json for machine-readable output)

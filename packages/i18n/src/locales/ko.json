@@ -1000,5 +1000,12 @@
       "gitFailed": "git 거부: {{message}}",
       "network": "서버에 연결하지 못했습니다."
     }
+  },
+  "auth": {
+    "title": "claude-alive 인증",
+    "body": "이 서버는 토큰을 요구합니다. `claude-alive token new` 로 발급한 기기 토큰을 붙여넣거나, `claude-alive start` 로 대시보드를 다시 여세요.",
+    "placeholder": "기기 토큰",
+    "submit": "연결",
+    "invalid": "토큰이 거부되었습니다. 다시 확인해 주세요."
   }
 }

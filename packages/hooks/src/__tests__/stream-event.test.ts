@@ -51,3 +51,31 @@ describe('stream-event.sh hook script', () => {
     expect(script).toMatch(/-m\s+2\b/);
   });
 });
+
+/**
+ * With remote mode on, the server no longer trusts a loopback address, so the
+ * hook has to prove it runs on this machine. It does that by reading the 0600
+ * env file — something a tunnelled caller cannot do.
+ */
+describe('stream-event.sh authentication', () => {
+  const script = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'stream-event.sh'),
+    'utf-8',
+  );
+
+  it('reads the local token from the env file rather than baking one in', () => {
+    expect(script).toContain('.claude-alive/.env');
+    expect(script).toContain('CLAUDE_ALIVE_LOCAL_TOKEN');
+  });
+
+  it('sends it as a bearer header', () => {
+    expect(script).toContain('Authorization: Bearer');
+  });
+
+  it('still posts when no token is configured — local-only installs are unchanged', () => {
+    // The header lives in an array that stays empty without a token, so the
+    // curl invocation is identical to the pre-auth one.
+    expect(script).toContain('AUTH=()');
+    expect(script).toContain('"${AUTH[@]}"');
+  });
+});

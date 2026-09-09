@@ -45,6 +45,13 @@ export type {
 } from './runs/types.js';
 export * from './canonical/index.js';
 export { augmentPath } from './env/path.js';
+export {
+  addDeviceToken,
+  listDeviceTokens,
+  revokeDeviceToken,
+  readEnvValue,
+  type DeviceToken,
+} from './env/tokens.js';
 export { EFFICIO_AXES, EFFICIO_PRIMARY_AXIS } from './efficio/types.js';
 export type {
   EfficioAxisKey, EfficioAxisStatus, EfficioCluster, EfficioAxisMeta,

@@ -46,7 +46,6 @@ import { resolveCwd, invalidateGitCache } from './gitResolver.js';
 import { createBranch, deleteBranch, listBranches, switchBranch } from './gitBranches.js';
 import { ticketToUpsert, ticketRunOutcome, orphanTicketRunIds } from './runAdapters/ticketRuns.js';
 import { runIdForSession } from './runAttribution.js';
-import { isAllowedWsOrigin } from './wsOrigin.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
@@ -64,8 +63,13 @@ import { createEvalStore } from './evalStore.js';
 import { verificationHealth, formatVerificationHealth } from './verificationHealth.js';
 import { buildMainPrompt, buildOrchestratorPrompt } from './ticketPrompt.js';
 import { loadServerEnv, SERVER_ENV_FILE } from './serverEnv.js';
+import { loadRemoteAccessConfig } from './remoteAccess.js';
+import { ensureLocalToken } from './localToken.js';
+import { authorizeUpgrade } from './wsAuth.js';
+import { isCwdAllowed } from './ticketRunner.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
-import { dirname, join, isAbsolute } from 'node:path';
+import { readdir } from 'node:fs/promises';
+import { dirname, join, isAbsolute, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -79,6 +83,23 @@ if (envFromFile.length > 0) {
 }
 
 const PORT = parseInt(process.env.CLAUDE_ALIVE_PORT ?? '3141', 10);
+
+// Remote access is refused rather than warned about: every failure below is a
+// configuration that binds the server wider than it can defend, and a warning
+// in a detached daemon's log is not a control.
+const accessResult = loadRemoteAccessConfig(process.env);
+if (!accessResult.ok) {
+  console.error('[server] refusing to start:');
+  for (const problem of accessResult.errors) console.error(`  - ${problem}`);
+  process.exit(1);
+}
+// The local token is what the hook script, the CLI and the served dashboard
+// present now that a loopback address proves nothing. Generated on first
+// remote boot into the same 0600 env file the server already reads.
+const remoteAccess = accessResult.config.enabled
+  ? { ...accessResult.config, localToken: ensureLocalToken(SERVER_ENV_FILE, process.env) }
+  : accessResult.config;
+const HOST = remoteAccess.host;
 
 const store = new SessionStore();
 
@@ -683,10 +704,70 @@ const backendRegistry = createBackendRegistry({
   findClaude: () => findOnPath('claude'),
 });
 
+/**
+ * Projects a remote device may target: the ticket roots themselves when they
+ * are checkouts, otherwise their immediate git subdirectories. This is the
+ * whole reason `/api/fs/browse` can stay closed remotely — the app needs a cwd
+ * to offer, not the ability to read the disk.
+ */
+async function listRemoteProjects(): Promise<Array<{ path: string; name: string }>> {
+  const found = new Map<string, string>();
+  for (const root of remoteAccess.ticketRoots) {
+    if (existsSync(join(root, '.git'))) {
+      found.set(root, getProjectName(root) ?? basename(root));
+      continue;
+    }
+    let entries: import('node:fs').Dirent[] = [];
+    try {
+      entries = await readdir(root, { withFileTypes: true, encoding: 'utf-8' });
+    } catch {
+      // A root that no longer exists is skipped, not fatal: the operator may
+      // have listed several machines' worth of paths in one env file.
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const path = join(root, entry.name);
+      if (existsSync(join(path, '.git'))) found.set(path, getProjectName(path) ?? entry.name);
+    }
+  }
+  return [...found.entries()].map(([path, name]) => ({ path, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Branch list for one allowlisted project. Anything outside the roots throws. */
+async function listRemoteBranches(cwd: string): Promise<unknown> {
+  if (!isCwdAllowed(cwd, remoteAccess.ticketRoots)) throw new Error('cwd is not in the ticket-root allowlist');
+  return listBranches(cwd);
+}
+
+/**
+ * The extra hurdle a ticket from a device has to clear. Local tickets are held
+ * to the cwd allowlist at creation (the runner would reject them later anyway,
+ * but minutes later and as a failed ticket). SSH tickets are refused outright
+ * unless the operator named the host — otherwise a device token would reach
+ * every machine this one can ssh to.
+ */
+function validateRemoteTicketCreate(input: { cwd: string; location?: { kind: string; ssh?: { host: string } } }): string | null {
+  if (input.location?.kind === 'ssh') {
+    const host = input.location.ssh?.host;
+    if (!host || !remoteAccess.sshHosts.includes(host)) {
+      return 'Remote tickets on this host are not allowed. Add it to CLAUDE_ALIVE_REMOTE_SSH_HOSTS.';
+    }
+    return null;
+  }
+  if (!isCwdAllowed(input.cwd, remoteAccess.ticketRoots)) {
+    return 'cwd is not in the ticket-root allowlist';
+  }
+  return null;
+}
+
 const httpServer = createHttpServer({
   onEvent,
   getSnapshot,
   runs: runStore,
+  remoteAccess,
+  remoteProjects: listRemoteProjects,
+  remoteBranches: listRemoteBranches,
   tickets: {
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
@@ -707,6 +788,7 @@ const httpServer = createHttpServer({
       }
       return null;
     },
+    validateRemoteCreate: validateRemoteTicketCreate,
     list: () => ticketStore.list(),
     create: async (input) => {
       const ticket = await ticketStore.create(input);
@@ -978,14 +1060,19 @@ httpServer.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
-  // Loopback binding keeps the network out, not the browser: without this any
-  // page the user visits could open this socket and read every session.
-  if (!isAllowedWsOrigin(req.headers.origin, PORT)) {
-    console.warn(`[ws] rejected upgrade from origin ${req.headers.origin}`);
+  // Origin alone guarded this socket while the server was loopback-only. It is
+  // not enough once the port is reachable: a native client sends no Origin, and
+  // this socket accepts `terminal:spawn`.
+  const decision = authorizeUpgrade(
+    { headers: req.headers, remoteAddress: req.socket.remoteAddress, port: PORT },
+    remoteAccess,
+  );
+  if (!decision.ok) {
+    console.warn(`[ws] rejected upgrade (${decision.reason})`);
     socket.destroy();
     return;
   }
-  broadcaster.handleUpgrade(req, socket, head);
+  broadcaster.handleUpgrade(req, socket, head, { remote: decision.remote });
 });
 
 // Host CPU/RAM metrics poller. 2s cadence is smooth for a header indicator without
@@ -1037,7 +1124,7 @@ const stopWorkerLoop = startWorkerLoop();
 // broadcaster exists so state changes reach connected clients.
 void ticketRunner.recover();
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, HOST, () => {
   console.log(`
   ╔══════════════════════════════════════╗
   ║        claude-alive server           ║
@@ -1046,6 +1133,19 @@ httpServer.listen(PORT, () => {
   ║  WS:    ws://localhost:${PORT}/ws      ║
   ╚══════════════════════════════════════╝
   `);
+  console.log(`[server] bound to ${HOST}:${PORT}`);
+  if (remoteAccess.enabled) {
+    // Names, never values.
+    const labels = remoteAccess.tokens.map((t) => t.label).join(', ');
+    console.log(`[server] remote access ON — device tokens: ${labels}`);
+    console.log(`[server] ticket roots: ${remoteAccess.ticketRoots.join(', ')}`);
+    if (remoteAccess.trustLoopback) {
+      console.warn(
+        '[server] CLAUDE_ALIVE_TRUST_LOOPBACK=1 — anything reaching this server through a local ' +
+          'proxy or SSH forward is treated as local and needs no token.',
+      );
+    }
+  }
 });
 
 // Ignore SIGHUP so the server survives terminal close (daemon mode)
