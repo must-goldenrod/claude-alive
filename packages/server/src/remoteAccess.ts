@@ -45,6 +45,15 @@ export interface RemoteAccessConfig {
   ticketRoots: readonly string[];
   /** SSH hosts a remote caller may target; empty = no remote ssh tickets. */
   sshHosts: readonly string[];
+  /**
+   * Full-access token for processes that live on this machine: the hook script,
+   * the CLI, and the dashboard the server itself serves. They need routes no
+   * remote device may touch (`POST /api/event` above all), and once loopback
+   * stops being evidence they need some other way to say "I am local". The
+   * answer is filesystem access: this value sits 0600 in ~/.claude-alive/.env,
+   * which a tunnelled attacker cannot read. Absent = no such caller exists.
+   */
+  localToken?: string;
 }
 
 export type ConfigResult =
@@ -60,7 +69,7 @@ export type ConfigResult =
  */
 export type AuthOutcome =
   | { kind: 'local' }
-  | { kind: 'token'; label: string }
+  | { kind: 'token'; label: string; fullAccess: boolean }
   | { kind: 'untrusted' }
   | { kind: 'reject'; status: 401 | 403 | 429; error: string };
 
@@ -129,9 +138,9 @@ export function bearerFromHeaders(headers: IncomingHttpHeaders): string | undefi
     const m = /^bearer\s+(.+)$/i.exec(auth.trim());
     if (m) return m[1]!.trim();
   }
-  const proto = headers['sec-websocket-protocol'];
-  const offered = typeof proto === 'string' ? proto : Array.isArray(proto) ? proto.join(',') : undefined;
-  if (offered) {
+  // Node folds a repeated Sec-WebSocket-Protocol into one comma-joined string.
+  const offered = headers['sec-websocket-protocol'];
+  if (typeof offered === 'string') {
     for (const raw of offered.split(',')) {
       const entry = raw.trim();
       if (entry.startsWith(WS_TOKEN_PROTOCOL_PREFIX)) {
@@ -216,6 +225,22 @@ export interface AuthorizeInput {
   pathname: string;
   headers: IncomingHttpHeaders;
   remoteAddress: string | undefined;
+  /**
+   * `?token=` from the URL. A browser opening the dashboard cannot set a
+   * header, so `claude-alive start` hands it the token in the URL once and the
+   * page moves it into localStorage. Accepted for the UI shell only — see
+   * `acceptsSearchToken`.
+   */
+  searchToken?: string;
+}
+
+/**
+ * URLs leak: access logs, shell history, `Referer`. So a token in the query
+ * string buys exactly one thing — bootstrapping the served dashboard — and is
+ * refused everywhere an API client could have sent a header instead.
+ */
+function acceptsSearchToken(pathname: string): boolean {
+  return !pathname.startsWith('/api/') && !pathname.startsWith('/v1/');
 }
 
 /**
@@ -245,7 +270,14 @@ export function authorizeRequest(
     return { kind: 'reject', status: 429, error: 'Too many failed authentications' };
   }
 
-  const label = verifyToken(bearerFromHeaders(input.headers), config.tokens);
+  const offered =
+    bearerFromHeaders(input.headers) ??
+    (acceptsSearchToken(input.pathname) ? input.searchToken : undefined);
+
+  const known: RemoteToken[] = config.localToken
+    ? [{ label: 'local', value: config.localToken }, ...config.tokens]
+    : [...config.tokens];
+  const label = verifyToken(offered, known);
   if (label === null) {
     limiter?.fail(key);
     // The message names neither the offered token nor whether one was offered.
@@ -253,10 +285,11 @@ export function authorizeRequest(
   }
   limiter?.succeed(key);
 
-  if (!isRemoteAllowed(input.method, input.pathname)) {
+  const fullAccess = label === 'local' && config.localToken !== undefined;
+  if (!fullAccess && !isRemoteAllowed(input.method, input.pathname)) {
     return { kind: 'reject', status: 403, error: 'Route is not available to remote callers' };
   }
-  return { kind: 'token', label };
+  return { kind: 'token', label, fullAccess };
 }
 
 /**
@@ -310,6 +343,7 @@ export function loadRemoteAccessConfig(env: NodeJS.ProcessEnv): ConfigResult {
       tokens,
       ticketRoots,
       sshHosts,
+      ...(env.CLAUDE_ALIVE_LOCAL_TOKEN?.trim() ? { localToken: env.CLAUDE_ALIVE_LOCAL_TOKEN.trim() } : {}),
     },
   };
 }

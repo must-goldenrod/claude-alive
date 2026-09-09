@@ -145,7 +145,7 @@ describe('authorizeRequest — remote enabled', () => {
       { method: 'POST', pathname: '/api/tickets', headers: { authorization: `Bearer ${LONG}` }, remoteAddress: '10.0.0.4' },
       config(),
     );
-    expect(out).toEqual({ kind: 'token', label: 'phone' });
+    expect(out).toEqual({ kind: 'token', label: 'phone', fullAccess: false });
   });
   it('answers 403 for a valid token on a route that is not whitelisted', () => {
     const out = authorizeRequest(
@@ -238,5 +238,50 @@ describe('loadRemoteAccessConfig', () => {
       CLAUDE_ALIVE_TOKEN: LONG, CLAUDE_ALIVE_TICKET_ROOTS: '/work',
     });
     expect(r).toMatchObject({ ok: true, config: { host: '100.64.0.1' } });
+  });
+});
+
+describe('local full-access token', () => {
+  const LOCAL = 'l'.repeat(MIN_TOKEN_CHARS);
+  const withLocal = () => config({ localToken: LOCAL });
+
+  it('bypasses the route whitelist so hooks and the local dashboard keep working', () => {
+    const out = authorizeRequest(
+      { method: 'POST', pathname: '/api/event', headers: { authorization: `Bearer ${LOCAL}` }, remoteAddress: '127.0.0.1' },
+      withLocal(),
+    );
+    expect(out).toEqual({ kind: 'token', label: 'local', fullAccess: true });
+  });
+
+  it('is still a token, so a caller without it is refused even on loopback', () => {
+    expect(
+      authorizeRequest({ method: 'POST', pathname: '/api/event', headers: {}, remoteAddress: '127.0.0.1' }, withLocal()),
+    ).toMatchObject({ kind: 'reject', status: 401 });
+  });
+
+  it('does not grant full access to a device token', () => {
+    const out = authorizeRequest(
+      { method: 'POST', pathname: '/api/event', headers: { authorization: `Bearer ${LONG}` }, remoteAddress: '10.0.0.4' },
+      withLocal(),
+    );
+    expect(out).toMatchObject({ kind: 'reject', status: 403 });
+  });
+});
+
+describe('?token= bootstrap for the served dashboard', () => {
+  const LOCAL = 'l'.repeat(MIN_TOKEN_CHARS);
+  it('accepts a query token for the UI shell, which has no way to set a header', () => {
+    const out = authorizeRequest(
+      { method: 'GET', pathname: '/', headers: {}, remoteAddress: '127.0.0.1', searchToken: LOCAL },
+      config({ localToken: LOCAL }),
+    );
+    expect(out).toMatchObject({ kind: 'token', fullAccess: true });
+  });
+  it('refuses a query token on an API route — URLs end up in logs and referrers', () => {
+    const out = authorizeRequest(
+      { method: 'GET', pathname: '/api/tickets', headers: {}, remoteAddress: '10.0.0.4', searchToken: LONG },
+      config(),
+    );
+    expect(out).toMatchObject({ kind: 'reject', status: 401 });
   });
 });

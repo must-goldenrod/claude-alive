@@ -9,6 +9,11 @@ import { createStaticHandler } from './staticFiles.js';
 import { handleRunRequest } from './runRoutes.js';
 import type { RunStore } from './runStore.js';
 import { listClaudeSessions } from './claudeSessionIndex.js';
+import {
+  authorizeRequest,
+  createAuthLimiter,
+  type RemoteAccessConfig,
+} from './remoteAccess.js';
 import type { EfficioReader } from './efficioReader.js';
 
 // --- Zod schemas for runtime input validation ---
@@ -144,6 +149,11 @@ export interface HttpRouterOptions {
     remove: (id: string) => Promise<boolean>;
     /** Validate cwd before creating; returns an error message, or null when valid. */
     validateCwd?: (cwd: string, isRemote: boolean) => string | null;
+    /**
+     * Extra validation applied only to tickets created by a remote device: the
+     * cwd allowlist and the SSH-host policy. Returns an error message, or null.
+     */
+    validateRemoteCreate?: (input: { cwd: string; location?: { kind: string; ssh?: { host: string } } }) => string | null;
     /** Apply a human good/bad label to a settled ticket. Undefined = unknown id. */
     evaluate?: (
       id: string,
@@ -177,6 +187,23 @@ export interface HttpRouterOptions {
     create: (cwd: string, name: string, from?: string) => Promise<unknown>;
     remove: (cwd: string, name: string) => Promise<unknown>;
   };
+
+  /**
+   * Remote-access policy. Absent = the pre-existing local-only behaviour.
+   * Present and enabled, every request needs a token — including the ones that
+   * arrive on loopback, because a tunnel makes remote callers look local.
+   */
+  remoteAccess?: RemoteAccessConfig;
+
+  /**
+   * Projects a remote caller may target, drawn from the ticket-root allowlist.
+   * This exists because `/api/fs/browse` must stay closed to remote callers
+   * (it reads any directory) while the app still has to offer a cwd to pick.
+   */
+  remoteProjects?: () => Promise<Array<{ path: string; name: string }>>;
+
+  /** Branches of one allowlisted project, for the same reason as remoteProjects. */
+  remoteBranches?: (cwd: string) => Promise<unknown>;
 
   /** Remote directory listing over SSH, for the ticket's remote folder picker. */
   sshBrowse?: (
@@ -256,14 +283,18 @@ const ReflectBodySchema = z.object({
 const MAX_BODY_BYTES = 1_048_576; // 1 MB
 
 /**
- * Ticket routes spawn fully-autonomous agents (RCE-equivalent), so they are
- * restricted to loopback callers regardless of what interface the server bound.
- * Covers IPv4, IPv6, and IPv4-mapped-IPv6 loopback.
+ * Policy for an install that never opted into remote access: loopback callers
+ * are trusted, everyone else falls through to the per-route gates that answer
+ * 403. Identical to the behaviour before remote mode existed.
  */
-function isLoopbackRequest(req: IncomingMessage): boolean {
-  const addr = req.socket.remoteAddress ?? '';
-  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1' || addr.startsWith('127.');
-}
+const REMOTE_DISABLED: RemoteAccessConfig = {
+  enabled: false,
+  host: '127.0.0.1',
+  trustLoopback: false,
+  tokens: [],
+  ticketRoots: [],
+  sshHosts: [],
+};
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -351,13 +382,52 @@ export function createHttpServer(options: HttpRouterOptions) {
     backends,
     git,
     sshBrowse,
+    remoteAccess,
+    remoteProjects,
+    remoteBranches,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
+  const accessPolicy = remoteAccess ?? REMOTE_DISABLED;
+  // One limiter per server instance: the counter is what makes online token
+  // guessing expensive, and it has to outlive individual requests.
+  const authLimiter = createAuthLimiter();
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
 
-    // Delegate prompt-subsystem paths to the mounted Fastify router first.
+    // Preflight carries no Authorization by definition, so it is answered
+    // before the gate; it reveals nothing a 401 would not.
+    if (req.method === 'OPTIONS') {
+      sendJson(res, 204, null, req);
+      return;
+    }
+
+    // The access gate sits ahead of every route *and* ahead of the prompt
+    // delegation below. Placing it after would leave `/api/prompts`,
+    // `/api/sessions` and `/v1/ingest/*` — prompt text and a write path —
+    // outside the policy entirely, since those return before the route table.
+    const auth = authorizeRequest(
+      {
+        method: req.method ?? 'GET',
+        pathname: url.pathname,
+        headers: req.headers,
+        remoteAddress: req.socket.remoteAddress,
+        searchToken: url.searchParams.get('token') ?? undefined,
+      },
+      accessPolicy,
+      authLimiter,
+    );
+    if (auth.kind === 'reject') {
+      sendJson(res, auth.status, { error: auth.error }, req);
+      return;
+    }
+    // What the per-route loopback checks below now ask. A remote caller only
+    // gets here after clearing the route allowlist, so those checks must not
+    // reject it a second time.
+    const sensitiveAllowed = auth.kind !== 'untrusted';
+    const remoteCaller = auth.kind === 'token' && !auth.fullAccess;
+
+    // Delegate prompt-subsystem paths to the mounted Fastify router.
     // These paths are exclusively owned by the absorbed think-prompt code
     // (read-only JSON API + browser-extension ingest); the built-in router
     // never registers them, so there is no overlap risk.
@@ -368,11 +438,6 @@ export function createHttpServer(options: HttpRouterOptions) {
         url.pathname.startsWith('/v1/ingest/'))
     ) {
       promptRouter(req, res);
-      return;
-    }
-
-    if (req.method === 'OPTIONS') {
-      sendJson(res, 204, null, req);
       return;
     }
 
@@ -474,7 +539,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // ── Run registry (spec 2026-08-28) ──────────────────────────────────────
     // Same loopback restriction as tickets: closing a run writes to disk.
     if (runs && url.pathname.startsWith('/api/runs')) {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'Run API is restricted to loopback' }, req);
         return;
       }
@@ -496,7 +561,7 @@ export function createHttpServer(options: HttpRouterOptions) {
 
     // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────
     // These routes drive RCE-equivalent autonomous agents → loopback callers only.
-    if (tickets && url.pathname.startsWith('/api/tickets') && !isLoopbackRequest(req)) {
+    if (tickets && url.pathname.startsWith('/api/tickets') && !sensitiveAllowed) {
       sendJson(res, 403, { error: 'Ticket API is restricted to loopback' }, req);
       return;
     }
@@ -515,6 +580,16 @@ export function createHttpServer(options: HttpRouterOptions) {
         if (cwdError) {
           sendJson(res, 400, { error: cwdError }, req);
           return;
+        }
+        // A device token may only start an agent where the operator said it
+        // could. Checked at create time, not at spawn time, so the app gets a
+        // real error instead of a ticket that fails minutes later.
+        if (remoteCaller) {
+          const remoteError = tickets.validateRemoteCreate?.(parsed.data);
+          if (remoteError) {
+            sendJson(res, 400, { error: remoteError }, req);
+            return;
+          }
         }
         const ticket = await tickets.create(parsed.data);
         sendJson(res, 201, { ticket }, req);
@@ -609,7 +684,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // GET /api/evaluations — the evaluation dataset (read-only). Loopback-only:
     // it echoes ticket content (goals/results), matching the /api/tickets guard.
     if (tickets?.listEvaluations && req.method === 'GET' && url.pathname === '/api/evaluations') {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'Evaluation API is restricted to loopback' }, req);
         return;
       }
@@ -619,7 +694,7 @@ export function createHttpServer(options: HttpRouterOptions) {
 
     // Orchestration backends (loopback-only): list + live connectivity check.
     if (backends && req.method === 'GET' && url.pathname === '/api/backends') {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'Backends API is restricted to loopback' }, req);
         return;
       }
@@ -631,7 +706,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // are loopback-only exactly like the ticket routes. Every branch name is
     // validated in gitBranches before it reaches git.
     if (git && url.pathname.startsWith('/api/git/')) {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'Git API is restricted to loopback' }, req);
         return;
       }
@@ -671,7 +746,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // POST /api/ssh/browse — list remote sub-directories for the remote folder
     // picker (loopback-only; the ssh target comes from the local user's preset).
     if (sshBrowse && req.method === 'POST' && url.pathname === '/api/ssh/browse') {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'SSH browse is restricted to loopback' }, req);
         return;
       }
@@ -692,7 +767,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     }
     const backendCheckMatch = url.pathname.match(/^\/api\/backends\/([^/]+)\/check$/);
     if (backends && req.method === 'POST' && backendCheckMatch) {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'Backends API is restricted to loopback' }, req);
         return;
       }
@@ -725,7 +800,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // for the Tools > Data dashboard. Loopback-only: it reads the local user's
     // Claude Code transcripts (prompt/response metadata lives alongside).
     if (getUsageRecords && req.method === 'GET' && url.pathname === '/api/usage') {
-      if (!isLoopbackRequest(req)) {
+      if (!sensitiveAllowed) {
         sendJson(res, 403, { error: 'Usage API is restricted to loopback' }, req);
         return;
       }
@@ -832,6 +907,36 @@ export function createHttpServer(options: HttpRouterOptions) {
           : efficio.profile(sessionId)
         : { modelVersion: null, sessions: [] };
       sendJson(res, 200, profiles, req);
+      return;
+    }
+
+    // ── Remote app surface ──────────────────────────────────────────────────
+    // The narrow, allowlist-shaped replacement for /api/fs/browse: it answers
+    // "which directories may a ticket run in", never "what is on this disk".
+    if (req.method === 'GET' && url.pathname === '/api/remote/projects') {
+      if (!remoteProjects) {
+        sendJson(res, 503, { error: 'Remote project listing is not configured' }, req);
+        return;
+      }
+      sendJson(res, 200, { projects: await remoteProjects() }, req);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/remote/branches') {
+      const cwd = url.searchParams.get('cwd') ?? '';
+      if (!remoteBranches) {
+        sendJson(res, 503, { error: 'Remote branch listing is not configured' }, req);
+        return;
+      }
+      if (!cwd) {
+        sendJson(res, 400, { error: 'cwd is required' }, req);
+        return;
+      }
+      try {
+        sendJson(res, 200, await remoteBranches(cwd), req);
+      } catch (error) {
+        sendJson(res, 400, { error: error instanceof Error ? error.message : 'branch listing failed' }, req);
+      }
       return;
     }
 
