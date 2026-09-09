@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation, EventLogEntry, WSServerMessage, WSClientMessage, AgentStats, ResumableSession, UsageLimitsSnapshot } from '@claude-alive/core';
 import { playCompletionSound } from '../../../services/sound';
+import { wsProtocols } from '../../../lib/auth.ts';
 
 export interface SystemMetrics {
   /** CPU usage 0..1 (average across cores, rolling 2s window). */
@@ -45,7 +46,10 @@ export function useWebSocket(url: string, onRawMessage?: (msg: WSServerMessage) 
   const despawnTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const connect = useCallback(() => {
-    const ws = new WebSocket(url);
+    // The token rides the subprotocol: a browser cannot set a header on a
+    // socket, and a remote-mode server refuses an unauthenticated upgrade.
+    const protocols = wsProtocols();
+    const ws = protocols ? new WebSocket(url, protocols) : new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
