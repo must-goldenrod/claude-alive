@@ -1,6 +1,6 @@
 # ADR-0009: MVP의 보안 경계는 로컬 단일 사용자다
 
-- 상태: **Accepted** (P0 threat model)
+- 상태: **Accepted** (P0 threat model) — 일부 항목은 [ADR-0013](0013-remote-access-token-boundary.md)이 supersede (2026-09-09)
 - 일자: 2026-07-20
 
 ## 맥락
@@ -8,6 +8,8 @@ Alive는 터미널 출력, 프롬프트 원문, 코드 경로, 세션 이력을 
 
 ## 결정
 MVP는 로컬 단일 사용자 앱이다. 서버는 기본 `127.0.0.1` bind. LAN 공개는 명시적 설정이며, 그 경우 bearer session + TLS reverse proxy를 필수로 한다. 단순히 `0.0.0.0`으로 bind하는 것은 제품 기능으로 인정하지 않는다.
+
+> **개정(2026-09-09, ADR-0013)**: bearer 토큰 요구와 명시적 opt-in 은 유지된다. 바뀐 것은 두 가지다 — (1) TLS 는 서버가 아니라 사설망/터널에 위임한다, (2) 원격 모드에서는 loopback 주소도 인증으로 인정하지 않는다(터널이 위조하므로).
 
 ## 결정 세부
 - HTTP Origin 검증, WebSocket origin 검증, CSRF 방어

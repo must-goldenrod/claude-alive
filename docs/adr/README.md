@@ -27,5 +27,6 @@
 | [0010](0010-product-name-and-compat-migration.md) | 제품명과 호환 migration | Accepted | P0 말 branding 조사 완료 |
 | [0011](0011-prompt-efficio-db-ownership.md) | prompt/efficio DB 소유권과 session ID link | Accepted | P0 package/data ownership review |
 | 0012 | v1 compatibility projection/deprecation | Proposed | P0 golden fixture + P1 dual-run |
+| [0013](0013-remote-access-token-boundary.md) | 원격 접근 경계 = 토큰 (0009 일부 supersede) | **Accepted** | LAN·터널 실측 + 게이트 테스트 |
 
 현재 상태의 사실 근거는 [`docs/status/p0a-discovery-inventory.md`](../status/p0a-discovery-inventory.md)를 참조하십시오.

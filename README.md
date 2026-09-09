@@ -562,7 +562,8 @@ claude-alive/
 
 ### Security / 보안
 
-- All HTTP endpoints only accept `localhost` requests (CORS restricted)
+- The server binds `127.0.0.1` by default. Binding anywhere else requires `CLAUDE_ALIVE_REMOTE=1`, and that mode refuses to start without a device token and a cwd allowlist.
+  서버는 기본적으로 `127.0.0.1` 에만 바인딩한다. 그 밖의 인터페이스는 `CLAUDE_ALIVE_REMOTE=1` 이 필요하고, 이 모드는 기기 토큰과 cwd 허용목록 없이는 부팅하지 않는다.
 - Runtime input validation with [Zod](https://zod.dev/) at API boundaries
 - Security headers on all responses (CSP, X-Content-Type-Options, X-Frame-Options)
 - Shell injection protection — hook scripts use stdin pipes instead of variable interpolation
@@ -571,7 +572,67 @@ claude-alive/
 - Path traversal protection on static file serving
 - Request body size limited to 1MB
 - Terminal sessions limited to 5 concurrent (auto-cleanup after 30min inactivity)
-- No external network calls — everything runs locally
+- No telemetry and no third-party calls: the only outbound requests are the ones you configure (a Claude CLI run, or an LLM gateway you point it at).
+  텔레메트리·서드파티 호출 없음. 나가는 요청은 사용자가 설정한 것(Claude CLI 실행, 지정한 LLM 게이트웨이)뿐이다.
+
+### Remote access / 원격 접속
+
+Off by default. Turning it on replaces one implicit rule — "a request from this
+machine is trusted" — with an explicit one: a bearer token, plus an allowlist of
+the routes a remote device may reach. A loopback address stops counting as
+authentication, because a tunnel (`ssh -L`, `cloudflared`) makes every remote
+request look local.
+
+기본은 꺼져 있다. 켜면 "이 기기에서 온 요청은 신뢰한다"는 암묵적 규칙이
+명시적 규칙 — bearer 토큰 + 원격 허용 라우트 목록 — 으로 대체된다. 터널을 거치면
+원격 요청도 loopback 으로 보이기 때문에, loopback 주소는 더 이상 인증이 아니다.
+
+```bash
+# 1. Issue a token for the device (shown once)
+claude-alive token new phone
+
+# 2. Name the directories a remote ticket may run in — required
+echo 'CLAUDE_ALIVE_TICKET_ROOTS=/Users/you/work' >> ~/.claude-alive/.env
+
+# 3. Start with remote access on
+claude-alive stop && claude-alive start --remote
+
+# Later: revoke one device without touching the others
+claude-alive token revoke phone
+```
+
+| Variable | Meaning |
+|---|---|
+| `CLAUDE_ALIVE_REMOTE=1` | Opt in to remote access. Without it the server stays on loopback. |
+| `CLAUDE_ALIVE_HOST` | Interface to bind. Defaults to `127.0.0.1`, or `0.0.0.0` in remote mode. |
+| `CLAUDE_ALIVE_TOKENS` | `label:token` entries, comma-separated. Managed by `claude-alive token`. |
+| `CLAUDE_ALIVE_TICKET_ROOTS` | Colon-separated directories a ticket may run in. Required in remote mode. |
+| `CLAUDE_ALIVE_REMOTE_SSH_HOSTS` | Hosts a remote device may target with an SSH ticket. Empty = none. |
+| `CLAUDE_ALIVE_TRUST_LOOPBACK=1` | Keep trusting loopback in remote mode. Only safe when nothing proxies to the port. |
+
+**What a device token can do**: list and create tickets, cancel/retry/reply to
+them, read `/api/status`, list the projects and branches under the ticket roots,
+and read the live WebSocket stream. **What it cannot do**: open a terminal
+(`terminal:*` is refused on a device connection), browse the filesystem, read
+prompt history, run git writes, or post events. Everything not on the allowlist
+answers 403.
+
+**Transport**: the server speaks HTTP, not HTTPS. Put it on a private network —
+[Tailscale](https://tailscale.com/) is the least work — rather than forwarding a
+port from the public internet. TLS is delegated on purpose: certificate renewal
+inside a local daemon is a permanent maintenance cost, and a WireGuard-based
+network authenticates the device as well as encrypting the link.
+
+전송 구간은 HTTP다. 공인 IP 포트포워딩 대신 Tailscale 같은 사설망 위에 두는 것을
+권장한다. TLS 를 서버가 직접 떠안지 않는 이유는 인증서 갱신이 로컬 데몬의 영구
+부채가 되기 때문이고, WireGuard 계열 망은 암호화와 함께 기기 인증까지 끝낸다.
+
+**The host has to be awake.** A sleeping Mac answers nothing; this is expected,
+not a bug. Keep it awake (`caffeinate -s`) or run the server on a machine that
+is always on and let tickets reach your laptop over SSH.
+
+절전 중인 맥은 응답하지 않는다. 정상 동작이다. `caffeinate -s` 로 깨워두거나,
+상시 켜진 호스트에서 서버를 돌리고 작업만 SSH 로 내려보내면 된다.
 
 ---
 

@@ -1,8 +1,9 @@
 # 원격 트리거 보안 설계 및 점검 / Remote Trigger Hardening
 
-상태: 초안 rev2(심층 검토 반영) · 작성 2026-09-09 · 대상 버전 0.2.x
+상태: rev3(구현 완료·실측 검증) · 작성 2026-09-09 · 대상 버전 0.2.x
 목표: 앱에서 로컬 claude-alive를 **같은 네트워크 밖에서** 제어(티켓 생성/트리거)하되, 오픈소스 배포물로서 안전한 기본값과 인증을 갖춘다.
-관련 결정: [ADR-0009 로컬 단일 사용자 보안 경계](../adr/0009-local-single-user-security-boundary.md) — 본 문서는 그 경계를 변경하므로 §9 참조.
+관련 결정: [ADR-0013 원격 접근 경계 = 토큰](../adr/0013-remote-access-token-boundary.md) (ADR-0009 일부 supersede) — §9 참조.
+구현 결과와 수정 후 실측은 §10.
 
 ---
 
@@ -190,30 +191,30 @@ GET /api/usage         -> 200   (직접 요청 시 403)
 - [x] SECURITY.md·README 문구와 코드 불일치 확인
 - [x] loopback 게이트에 대한 기존 테스트 0건 확인(`httpRouter.test.ts`)
 
-### 구현 게이트 — 서버(미착수 = [ ])
-- [ ] `CLAUDE_ALIVE_HOST` 기본 `127.0.0.1` 바인딩
-- [ ] `CLAUDE_ALIVE_REMOTE` opt-in, 미설정 시 loopback
-- [ ] 원격 모드에서 `CLAUDE_ALIVE_TOKEN` 부재 시 부팅 거부
-- [ ] 원격 모드에서 `CLAUDE_ALIVE_TICKET_ROOTS` 부재 시 부팅 거부 + ssh 티켓 호스트 정책
-- [ ] `timingSafeEqual` 토큰 검증 유틸 + 단위테스트
-- [ ] **원격 모드에서 loopback OR 우회 제거**(프록시 경유 대응) + 회귀 테스트
-- [ ] 원격 허용 라우트 화이트리스트(기본 차단) + 테스트 — **promptRouter 위임보다 앞에 배치**
-- [ ] WS 업그레이드 토큰 검증 + 원격 Origin 허용 확장 + 원격 `terminal:*` 거부 + 테스트
-- [ ] 원격 전용 프로젝트/브랜치 목록 엔드포인트(fs/browse 대체)
-- [ ] 토큰 401 레이트리밋
-- [ ] 토큰이 로그·에러에 노출되지 않음(테스트/수동확인)
-- [ ] `.env` 파일 권한 0600 검사·경고
-- [ ] 원격 상태변경 감사 로그
+### 구현 게이트 — 서버
+- [x] `CLAUDE_ALIVE_HOST` 기본 `127.0.0.1` 바인딩 — `index.ts` `listen(PORT, HOST)`
+- [x] `CLAUDE_ALIVE_REMOTE` opt-in, 미설정 시 loopback
+- [x] 원격 모드에서 토큰 부재 시 부팅 거부
+- [x] 원격 모드에서 `CLAUDE_ALIVE_TICKET_ROOTS` 부재 시 부팅 거부 + ssh 호스트 allowlist(`CLAUDE_ALIVE_REMOTE_SSH_HOSTS`)
+- [x] `timingSafeEqual` 토큰 검증 + 단위테스트 (`remoteAccess.test.ts`)
+- [x] **원격 모드에서 loopback OR 우회 제거** + 포워더 회귀 실측(§10)
+- [x] 원격 허용 라우트 화이트리스트(기본 차단), promptRouter 위임 **앞**에 배치 (`remoteGate.test.ts`)
+- [x] WS 업그레이드 토큰 검증 + 원격 Origin 허용 + 원격 `terminal:*` 거부 (`wsAuth.test.ts`, `wsRemoteAccess.test.ts`)
+- [x] 원격 전용 프로젝트/브랜치 엔드포인트 (`/api/remote/projects`, `/api/remote/branches`)
+- [x] 토큰 실패 레이트리밋(1분 10회 → 429)
+- [x] 토큰이 로그에 남지 않음 — 실측 0건(§10)
+- [x] 로컬 토큰 파일 0600 생성 (`localToken.ts`)
+- [ ] 원격 상태변경 감사 로그 — **미착수**
 
-### 구현 게이트 — CLI/앱/문서(미착수 = [ ])
-- [ ] CLI: `claude-alive start --host/--remote`, `status` 헬스체크가 고정 `localhost`가 아닌 실제 바인딩을 조회(`cli/src/index.ts:272`)
-- [ ] CLI: 토큰 생성/표시/회전 명령(`claude-alive token`), `doctor`에 원격 모드 점검 추가
-- [ ] 앱: 서버 호스트 입력·저장
-- [ ] 앱: 토큰 보관(키체인/보안 저장소)과 모든 요청에 `Authorization: Bearer` 부착
-- [ ] 앱: WS 인증 핸드셰이크(서브프로토콜 또는 첫 메시지) + 재연결 시 재인증
-- [ ] 앱: 401/403 처리(토큰 만료·폐기 안내)
-- [ ] SECURITY.md 갱신, README.md:574 갱신
-- [ ] README/CLI 도움말에 원격 모드 활성 절차 + Tailscale 안내
+### 구현 게이트 — CLI/앱/문서
+- [x] CLI: `claude-alive start --remote/--host`, 부팅 거부 시 로그 노출
+- [x] CLI: `claude-alive token new|list|revoke`, `status` 가 로컬 토큰으로 인증
+- [x] 훅 스크립트가 0600 env 파일에서 토큰을 읽어 Bearer 전송(재설치 불필요)
+- [x] 대시보드: `?token=` 1회 부트스트랩 → localStorage, 동일 출처 요청에 Bearer 자동 부착
+- [x] 대시보드: WS 서브프로토콜 인증, 401 시 토큰 입력 오버레이(EN/KO)
+- [x] SECURITY.md·README 갱신, ADR-0013
+- [ ] 네이티브 앱(별도 저장소): 호스트 입력·키체인 보관·재연결 시 재인증 — 이 저장소 밖
+- [ ] `claude-alive doctor` 에 원격 모드 점검 항목 — **미착수**
 
 ### 재현 명령 (참고)
 ```bash
@@ -284,3 +285,65 @@ rev1은 서버 하드닝만 다뤘다. 현재 UI에 `Authorization`/토큰 관�
 - 따라서 §2.1의 현재 바인딩은 **새 문제가 아니라 ADR 위반 상태**다. §4.1은 신규 결정이 아니라 원복이다.
 - 반면 §3의 "TLS는 Tailscale/WireGuard에 위임, 서버 자체 TLS 미채택"은 ADR-0009의 "TLS reverse proxy 필수"를 **변경**한다. 또 "원격·팀 기능은 RBAC·비밀 격리·감사 로그가 준비된 뒤에야 안전하다"는 근거와도 충돌한다(감사 로그는 §4.7로 편입).
 - 필요한 조치: 원격 트리거를 채택하는 **신규 ADR**(0012)로 0009의 해당 항목을 supersede 하거나, 0009에 개정 항을 추가한다. 구현 착수 전에 결정되어야 한다.
+
+
+---
+
+## 10. 구현 결과와 수정 후 실측 (2026-09-09)
+
+측정 방법: 빌드된 서버를 격리 HOME·포트 3199 로 기동, 같은 LAN IP(192.168.100.56)로 요청. §2 와 동일 조건.
+
+### 10.1 부팅
+| 조건 | 결과 |
+|---|---|
+| 기본(환경변수 없음) | `127.0.0.1:3198` 바인딩. LAN 요청 `000`(도달 불가), loopback `200` |
+| `CLAUDE_ALIVE_REMOTE=1`, 토큰 없음 | 부팅 거부 + 사유 출력 |
+| `CLAUDE_ALIVE_HOST=0.0.0.0`, remote 아님 | 부팅 거부 + 사유 출력 |
+| remote + 토큰 + 루트 | `0.0.0.0:3199`, 토큰 라벨만 로그(값 아님) |
+
+### 10.2 §2.2 에서 열려 있던 라우트 — 토큰 없이 LAN
+
+`/api/status`, `/api/fs/browse`, `/api/prompts`, `/api/sessions`, `PUT /api/projects/names`,
+`POST /api/event`, `POST /v1/ingest/web`(+ext 헤더), `DELETE /api/agents/x`, `GET /` — **전부 401**.
+(수정 전에는 각각 200.)
+
+### 10.3 기기 토큰
+
+| 라우트 | 결과 |
+|---|---|
+| `/api/tickets`, `/api/status`, `/api/remote/projects` | 200 |
+| `/api/fs/browse`, `/api/prompts`, `/api/event`, `/api/git/branches`, `/` | 403 |
+| 티켓 생성 — 루트 밖(`/etc`) | 400 `cwd is not in the ticket-root allowlist` |
+| 티켓 생성 — 미허용 ssh 호스트 | 400 `Remote tickets on this host are not allowed…` |
+| 티켓 생성 — 루트 안 | 201, 목록에 반영 |
+
+### 10.4 §2.5 프록시 우회 — 재현 결과가 뒤집혔다
+
+같은 포워더(LAN IP → `127.0.0.1:3199`) 경유:
+
+| 요청 | 수정 전 | 수정 후 |
+|---|---|---|
+| `GET /api/tickets` (토큰 없음) | 200 | **401** |
+| `GET /api/git/branches` (토큰 없음) | 200 | **401** |
+| `GET /api/usage` (토큰 없음) | 200 | **401** |
+| `GET /api/fs/browse` (기기 토큰) | — | **403** |
+
+### 10.5 WebSocket
+
+| 연결 | 결과 |
+|---|---|
+| 토큰 없음·Origin 없음 (§2.3 의 구멍) | REJECTED |
+| 기기 토큰(서브프로토콜/헤더) | CONNECTED, snapshot 수신, `terminal:spawn` **refused** |
+| 로컬 토큰 | CONNECTED, `terminal:spawn` 허용(로컬 대시보드용) |
+| 잘못된 토큰 | REJECTED |
+
+### 10.6 브루트포스·로그
+- 잘못된 토큰 12회: `401×10 → 429×2`. 잠금 창(60초) 동안에는 정상 토큰도 429 — 의도된 동작.
+- 서버 로그에서 기기 토큰·로컬 토큰 문자열 **0건**.
+
+### 10.7 남은 것
+1. 원격 상태변경 감사 로그(§4.7) — 미착수.
+2. 앱 알림(DECISION 티켓 대기) — 미착수. 현재는 앱이 폴링하거나 WS 를 열어두어야 한다.
+3. 토큰 만료 — 폐기(`token revoke`)만 있고 TTL 은 없다.
+4. `claude-alive doctor` 원격 점검 항목.
+5. 호스트 절전 — 설계상 도달 불가. 문서에만 반영(README).
