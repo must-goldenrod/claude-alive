@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { RunTree, Ticket, UsageLimitsSnapshot, WSServerMessage, WSClientMessage } from '@claude-alive/core';
 import { parseClientMessage } from './wsClientSchema.js';
+import { isRemoteWsMessageAllowed, selectWsProtocol } from './wsAuth.js';
 
 const MAX_CLIENTS = 50;
 
@@ -30,6 +31,12 @@ export interface WSBroadcasterOptions {
   onClientDisconnect?: (ws: WebSocket) => void;
 }
 
+/** Per-connection facts the upgrade established. */
+export interface WSConnectionMeta {
+  /** Authenticated from off-box: may read the stream, may not drive a terminal. */
+  remote?: boolean;
+}
+
 export class WSBroadcaster {
   private wss: WebSocketServer;
   private clients = new Set<WebSocket>();
@@ -41,6 +48,8 @@ export class WSBroadcaster {
   private maxClients: number;
   private onClientMessage?: WSBroadcasterOptions['onClientMessage'];
   private onClientDisconnect?: WSBroadcasterOptions['onClientDisconnect'];
+  /** Connections that authenticated as a remote device rather than as this machine. */
+  private remoteClients = new WeakSet<WebSocket>();
 
   constructor(options: WSBroadcasterOptions) {
     this.getSnapshot = options.getSnapshot;
@@ -50,7 +59,9 @@ export class WSBroadcaster {
     this.maxClients = options.maxClients ?? MAX_CLIENTS;
     this.onClientMessage = options.onClientMessage;
     this.onClientDisconnect = options.onClientDisconnect;
-    this.wss = new WebSocketServer({ noServer: true });
+    // A browser that offers a subprotocol disconnects unless the server names
+    // one back, and the token rides the subprotocol — so echo it.
+    this.wss = new WebSocketServer({ noServer: true, handleProtocols: selectWsProtocol });
 
     this.wss.on('connection', (ws) => {
       if (this.clients.size >= this.maxClients) {
@@ -71,6 +82,11 @@ export class WSBroadcaster {
           // Malformed or schema-invalid payload — drop it rather than trusting a
           // bad shape downstream (e.g. a non-string tabId used as a Map key).
           console.warn('[ws] dropped invalid client message');
+          return;
+        }
+        if (this.remoteClients.has(ws) && !isRemoteWsMessageAllowed(msg.type)) {
+          // A device token buys the read stream, not a PTY.
+          console.warn(`[ws] refused ${msg.type} from a remote client`);
           return;
         }
         if (msg.type === 'ping') {
@@ -142,8 +158,9 @@ export class WSBroadcaster {
     return this.clients.size;
   }
 
-  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer, meta: WSConnectionMeta = {}): void {
     this.wss.handleUpgrade(req, socket, head, (ws) => {
+      if (meta.remote) this.remoteClients.add(ws);
       this.wss.emit('connection', ws, req);
     });
   }

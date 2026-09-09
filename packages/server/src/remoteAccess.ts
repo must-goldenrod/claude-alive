@@ -167,6 +167,9 @@ const REMOTE_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'GET', pattern: /^\/api\/evaluations$/ },
   { method: 'GET', pattern: /^\/api\/remote\/projects$/ },
   { method: 'GET', pattern: /^\/api\/remote\/branches$/ },
+  // The live stream. Read-only for a device: `terminal:*` is refused per
+  // connection in wsAuth, not here, because the allowlist is path-shaped.
+  { method: 'GET', pattern: /^\/ws$/ },
 ];
 
 export function isRemoteAllowed(method: string, pathname: string): boolean {
