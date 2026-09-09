@@ -1008,5 +1008,32 @@
     "placeholder": "Device token",
     "submit": "Connect",
     "invalid": "That token was refused. Check it and try again."
+  },
+  "mobile": {
+    "listTitle": "Tickets",
+    "filterAll": "All",
+    "filterActive": "Running",
+    "filterDecision": "Needs answer",
+    "filterDone": "Done",
+    "empty": "No tickets yet",
+    "newTicket": "New ticket",
+    "composeTitle": "New ticket",
+    "goalLabel": "What should it do?",
+    "goalPlaceholder": "e.g. Translate the login error messages to Korean",
+    "projectLabel": "In which project",
+    "noProjects": "No project to choose from. Set CLAUDE_ALIVE_TICKET_ROOTS on the server.",
+    "presetLabel": "How deep",
+    "create": "Create",
+    "creating": "Creating…",
+    "back": "Back",
+    "resultLabel": "Result",
+    "noResult": "No result",
+    "questionLabel": "The agent is asking",
+    "answerPlaceholder": "Type your answer",
+    "send": "Send",
+    "sending": "Sending…",
+    "cancelTicket": "Cancel",
+    "retryTicket": "Retry",
+    "offline": "Disconnected from the server"
   }
 }

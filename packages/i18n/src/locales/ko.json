@@ -1007,5 +1007,32 @@
     "placeholder": "기기 토큰",
     "submit": "연결",
     "invalid": "토큰이 거부되었습니다. 다시 확인해 주세요."
+  },
+  "mobile": {
+    "listTitle": "티켓",
+    "filterAll": "전체",
+    "filterActive": "진행중",
+    "filterDecision": "답변대기",
+    "filterDone": "완료",
+    "empty": "아직 티켓이 없습니다",
+    "newTicket": "새 티켓",
+    "composeTitle": "새 티켓",
+    "goalLabel": "무엇을 시킬까요?",
+    "goalPlaceholder": "예: 로그인 화면의 오류 메시지를 한국어로 바꿔줘",
+    "projectLabel": "어느 프로젝트에서",
+    "noProjects": "선택할 프로젝트가 없습니다. 서버의 CLAUDE_ALIVE_TICKET_ROOTS 에 폴더를 지정하세요.",
+    "presetLabel": "얼마나 깊게",
+    "create": "만들기",
+    "creating": "만드는 중…",
+    "back": "뒤로",
+    "resultLabel": "결과",
+    "noResult": "결과 없음",
+    "questionLabel": "에이전트가 묻고 있습니다",
+    "answerPlaceholder": "답변을 적으세요",
+    "send": "보내기",
+    "sending": "보내는 중…",
+    "cancelTicket": "취소",
+    "retryTicket": "재시도",
+    "offline": "서버와 연결이 끊겼습니다"
   }
 }

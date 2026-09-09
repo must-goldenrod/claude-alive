@@ -37,6 +37,8 @@ const TicketsView = lazy(() =>
 );
 import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
 import { isAuthReloading } from './lib/auth.ts';
+import { useIsPhone } from './mobile/useIsPhone.ts';
+import { MobileApp } from './mobile/MobileApp.tsx';
 import { BoardView } from './views/board/BoardView.tsx';
 
 export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data' | 'board';
@@ -545,6 +547,7 @@ export default function App() {
   }, []);
 
   const { tree: runTree } = useRunTree(true, subscribeRaw);
+  const isPhone = useIsPhone();
   // Which checkout is a repository's main one, so selecting a repo alone can
   // still name a concrete folder for the ticket composer.
   const primaryWorktreeIds = useMemo(
@@ -570,6 +573,11 @@ export default function App() {
     window.addEventListener(OPEN_RUN_EVENT, handler);
     return () => window.removeEventListener(OPEN_RUN_EVENT, handler);
   }, [handleViewModeChange]);
+
+  // A phone gets its own screens rather than a squeezed dashboard: the sidebar
+  // alone is 280px of a 390px viewport and the header controls sit past x=850,
+  // so below 768px the desktop layout is not cramped, it is cut off.
+  if (isPhone) return <MobileApp subscribeRaw={subscribeRaw} connected={connected} />;
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
