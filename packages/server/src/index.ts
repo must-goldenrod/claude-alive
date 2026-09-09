@@ -35,6 +35,7 @@ import { SystemMetricsPoller } from './systemMetrics.js';
 import { UsageLimitsPoller } from './usage/rateLimitsPoller.js';
 import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
+import { createCatalogSignal } from './catalogSignal.js';
 import { resolveSessionTerminal } from './sessionTerminalLink.js';
 import { readTranscriptConversation } from './transcriptLocator.js';
 import { augmentPath } from './envPath.js';
@@ -174,14 +175,8 @@ const execFileAsync = promisify(execFile);
  * Coalesce catalog change signals: a busy session emits several events per
  * second, and the client only needs to know "refetch", not how many times.
  */
-let catalogChangeTimer: ReturnType<typeof setTimeout> | null = null;
-function signalCatalogChanged(): void {
-  if (catalogChangeTimer) return;
-  catalogChangeTimer = setTimeout(() => {
-    catalogChangeTimer = null;
-    broadcaster.broadcast({ type: 'v2:catalog-changed' });
-  }, 300);
-}
+const catalogSignal = createCatalogSignal();
+const signalCatalogChanged = () => catalogSignal.signal();
 
 const canonicalPipeline = createCanonicalPipeline({
   dbPath: process.env.CLAUDE_ALIVE_EVENT_DB ?? join(ALIVE_DIR, 'alive.db'),
@@ -1046,6 +1041,9 @@ const broadcaster = new WSBroadcaster({
     terminalManager.detachClient(ws);
   },
 });
+
+// Catalog signals can now reach clients; anything emitted during boot was dropped.
+catalogSignal.connect((message) => broadcaster.broadcast(message));
 
 // Push every run change to connected clients. Without this the sidebar would
 // only be correct at connect time — a ticket finishing, or someone closing a
