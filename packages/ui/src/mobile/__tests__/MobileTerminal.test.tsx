@@ -8,6 +8,7 @@ afterEach(cleanup);
 
 const props = (over = {}) => ({
   title: 'app',
+  subtitle: 'my-repo',
   output: '',
   canType: true,
   exited: false,
@@ -18,6 +19,16 @@ const props = (over = {}) => ({
 });
 
 describe('MobileTerminal', () => {
+  it('goes back from an icon and names the checkout under the title', () => {
+    const onBack = vi.fn();
+    render(<MobileTerminal {...props({ onBack })} />);
+    const back = screen.getByRole('button', { name: /뒤로|Back/ });
+    expect(back).toHaveTextContent('‹');
+    fireEvent.click(back);
+    expect(onBack).toHaveBeenCalled();
+    expect(screen.getByText('my-repo')).toBeInTheDocument();
+  });
+
   it('shows the output it has received', () => {
     render(<MobileTerminal {...props({ output: '$ ls\nREADME.md\n' })} />);
     expect(screen.getByText(/README\.md/)).toBeInTheDocument();

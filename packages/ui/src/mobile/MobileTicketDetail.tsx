@@ -8,7 +8,7 @@ import {
 import { failureLine } from '../views/tickets/failureLine.ts';
 import { useNow } from '../views/dashboard/hooks/useNow.ts';
 import { formatAge } from '../utils/age.ts';
-import { COLORS, screen, topBar, body, primaryButton, secondaryButton, actionBar, input } from './styles.ts';
+import { COLORS, screen, topBar, body, primaryButton, secondaryButton, actionBar, input, TYPE, clamp1 } from './styles.ts';
 import { Section, Panel, InfoRows, Badge } from './parts.tsx';
 import type { MobileReplyFn } from './types.ts';
 
@@ -119,27 +119,46 @@ export function MobileTicketDetail({
 
   return (
     <div style={screen}>
-      <div style={{ ...topBar, gap: 8, flexWrap: 'wrap' }}>
-        <button
-          onClick={onBack}
-          aria-label={t('mobile.back')}
-          style={{ background: 'none', border: 'none', color: COLORS.text, fontSize: 22, lineHeight: 1, cursor: 'pointer', padding: '0 6px 0 0' }}
-        >
-          ‹
-        </button>
-        <span style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 12, color: COLORS.muted }}>#{ticket.seq}</span>
-        <Badge text={projectName(ticket.cwd)} color={COLORS.border} />
-        <Badge text={t(`tickets.status.${ticket.state}`)} color={STATUS_COLOR[status]} filled />
-        {review && <Badge text={review.text} color={review.color} />}
-        {remote ? <Badge text={`${t('mobile.locationSsh')} ${sshDisplay(remote)}`} color="#a371f7" /> : <Badge text={t('mobile.locationLocal')} color={COLORS.border} />}
-        <span style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'var(--font-mono, monospace)', color: COLORS.muted }}>
-          {age} · {formatStarted(ticket)}
-        </span>
+      {/* Two deliberate rows, always.
+          The header carries six things — back, project, number, state, review
+          verdict, where it ran, how long ago — and wrapping them into one flex
+          row produced a block that was one line for a short project and two for
+          a long one, with the badges landing somewhere different each time.
+          Row one identifies the ticket, row two says what state it is in; the
+          badge row scrolls sideways so a long ssh target cannot reflow it. */}
+      <div style={{ ...topBar, flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <button
+            onClick={onBack}
+            aria-label={t('mobile.back')}
+            style={{ background: 'none', border: 'none', color: COLORS.text, fontSize: 22, lineHeight: 1, cursor: 'pointer', padding: '0 4px 0 0', flexShrink: 0 }}
+          >
+            ‹
+          </button>
+          {/* The checkout is what tells two identical goals apart, so it is read
+              at full contrast and gets whatever width is left. */}
+          <span style={{ ...TYPE.title, ...clamp1, color: COLORS.text, flex: 1 }} title={ticket.cwd}>
+            {projectName(ticket.cwd)}
+          </span>
+          <span style={{ ...TYPE.meta, color: COLORS.muted, flexShrink: 0 }}>#{ticket.seq}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', minWidth: 0 }}>
+          <Badge text={t(`tickets.status.${ticket.state}`)} color={STATUS_COLOR[status]} filled />
+          {review && <Badge text={review.text} color={review.color} />}
+          {remote ? (
+            <Badge text={`${t('mobile.locationSsh')} ${sshDisplay(remote)}`} color="#a371f7" />
+          ) : (
+            <Badge text={t('mobile.locationLocal')} color={COLORS.muted} />
+          )}
+          <span style={{ ...TYPE.meta, color: COLORS.muted, marginLeft: 'auto', paddingLeft: 8, whiteSpace: 'nowrap' }}>
+            {age} · {formatStarted(ticket)}
+          </span>
+        </div>
       </div>
 
       <div style={{ ...body, paddingBottom: 96 }}>
         <Section label={t('tickets.goalLabel')}>
-          <div style={{ fontSize: 15, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{ticket.goal}</div>
+          <div style={{ ...TYPE.body, whiteSpace: 'pre-wrap' }}>{ticket.goal}</div>
         </Section>
 
         {waiting && (
@@ -173,7 +192,7 @@ export function MobileTicketDetail({
 
         {ticket.headline && (
           <Section label={t('tickets.headlineLabel')}>
-            <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.5 }}>{ticket.headline}</div>
+            <div style={{ ...TYPE.title }}>{ticket.headline}</div>
           </Section>
         )}
 
@@ -186,7 +205,7 @@ export function MobileTicketDetail({
         <Section label={t('tickets.resultLabel')}>
           <Panel>
             {ticket.result ? (
-              <pre style={{ margin: 0, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'var(--font-ui, system-ui)' }}>
+              <pre style={{ ...TYPE.body, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {ticket.result}
               </pre>
             ) : (
@@ -207,7 +226,7 @@ export function MobileTicketDetail({
               <div style={{ marginBottom: 6 }}>
                 {review && <Badge text={review.text} color={review.color} />}
                 {ticket.verification.consensus && (
-                  <span style={{ marginLeft: 8, fontSize: 12, color: COLORS.muted }}>
+                  <span style={{ ...TYPE.meta, marginLeft: 8, color: COLORS.muted }}>
                     {t('tickets.consensusLabel')} {ticket.verification.consensus.agree}/{ticket.verification.consensus.total}
                   </span>
                 )}
@@ -216,7 +235,7 @@ export function MobileTicketDetail({
                 <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.verification.reason}</div>
               )}
               {ticket.verification.gate?.coverage && (
-                <div style={{ marginTop: 6, fontSize: 12, color: COLORS.muted, whiteSpace: 'pre-wrap' }}>
+                <div style={{ ...TYPE.body, marginTop: 6, color: COLORS.muted, whiteSpace: 'pre-wrap' }}>
                   {ticket.verification.gate.coverage}
                 </div>
               )}
@@ -234,7 +253,7 @@ export function MobileTicketDetail({
                     key={rating.textKey}
                     onClick={() => onEvaluate(rating.label, rating.weight)}
                     style={{
-                      ...secondaryButton, minHeight: 40, padding: '0 12px', fontSize: 13,
+                      ...secondaryButton, ...TYPE.button, minHeight: 40, padding: '0 12px',
                       borderColor: active ? COLORS.accent : COLORS.border,
                       background: active ? COLORS.accent : 'transparent',
                       color: active ? '#0d1117' : COLORS.text,
@@ -246,7 +265,7 @@ export function MobileTicketDetail({
               })}
             </div>
             {evaluation?.autoLabel && (
-              <div style={{ marginTop: 6, fontSize: 11, color: COLORS.muted }}>
+              <div style={{ ...TYPE.label, marginTop: 6, color: COLORS.muted }}>
                 {t('tickets.evalAuto')}: {evaluation.autoLabel}
               </div>
             )}

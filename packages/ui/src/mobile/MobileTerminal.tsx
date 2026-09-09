@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { COLORS, screen, topBar, secondaryButton, input } from './styles.ts';
+import { COLORS, screen, topBar, secondaryButton, input, TYPE, clamp1 } from './styles.ts';
 
 export interface MobileTerminalProps {
   title: string;
+  /** The checkout this pty runs in, shown under the title. */
+  subtitle?: string;
   /** Everything the pty has emitted since attach, control codes stripped. */
   output: string;
   /** False at the `watch` level: the pane renders, the keyboard does not. */
@@ -36,7 +38,7 @@ const KEYS: ReadonlyArray<{ label: string; sequence: string }> = [
  * keyboard is worse than useless — but "read what it said, answer the prompt,
  * press Ctrl-C" is what a phone is actually for.
  */
-export function MobileTerminal({ title, output, canType, exited, onBack, onSend, onKey }: MobileTerminalProps) {
+export function MobileTerminal({ title, subtitle, output, canType, exited, onBack, onSend, onKey }: MobileTerminalProps) {
   const { t } = useTranslation();
   const [line, setLine] = useState('');
   const endRef = useRef<HTMLDivElement>(null);
@@ -55,24 +57,28 @@ export function MobileTerminal({ title, output, canType, exited, onBack, onSend,
 
   return (
     <div style={screen}>
-      <div style={topBar}>
-        <button style={{ ...secondaryButton, padding: '0 12px' }} onClick={onBack}>{t('mobile.back')}</button>
-        <span style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {t('mobile.terminalTitle')} · {title}
+      <div style={{ ...topBar, alignItems: 'flex-start' }}>
+        <button
+          onClick={onBack}
+          aria-label={t('mobile.back')}
+          style={{ background: 'none', border: 'none', color: COLORS.text, fontSize: 22, lineHeight: 1.1, cursor: 'pointer', padding: '0 6px 0 0' }}
+        >
+          ‹
+        </button>
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <span style={{ ...TYPE.title, ...clamp1 }}>{title}</span>
+          {subtitle && <span style={{ ...TYPE.meta, ...clamp1, color: COLORS.muted }}>{subtitle}</span>}
         </span>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 12, background: '#000' }}>
         <pre
-          style={{
-            margin: 0, fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, monospace)',
-            fontSize: 12, lineHeight: 1.5, color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-          }}
+          style={{ ...TYPE.code, margin: 0, color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
         >
           {output || t('mobile.terminalAttaching')}
         </pre>
         {exited && (
-          <p style={{ color: '#e5534b', fontSize: 12, marginTop: 12 }}>{t('mobile.terminalGone')}</p>
+          <p style={{ ...TYPE.meta, color: '#e5534b', marginTop: 12 }}>{t('mobile.terminalGone')}</p>
         )}
         <div ref={endRef} />
       </div>
@@ -84,7 +90,7 @@ export function MobileTerminal({ title, output, canType, exited, onBack, onSend,
               <button
                 key={key.label}
                 onClick={() => onKey(key.sequence)}
-                style={{ ...secondaryButton, minHeight: 40, padding: '0 12px', whiteSpace: 'nowrap', fontSize: 13 }}
+                style={{ ...secondaryButton, ...TYPE.button, minHeight: 40, padding: '0 12px', whiteSpace: 'nowrap' }}
               >
                 {key.label}
               </button>
@@ -111,7 +117,7 @@ export function MobileTerminal({ title, output, canType, exited, onBack, onSend,
         </div>
       ) : (
         <div style={{ borderTop: `1px solid ${COLORS.border}`, padding: '12px 16px', flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: COLORS.muted }}>{t('mobile.terminalReadOnly')}</span>
+          <span style={{ ...TYPE.meta, color: COLORS.muted }}>{t('mobile.terminalReadOnly')}</span>
         </div>
       )}
     </div>

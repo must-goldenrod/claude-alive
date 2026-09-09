@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectName } from '../views/tickets/ticketDisplay.ts';
-import { COLORS, screen, topBar, body, card } from './styles.ts';
+import { COLORS, screen, body, card, TYPE, clamp1, clamp2 } from './styles.ts';
 
 export interface MobileSession {
   sessionId: string;
@@ -67,36 +67,30 @@ export function MobileSessionList({ sessions, loading, onOpen }: MobileSessionLi
 
   return (
     <div style={{ ...screen, position: 'relative' }}>
-      <div style={topBar}>
-        <span style={{ fontSize: 17, fontWeight: 600 }}>{t('mobile.tabSessions')}</span>
-      </div>
-      <div style={{ ...body, paddingBottom: 24 }}>
+      {/* No title bar — the tab above names this list. */}
+      <div style={{ ...body, paddingTop: 12, paddingBottom: 24 }}>
         {loading && rows.length === 0 ? (
-          <p style={{ color: COLORS.muted, fontSize: 14, textAlign: 'center', marginTop: 48 }}>{t('mobile.sessionsLoading')}</p>
+          <p style={{ ...TYPE.body, color: COLORS.muted, textAlign: 'center', marginTop: 48 }}>{t('mobile.sessionsLoading')}</p>
         ) : rows.length === 0 ? (
-          <p style={{ color: COLORS.muted, fontSize: 14, textAlign: 'center', marginTop: 48 }}>{t('mobile.sessionsEmpty')}</p>
+          <p style={{ ...TYPE.body, color: COLORS.muted, textAlign: 'center', marginTop: 48 }}>{t('mobile.sessionsEmpty')}</p>
         ) : (
           rows.map((s) => (
             <button key={s.sessionId} style={card} onClick={() => onOpen(s.sessionId)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 4, background: stateColor(s.state), flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: COLORS.muted }}>{s.state}</span>
-                <span style={{ fontSize: 12, color: COLORS.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {projectName(s.cwd)}
-                </span>
+                <span style={{ ...TYPE.meta, color: COLORS.muted }}>{s.state}</span>
+                <span style={{ ...TYPE.meta, ...clamp1, color: COLORS.muted }}>{projectName(s.cwd)}</span>
                 {s.needsApproval && (
                   <span
                     aria-label={t('mobile.needsApproval')}
                     title={t('mobile.needsApproval')}
-                    style={{ marginLeft: 'auto', fontSize: 11, color: '#d29922' }}
+                    style={{ ...TYPE.badge, marginLeft: 'auto', color: '#d29922' }}
                   >
                     ●
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 15, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                {s.displayName || s.sessionId.slice(0, 12)}
-              </div>
+              <div style={{ ...TYPE.body, ...clamp2 }}>{s.displayName || s.sessionId.slice(0, 12)}</div>
             </button>
           ))
         )}

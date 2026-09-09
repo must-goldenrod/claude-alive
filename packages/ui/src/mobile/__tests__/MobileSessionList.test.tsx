@@ -93,3 +93,13 @@ describe('MobileSessionList — long catalogs', () => {
     expect(rows[0]).toHaveTextContent('세션 199');
   });
 });
+
+describe('MobileSessionList — no heading', () => {
+  it('does not repeat the tab name as a heading', () => {
+    // The top-level switch already says "세션"; a second one costs a fifth of
+    // the visible rows on a 390px screen.
+    render(<MobileSessionList sessions={[session({})]} onOpen={() => {}} loading={false} />);
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(screen.getByText('로그인 리팩터링')).toBeInTheDocument();
+  });
+});

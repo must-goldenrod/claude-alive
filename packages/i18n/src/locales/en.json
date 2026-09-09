@@ -609,6 +609,7 @@
       "queued": "Queued",
       "running": "Running",
       "verifying": "Verifying",
+      "decision": "Decision",
       "done": "Closed",
       "failed": "Failed"
     },
@@ -1065,6 +1066,7 @@
     "sheetClose": "Close",
     "deleteTicket": "Delete",
     "deleteConfirm": "Delete this ticket?",
-    "ratingLabel": "Rating"
+    "ratingLabel": "Rating",
+    "home": "Home — tickets"
   }
 }

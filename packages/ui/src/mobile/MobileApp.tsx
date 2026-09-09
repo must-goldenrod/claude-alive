@@ -10,7 +10,7 @@ import { MobileTicketDetail } from './MobileTicketDetail.tsx';
 import { mergeProjects } from './mobileProjects.ts';
 import { MobileSessions } from './MobileSessions.tsx';
 import { parseCapabilities, type RemoteCapabilities } from './capabilities.ts';
-import { COLORS } from './styles.ts';
+import { COLORS, chip } from './styles.ts';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
@@ -104,6 +104,13 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
 
   const sessionsAvailable = caps.terminal !== 'off';
 
+  /** Back to the ticket list from wherever the user is. */
+  const goHome = () => {
+    setTab('tickets');
+    setScreen('list');
+    setOpenId(null);
+  };
+
   const body =
     tab === 'sessions' && sessionsAvailable ? (
       <MobileSessions subscribeRaw={subscribeRaw} send={send} terminalLevel={caps.terminal} projects={projects} />
@@ -127,7 +134,21 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
           padding: '6px 12px', borderBottom: `1px solid ${COLORS.border}`,
         }}
       >
-        <div role="tablist" style={{ display: 'flex', gap: 4 }}>
+        {/* The mark is the way home: from four screens deep, one tap lands on
+            the ticket list rather than four taps on a back arrow. */}
+        <button
+          onClick={goHome}
+          aria-label={t('mobile.home')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 4px',
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, letterSpacing: '-0.02em', color: COLORS.text,
+          }}
+        >
+          <img src="/favicon.svg" alt="claude-alive logo" width={18} height={18} style={{ display: 'block', borderRadius: 4 }} />
+          claude-alive
+        </button>
+        <div role="tablist" style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
           {(['tickets', 'sessions'] as const).map((id) => {
             if (id === 'sessions' && !sessionsAvailable) return null;
             return (
@@ -137,8 +158,8 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
                 aria-selected={tab === id}
                 onClick={() => setTab(id)}
                 style={{
-                  minHeight: 36, padding: '0 12px', borderRadius: 999, cursor: 'pointer', fontSize: 13,
-                  border: `1px solid ${tab === id ? COLORS.accent : 'transparent'}`,
+                  ...chip,
+                  border: `1px solid ${tab === id ? COLORS.accent : COLORS.border}`,
                   background: tab === id ? COLORS.accent : 'transparent',
                   color: tab === id ? '#0d1117' : COLORS.muted,
                 }}
@@ -148,15 +169,6 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
             );
           })}
         </div>
-        <span
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 13, fontWeight: 600, letterSpacing: '-0.02em', color: COLORS.text,
-          }}
-        >
-          claude-alive
-          <img src="/favicon.svg" alt="claude-alive logo" width={18} height={18} style={{ display: 'block', borderRadius: 4 }} />
-        </span>
       </div>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>{body}</div>
     </div>

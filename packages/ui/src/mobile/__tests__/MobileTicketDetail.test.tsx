@@ -135,3 +135,31 @@ describe('MobileTicketDetail — the parked question', () => {
     expect(screen.getByText(/결과 없음|No result/)).toBeInTheDocument();
   });
 });
+
+describe('MobileTicketDetail — header layout', () => {
+  it('keeps the header at two rows whatever the project is called', () => {
+    // Everything used to sit in one wrapping flex row, so a short project gave
+    // one line and a long one gave two, with the badges landing somewhere
+    // different each time.
+    const long = base({ cwd: '/Users/me/work/a-very-long-repository-name-that-will-not-fit-on-a-phone' });
+    render(<MobileTicketDetail {...props(long)} />);
+    const back = screen.getByRole('button', { name: /뒤로|Back/ });
+    const header = back.parentElement!.parentElement!;
+    expect(header.children).toHaveLength(2);
+  });
+
+  it('cuts a long project name rather than wrapping it', () => {
+    const long = base({ cwd: '/Users/me/work/a-very-long-repository-name-that-will-not-fit' });
+    render(<MobileTicketDetail {...props(long)} />);
+    const name = screen.getByTitle(long.cwd);
+    expect(name).toHaveStyle({ textOverflow: 'ellipsis', whiteSpace: 'nowrap' });
+  });
+
+  it('keeps the ticket number and the badges on separate rows', () => {
+    render(<MobileTicketDetail {...props(base({ state: 'running' }))} />);
+    const back = screen.getByRole('button', { name: /뒤로|Back/ });
+    const [identity, state] = [...back.parentElement!.parentElement!.children];
+    expect(identity!.textContent).toContain('#3');
+    expect(state!.textContent).toMatch(/실행중|Running/);
+  });
+});

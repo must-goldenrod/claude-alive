@@ -13,9 +13,65 @@ export const COLORS = {
   surface: 'var(--bg-secondary, #161b22)',
   border: 'var(--border-default, #30363d)',
   text: 'var(--text-primary, #e6edf3)',
-  muted: 'var(--text-secondary, #8b949e)',
+  /**
+   * Secondary text, one step brighter than the desktop's `--text-secondary`.
+   *
+   * A phone is read at arm's length, outdoors, at whatever brightness the
+   * screen decided on — and every one of these screens is dark. #8b949e holds
+   * up on a monitor and disappears on a handset, so the phone palette lifts it
+   * rather than inheriting. `border` is for borders only: at #30363d it is
+   * invisible as text, which is exactly what the "로컬" badge looked like.
+   */
+  muted: '#a9b4c0',
   accent: 'var(--accent-blue, #58a6ff)',
 } as const;
+
+/**
+ * The phone's type scale.
+ *
+ * Sizes were being chosen per component, so a label was 11px in one screen and
+ * 12px in the next and the same information read as two different kinds of
+ * thing. These are the only sizes the phone uses; a component picks a role, not
+ * a number.
+ *
+ * `mono` is reserved for values that are compared or copied — ids, paths,
+ * counts — where a proportional font makes two similar strings look alike.
+ */
+export const FONT_UI = 'var(--font-ui, system-ui)';
+export const FONT_MONO = 'var(--font-mono, ui-monospace, SFMono-Regular, monospace)';
+
+export const TYPE = {
+  /** Screen and card titles. */
+  title: { fontSize: 16, fontWeight: 600, lineHeight: 1.4, fontFamily: FONT_UI } as CSSProperties,
+  /** Running text: goals, results, conversation. */
+  body: { fontSize: 14, lineHeight: 1.6, fontFamily: FONT_UI } as CSSProperties,
+  /** Section captions above a panel. */
+  label: { fontSize: 11, lineHeight: 1.5, letterSpacing: '0.02em', fontFamily: FONT_UI } as CSSProperties,
+  /** Timestamps, counts, ids — anything read rather than prose. */
+  meta: { fontSize: 12, lineHeight: 1.5, fontFamily: FONT_MONO } as CSSProperties,
+  /** Terminal output and key/value values. */
+  code: { fontSize: 12, lineHeight: 1.6, fontFamily: FONT_MONO } as CSSProperties,
+  /** Anything tappable. */
+  button: { fontSize: 14, fontWeight: 600, fontFamily: FONT_UI } as CSSProperties,
+  /** Status pills. */
+  badge: { fontSize: 11, lineHeight: 1.6, fontFamily: FONT_UI } as CSSProperties,
+} as const;
+
+/** One line, cut with an ellipsis rather than wrapping unpredictably. */
+export const clamp1: CSSProperties = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+};
+
+/** Two lines, then cut — for goals and titles that are usually short but never guaranteed. */
+export const clamp2: CSSProperties = {
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+};
 
 export const screen: CSSProperties = {
   // Absolute, not fixed: the shell may put a tab bar above these screens, and a
@@ -106,6 +162,20 @@ export const input: CSSProperties = {
   color: COLORS.text,
   fontSize: 16, // 16px or iOS Safari zooms the page on focus.
   fontFamily: 'inherit',
+};
+
+/**
+ * The shape selector uses: the same rounded square as Solve, not a pill.
+ * One radius across chips, toggles and buttons keeps the phone reading as the
+ * same product as the desktop, where nothing is pill-shaped.
+ */
+export const chip: CSSProperties = {
+  minHeight: 40,
+  padding: '0 14px',
+  borderRadius: 10,
+  cursor: 'pointer',
+  fontSize: 13,
+  whiteSpace: 'nowrap',
 };
 
 export const label: CSSProperties = {

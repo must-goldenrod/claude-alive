@@ -609,6 +609,7 @@
       "queued": "대기중",
       "running": "실행중",
       "verifying": "검증중",
+      "decision": "의사결정 대기",
       "done": "종료",
       "failed": "실패"
     },
@@ -1064,6 +1065,7 @@
     "sheetClose": "닫기",
     "deleteTicket": "삭제",
     "deleteConfirm": "이 티켓을 삭제할까요?",
-    "ratingLabel": "평가"
+    "ratingLabel": "평가",
+    "home": "홈 — 티켓으로"
   }
 }

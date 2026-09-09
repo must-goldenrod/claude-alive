@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation } from '@claude-alive/core';
 import { displayStatus, STATUS_COLOR, projectName, ticketLastActivityAt } from '../views/tickets/ticketDisplay.ts';
-import { COLORS, screen, topBar, body, card, primaryButton, actionBar } from './styles.ts';
+import { COLORS, screen, body, card, chip, primaryButton, actionBar, TYPE, clamp1, clamp2 } from './styles.ts';
 
 export interface MobileTicketListProps {
   tickets: Ticket[];
@@ -57,10 +57,11 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
 
   return (
     <div style={screen}>
-      <div style={topBar}>
-        <span style={{ fontSize: 17, fontWeight: 600 }}>{t('mobile.listTitle')}</span>
-        {!connected && <span style={{ fontSize: 12, color: '#e5534b' }}>{t('mobile.offline')}</span>}
-      </div>
+      {/* No title bar: the tab above already says which list this is, and a
+          390px screen has no vertical space for a heading that repeats it. */}
+      {!connected && (
+        <div style={{ padding: '8px 12px 0', fontSize: 12, color: '#e5534b', flexShrink: 0 }}>{t('mobile.offline')}</div>
+      )}
 
       <div role="tablist" style={{ display: 'flex', gap: 6, padding: '10px 12px 0', overflowX: 'auto', flexShrink: 0 }}>
         {tabs.map((tab) => (
@@ -70,8 +71,8 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
             aria-selected={filter === tab.id}
             onClick={() => setFilter(tab.id)}
             style={{
-              minHeight: 36, padding: '0 12px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer',
-              fontSize: 13, border: `1px solid ${filter === tab.id ? COLORS.accent : COLORS.border}`,
+              ...chip,
+              border: `1px solid ${filter === tab.id ? COLORS.accent : COLORS.border}`,
               background: filter === tab.id ? COLORS.accent : 'transparent',
               color: filter === tab.id ? '#0d1117' : COLORS.muted,
             }}
@@ -83,7 +84,7 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
 
       <div style={body}>
         {rows.length === 0 ? (
-          <p style={{ color: COLORS.muted, fontSize: 14, textAlign: 'center', marginTop: 48 }}>{t('mobile.empty')}</p>
+          <p style={{ ...TYPE.body, color: COLORS.muted, textAlign: 'center', marginTop: 48 }}>{t('mobile.empty')}</p>
         ) : (
           rows.map((ticket) => {
             const status = displayStatus(ticket.state, evaluations[ticket.id]);
@@ -91,18 +92,12 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
               <button key={ticket.id} style={card} onClick={() => onOpen(ticket.id)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 4, background: STATUS_COLOR[status], flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: COLORS.muted }}>#{ticket.seq}</span>
-                  <span style={{ fontSize: 12, color: COLORS.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {projectName(ticket.cwd)}
-                  </span>
+                  <span style={{ ...TYPE.meta, color: COLORS.muted }}>#{ticket.seq}</span>
+                  <span style={{ ...TYPE.meta, ...clamp1, color: COLORS.muted }}>{projectName(ticket.cwd)}</span>
                 </div>
-                <div style={{ fontSize: 15, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {ticket.goal}
-                </div>
+                <div style={{ ...TYPE.body, ...clamp2 }}>{ticket.goal}</div>
                 {ticket.headline && (
-                  <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {ticket.headline}
-                  </div>
+                  <div style={{ ...TYPE.body, ...clamp1, color: COLORS.muted, marginTop: 6 }}>{ticket.headline}</div>
                 )}
               </button>
             );
