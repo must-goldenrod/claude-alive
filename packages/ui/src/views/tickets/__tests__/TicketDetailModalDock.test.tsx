@@ -60,6 +60,25 @@ describe('TicketDetailModal bottom dock', () => {
     expect(scrollBody(container)).toHaveTextContent('context that belongs in the scrolling body');
   });
 
+  it('lays the decision options out in a wrapping row, not a full-width stack', () => {
+    render(
+      <TicketDetailModal
+        ticket={base}
+        onClose={noop}
+        onRetry={noop}
+        onCancel={noop}
+        onDelete={noop}
+        onReply={async () => true}
+      />,
+    );
+
+    const option = screen.getByRole('button', { name: /지금 수정/ });
+    expect(option.style.width).not.toBe('100%');
+    expect(option.style.flex).toBe('1 1 220px');
+    expect(option.parentElement?.style.flexWrap).toBe('wrap');
+    expect(option.parentElement?.style.flexDirection).not.toBe('column');
+  });
+
   it('pins the 5-point rating outside the scrolling body when the ticket is settled', () => {
     const { container } = render(
       <TicketDetailModal

@@ -499,9 +499,11 @@ function Thread({ turns, t }: { turns: TicketTurn[]; t: (key: string) => string 
 
 /**
  * The pending decision, shown at the bottom of the modal: the question stem
- * followed by each labeled option wrapped in its own card so the choices are
- * easy to tell apart. When a reply is possible, clicking a card pre-fills the
- * composer with that choice (the human still confirms before sending).
+ * followed by the labeled options laid out side by side as buttons, so the
+ * choices read as a single row to pick from rather than a stack to scroll.
+ * Long options wrap onto the next line instead of forcing a horizontal scroll.
+ * When a reply is possible, clicking one pre-fills the composer with that
+ * choice (the human still confirms before sending).
  */
 function DecisionPanel({
   decision,
@@ -537,7 +539,7 @@ function DecisionPanel({
       )}
 
       {options.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {options.map((o) => (
             <button
               key={o.key}
@@ -545,11 +547,17 @@ function DecisionPanel({
               onClick={pickable ? () => onPick(o) : undefined}
               style={{
                 display: 'flex',
-                alignItems: 'center',
+                // Top-aligned so a one-line option and a wrapped one keep their
+                // key badges on the same baseline across the row.
+                alignItems: 'flex-start',
                 gap: 10,
-                width: '100%',
+                // Share the row evenly; drop to the next line only when a card
+                // would fall under ~220px, which is where two-word options stop
+                // being readable.
+                flex: '1 1 220px',
+                minWidth: 0,
                 textAlign: 'left',
-                padding: '10px 12px',
+                padding: '12px 14px',
                 borderRadius: 10,
                 border: `1px solid color-mix(in srgb, ${color} 35%, var(--border-default, #30363d))`,
                 background: 'var(--bg-tertiary, #21262d)',
@@ -588,7 +596,7 @@ function DecisionPanel({
               >
                 {o.key}
               </span>
-              <span style={{ fontSize: 13, lineHeight: 1.5, minWidth: 0, wordBreak: 'break-word' }}>{o.text}</span>
+              <span style={{ fontSize: 13, lineHeight: 1.5, minWidth: 0, paddingTop: 2, wordBreak: 'break-word' }}>{o.text}</span>
             </button>
           ))}
         </div>
