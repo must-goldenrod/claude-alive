@@ -346,3 +346,27 @@ describe('a device token on a shell path', () => {
     ).toMatchObject({ kind: 'reject', status: 403 });
   });
 });
+
+describe('the lockout counts guesses, not first visits', () => {
+  const req = (token?: string) => ({
+    method: 'GET' as const,
+    pathname: '/api/tickets',
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+    remoteAddress: '10.0.0.7',
+  });
+
+  it('does not lock a caller out for arriving without a token', () => {
+    // A page load fires a dozen requests before the user has pasted anything.
+    // Counting those as failed guesses locked the visitor out of their own
+    // dashboard for a minute, exactly when they were about to authenticate.
+    const limiter = createAuthLimiter({ maxFailures: 3, windowMs: 1000, now: () => 0 });
+    for (let i = 0; i < 10; i++) authorizeRequest(req(), config(), limiter);
+    expect(authorizeRequest(req(LONG), config(), limiter)).toEqual({ kind: 'token', label: 'phone', fullAccess: false });
+  });
+
+  it('still locks out someone offering wrong tokens', () => {
+    const limiter = createAuthLimiter({ maxFailures: 3, windowMs: 1000, now: () => 0 });
+    for (let i = 0; i < 3; i++) authorizeRequest(req(OTHER), config(), limiter);
+    expect(authorizeRequest(req(LONG), config(), limiter)).toMatchObject({ kind: 'reject', status: 429 });
+  });
+});

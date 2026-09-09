@@ -322,7 +322,11 @@ export function authorizeRequest(
     : [...config.tokens];
   const label = verifyToken(offered, known);
   if (label === null) {
-    limiter?.fail(key);
+    // Only an offered credential counts as a guess. A caller that presented
+    // nothing is usually a page loading before the user has pasted the token —
+    // one visit fires a dozen such requests, and counting them locked the
+    // visitor out of their own dashboard the moment they were about to log in.
+    if (offered !== undefined) limiter?.fail(key);
     // The message names neither the offered token nor whether one was offered.
     return { kind: 'reject', status: 401, error: 'Authentication required' };
   }

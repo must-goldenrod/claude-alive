@@ -22,7 +22,24 @@ export interface MobileSessionListProps {
 /** States that mean the session is doing something right now. */
 const BUSY = new Set(['running', 'using-tool', 'active', 'starting', 'thinking']);
 /** States that mean it is waiting on a person. */
-const WAITING = new Set(['ready', 'waiting', 'awaiting-approval']);
+const WAITING = new Set(['waiting', 'waiting-user', 'awaiting-approval']);
+
+/**
+ * How far back from the newest session still counts as "now".
+ *
+ * The catalog keeps every session this machine has ever run — 610 of them here,
+ * of which 2 were active in the last hour. A month-old session whose state was
+ * never updated still reads as `starting`, so ordering by state alone put
+ * ghosts at the top. Recency decides, and only a recently blocked session is
+ * lifted above it.
+ */
+const RECENT_MS = 60 * 60 * 1000;
+
+/**
+ * How many rows the phone shows. Applied after sorting, not before: slicing the
+ * catalog first handed the sort an arbitrary 60 of 610 and put July at the top.
+ */
+const MAX_ROWS = 60;
 
 function stateColor(state: string): string {
   if (BUSY.has(state)) return '#3fb950';
@@ -40,8 +57,12 @@ export function MobileSessionList({ sessions, loading, onOpen }: MobileSessionLi
   const { t } = useTranslation();
 
   const rows = useMemo(() => {
-    const weight = (s: MobileSession) => (BUSY.has(s.state) ? 0 : WAITING.has(s.state) ? 1 : 2);
-    return [...sessions].sort((a, b) => weight(a) - weight(b) || b.lastActivityAt - a.lastActivityAt);
+    const newest = sessions.reduce((max, s) => Math.max(max, s.lastActivityAt), 0);
+    const blocked = (s: MobileSession) =>
+      (s.needsApproval || WAITING.has(s.state)) && newest - s.lastActivityAt < RECENT_MS ? 0 : 1;
+    return [...sessions]
+      .sort((a, b) => blocked(a) - blocked(b) || b.lastActivityAt - a.lastActivityAt)
+      .slice(0, MAX_ROWS);
   }, [sessions]);
 
   return (

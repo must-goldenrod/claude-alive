@@ -15,9 +15,6 @@ const API_BASE = `${window.location.protocol}//${window.location.hostname}:${win
 
 /** How often the session list and the open conversation are refetched. */
 const POLL_MS = 4000;
-/** The catalog holds every session this machine has ever run; a phone wants the live end of it. */
-const MAX_ROWS = 60;
-
 export interface MobileSessionsProps {
   subscribeRaw: RawMessageSubscribe;
   send: (msg: WSClientMessage) => void;
@@ -177,7 +174,6 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
     send({ type: 'terminal:resize', tabId, cols: 60, rows: 24 });
   }, [send]);
 
-  const rows = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
   const open = useMemo(() => sessions.find((s) => s.sessionId === openId) ?? null, [sessions, openId]);
 
   if (attachedTab) {
@@ -212,7 +208,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
 
   return (
     <>
-      <MobileSessionList sessions={rows} loading={loading} onOpen={setOpenId} />
+      <MobileSessionList sessions={sessions} loading={loading} onOpen={setOpenId} />
       {terminalLevel === 'shell' && (
         <div style={actionBar}>
           <button style={primaryButton} onClick={() => setPicking(true)}>{t('mobile.terminalNew')}</button>

@@ -18,19 +18,48 @@ describe('MobileSessionList', () => {
     expect(screen.getByText('app')).toBeInTheDocument();
   });
 
-  it('puts the sessions that are doing something first', () => {
+  it('orders by recency — a month-old session still labelled "starting" is not news', () => {
     render(
       <MobileSessionList
         sessions={[
-          session({ sessionId: 'a', displayName: '멈춘 것', state: 'stopped', lastActivityAt: 9000 }),
-          session({ sessionId: 'b', displayName: '도구 쓰는 중', state: 'using-tool', lastActivityAt: 1 }),
+          session({ sessionId: 'a', displayName: '오래된 것', state: 'using-tool', lastActivityAt: 1 }),
+          session({ sessionId: 'b', displayName: '방금 것', state: 'stopped', lastActivityAt: 9_000_000 }),
         ]}
         onOpen={() => {}}
         loading={false}
       />,
     );
-    const rows = screen.getAllByRole('button', { name: /것|중/ });
-    expect(rows[0]).toHaveTextContent('도구 쓰는 중');
+    expect(screen.getAllByRole('button', { name: /것/ })[0]).toHaveTextContent('방금 것');
+  });
+
+  it('lifts a recently blocked session above more recent chatter', () => {
+    const now = 9_000_000;
+    render(
+      <MobileSessionList
+        sessions={[
+          session({ sessionId: 'a', displayName: '방금 움직인 것', state: 'using-tool', lastActivityAt: now }),
+          session({ sessionId: 'b', displayName: '승인 기다리는 것', state: 'ready', needsApproval: true, lastActivityAt: now - 600_000 }),
+        ]}
+        onOpen={() => {}}
+        loading={false}
+      />,
+    );
+    expect(screen.getAllByRole('button', { name: /것/ })[0]).toHaveTextContent('승인 기다리는 것');
+  });
+
+  it('does not lift a session that has been blocked since last month', () => {
+    const now = 9_000_000;
+    render(
+      <MobileSessionList
+        sessions={[
+          session({ sessionId: 'a', displayName: '방금 것', state: 'using-tool', lastActivityAt: now }),
+          session({ sessionId: 'b', displayName: '오래 멈춘 것', state: 'waiting-user', lastActivityAt: now - 30 * 86_400_000 }),
+        ]}
+        onOpen={() => {}}
+        loading={false}
+      />,
+    );
+    expect(screen.getAllByRole('button', { name: /것/ })[0]).toHaveTextContent('방금 것');
   });
 
   it('opens a session when tapped', () => {
@@ -48,5 +77,19 @@ describe('MobileSessionList', () => {
   it('explains an empty list instead of showing nothing', () => {
     render(<MobileSessionList sessions={[]} onOpen={() => {}} loading={false} />);
     expect(screen.getByText(/세션이 없습니다|No sessions/)).toBeInTheDocument();
+  });
+});
+
+describe('MobileSessionList — long catalogs', () => {
+  it('caps the rows after sorting, so the newest survive the cut', () => {
+    // The catalog holds every session this machine has ever run. Slicing before
+    // the sort handed the phone an arbitrary slab of history.
+    const many = Array.from({ length: 200 }, (_, i) =>
+      session({ sessionId: `s${i}`, displayName: `세션 ${i}`, lastActivityAt: i }),
+    );
+    render(<MobileSessionList sessions={many} onOpen={() => {}} loading={false} />);
+    const rows = screen.getAllByRole('button', { name: /세션 / });
+    expect(rows.length).toBeLessThanOrEqual(60);
+    expect(rows[0]).toHaveTextContent('세션 199');
   });
 });
