@@ -325,3 +325,24 @@ describe('the served dashboard shell is public in remote mode', () => {
     ).toMatchObject({ kind: 'token', fullAccess: true });
   });
 });
+
+describe('a device token on a shell path', () => {
+  it('still gets the page — the shell is public either way', () => {
+    // Pasting the device token into the URL used to 403 the document, so the
+    // page that would have asked for the token never loaded.
+    const out = authorizeRequest(
+      { method: 'GET', pathname: '/', headers: {}, remoteAddress: '10.0.0.4', searchToken: LONG },
+      config(),
+    );
+    expect(out).toEqual({ kind: 'public' });
+  });
+
+  it('does not extend that to the API', () => {
+    expect(
+      authorizeRequest(
+        { method: 'GET', pathname: '/api/fs/browse', headers: { authorization: `Bearer ${LONG}` }, remoteAddress: '10.0.0.4' },
+        config(),
+      ),
+    ).toMatchObject({ kind: 'reject', status: 403 });
+  });
+});

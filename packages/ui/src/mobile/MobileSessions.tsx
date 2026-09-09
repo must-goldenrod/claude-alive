@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { WSClientMessage, WSServerMessage } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../App.tsx';
 import { MobileSessionList, type MobileSession } from './MobileSessionList.tsx';
 import { MobileSessionDetail, type ConversationEntry } from './MobileSessionDetail.tsx';
 import { MobileTerminal } from './MobileTerminal.tsx';
 import { appendOutput } from './ansi.ts';
+import { MobileSpawnPicker } from './MobileSpawnPicker.tsx';
+import type { MobileProject } from './types.ts';
 import type { RemoteTerminalLevel } from './capabilities.ts';
+import { primaryButton, actionBar } from './styles.ts';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
@@ -18,6 +22,8 @@ export interface MobileSessionsProps {
   subscribeRaw: RawMessageSubscribe;
   send: (msg: WSClientMessage) => void;
   terminalLevel: RemoteTerminalLevel;
+  /** Where a phone-started shell may run; only used at the `shell` level. */
+  projects: MobileProject[];
 }
 
 interface TreeSession {
@@ -62,7 +68,8 @@ export function flattenTree(tree: Tree): MobileSession[] {
  * The sessions half of the phone app: what is running on this machine, what it
  * said, and — where the server permits it — its terminal.
  */
-export function MobileSessions({ subscribeRaw, send, terminalLevel }: MobileSessionsProps) {
+export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: MobileSessionsProps) {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState<MobileSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -71,6 +78,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel }: MobileSess
   const [attachedTab, setAttachedTab] = useState<string | null>(null);
   const [output, setOutput] = useState('');
   const [exited, setExited] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   // The catalog is fetched rather than pushed: `v2:catalog-changed` carries no
   // payload, so one poll covers both that signal and a dropped socket.
@@ -154,6 +162,21 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel }: MobileSess
     send({ type: 'terminal:attach', tabId: terminalTabId });
   }, [terminalTabId, send]);
 
+  /**
+   * Start a shell from the phone. Sized 60x24 rather than inherited: the pty
+   * wraps to the columns it is told about, and a phone reading 80-column output
+   * is a wall of broken lines.
+   */
+  const spawn = useCallback((cwd: string) => {
+    const tabId = `phone-${Date.now().toString(36)}`;
+    setPicking(false);
+    setOutput('');
+    setExited(false);
+    setAttachedTab(tabId);
+    send({ type: 'terminal:spawn', tabId, cwd, mode: 'shell', source: 'local' });
+    send({ type: 'terminal:resize', tabId, cols: 60, rows: 24 });
+  }, [send]);
+
   const rows = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
   const open = useMemo(() => sessions.find((s) => s.sessionId === openId) ?? null, [sessions, openId]);
 
@@ -183,5 +206,18 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel }: MobileSess
     );
   }
 
-  return <MobileSessionList sessions={rows} loading={loading} onOpen={setOpenId} />;
+  if (picking) {
+    return <MobileSpawnPicker projects={projects} onCancel={() => setPicking(false)} onSpawn={spawn} />;
+  }
+
+  return (
+    <>
+      <MobileSessionList sessions={rows} loading={loading} onOpen={setOpenId} />
+      {terminalLevel === 'shell' && (
+        <div style={actionBar}>
+          <button style={primaryButton} onClick={() => setPicking(true)}>{t('mobile.terminalNew')}</button>
+        </div>
+      )}
+    </>
+  );
 }

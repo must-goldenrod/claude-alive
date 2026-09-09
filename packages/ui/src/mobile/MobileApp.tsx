@@ -99,7 +99,7 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
 
   const body =
     tab === 'sessions' && sessionsAvailable ? (
-      <MobileSessions subscribeRaw={subscribeRaw} send={send} terminalLevel={caps.terminal} />
+      <MobileSessions subscribeRaw={subscribeRaw} send={send} terminalLevel={caps.terminal} projects={projects} />
     ) : (
       <MobileTicketList
         tickets={tickets}

@@ -330,6 +330,10 @@ export function authorizeRequest(
 
   const fullAccess = label === 'local' && config.localToken !== undefined;
   if (!fullAccess && !isRemoteAllowed(input.method, input.pathname, config.terminalLevel)) {
+    // A device token offered on a shell path is not a reason to withhold the
+    // shell: it is public without any token at all, and refusing here means the
+    // page that would have asked for a usable token never loads.
+    if (isShellPath(input.method, input.pathname)) return { kind: 'public' };
     return { kind: 'reject', status: 403, error: 'Route is not available to remote callers' };
   }
   return { kind: 'token', label, fullAccess };
