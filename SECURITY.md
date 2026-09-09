@@ -60,6 +60,10 @@ Turning it on changes the model rather than widening it:
 - Remote callers reach an allowlist of routes (tickets, status, the project and
   branch listings, the WebSocket stream). Everything else answers 403, including
   any route added later — the list is opt-in
+- The dashboard's static shell (the HTML document and its JS bundle) is served
+  without a token, because a browser cannot put a header on a navigation or a
+  `<script src>`. The shell is this repository's published code and holds no
+  data; everything it then requests — the API, the socket, `/health` — is gated
 - A device connection to the WebSocket may read the stream but not send
   `terminal:*`; terminals stay local
 - Tickets created by a device must fall inside the cwd allowlist, and SSH-located

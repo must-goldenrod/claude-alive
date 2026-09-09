@@ -120,3 +120,12 @@ describe('installAuthFetch', () => {
     off();
   });
 });
+
+describe('beginAuthReload', () => {
+  it('marks the reload as intentional so the leave-site guard stays quiet', async () => {
+    const { beginAuthReload, isAuthReloading } = await import('../lib/auth.ts');
+    expect(isAuthReloading()).toBe(false);
+    beginAuthReload();
+    expect(isAuthReloading()).toBe(true);
+  });
+});

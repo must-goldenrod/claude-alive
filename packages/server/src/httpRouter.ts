@@ -423,8 +423,9 @@ export function createHttpServer(options: HttpRouterOptions) {
     }
     // What the per-route loopback checks below now ask. A remote caller only
     // gets here after clearing the route allowlist, so those checks must not
-    // reject it a second time.
-    const sensitiveAllowed = auth.kind !== 'untrusted';
+    // reject it a second time. `public` is the unauthenticated dashboard shell
+    // and buys nothing beyond the static handler.
+    const sensitiveAllowed = auth.kind === 'local' || auth.kind === 'token';
     const remoteCaller = auth.kind === 'token' && !auth.fullAccess;
 
     // Delegate prompt-subsystem paths to the mounted Fastify router.

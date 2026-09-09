@@ -285,3 +285,43 @@ describe('?token= bootstrap for the served dashboard', () => {
     expect(out).toMatchObject({ kind: 'reject', status: 401 });
   });
 });
+
+/**
+ * A browser cannot put a header on a navigation or on a `<script src>`, so the
+ * shell and its bundle have to be reachable without one. Everything the shell
+ * then *asks for* is still gated — which is where the data actually lives.
+ */
+describe('the served dashboard shell is public in remote mode', () => {
+  it('serves the document and its assets without a token', () => {
+    for (const path of ['/', '/index.html', '/assets/index-abc123.js', '/favicon.svg']) {
+      expect(
+        authorizeRequest({ method: 'GET', pathname: path, headers: {}, remoteAddress: '10.0.0.4' }, config()),
+        path,
+      ).toEqual({ kind: 'public' });
+    }
+  });
+
+  it('still refuses every API route without a token', () => {
+    for (const path of ['/api/tickets', '/api/prompts', '/health', '/v1/ingest/web', '/ws']) {
+      expect(
+        authorizeRequest({ method: 'GET', pathname: path, headers: {}, remoteAddress: '10.0.0.4' }, config()),
+        path,
+      ).toMatchObject({ kind: 'reject' });
+    }
+  });
+
+  it('is read-only: a non-GET to a shell path still needs a token', () => {
+    expect(
+      authorizeRequest({ method: 'POST', pathname: '/', headers: {}, remoteAddress: '10.0.0.4' }, config()),
+    ).toMatchObject({ kind: 'reject', status: 401 });
+  });
+
+  it('lets a token through on the same path, so ?token= bootstrap still works', () => {
+    expect(
+      authorizeRequest(
+        { method: 'GET', pathname: '/', headers: {}, remoteAddress: '127.0.0.1', searchToken: 'l'.repeat(MIN_TOKEN_CHARS) },
+        config({ localToken: 'l'.repeat(MIN_TOKEN_CHARS) }),
+      ),
+    ).toMatchObject({ kind: 'token', fullAccess: true });
+  });
+});

@@ -72,6 +72,11 @@ export function authorizeUpgrade(
     return { ok: true, remote: false };
   }
 
+  // `/ws` is never part of the public shell, so anything but a token here is a
+  // refusal — stated rather than assumed, because the socket is the one surface
+  // where a wrong assumption hands out a shell.
+  if (auth.kind !== 'token') return { ok: false, reason: 'unauthenticated' };
+
   if (!remoteOriginAllowed(input.headers.origin, input.headers.host, input.port)) {
     return { ok: false, reason: 'origin' };
   }

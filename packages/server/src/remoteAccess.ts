@@ -69,6 +69,7 @@ export type ConfigResult =
  */
 export type AuthOutcome =
   | { kind: 'local' }
+  | { kind: 'public' }
   | { kind: 'token'; label: string; fullAccess: boolean }
   | { kind: 'untrusted' }
   | { kind: 'reject'; status: 401 | 403 | 429; error: string };
@@ -247,6 +248,23 @@ function acceptsSearchToken(pathname: string): boolean {
 }
 
 /**
+ * Paths that make up the dashboard shell: the HTML document and the bundle it
+ * pulls in. These are served before authentication because a browser has no way
+ * to authenticate them — a navigation and a `<script src>` carry no headers, and
+ * only `fetch` can. Gating them did not protect anything (the bundle is this
+ * repository, published); it just meant the page could never boot, so the token
+ * prompt inside it never appeared either.
+ *
+ * Everything the shell then requests — the API, the socket, `/health` — still
+ * needs a token. That is where the sessions, prompts and ticket controls are.
+ */
+function isShellPath(method: string, pathname: string): boolean {
+  if (method !== 'GET') return false;
+  if (pathname === '/health' || pathname === '/ws') return false;
+  return !pathname.startsWith('/api/') && !pathname.startsWith('/v1/');
+}
+
+/**
  * The single decision point for every HTTP request and WebSocket upgrade.
  *
  * Note what is *not* here: `isLoopbackAddress(...) || hasToken(...)`. That
@@ -276,6 +294,10 @@ export function authorizeRequest(
   const offered =
     bearerFromHeaders(input.headers) ??
     (acceptsSearchToken(input.pathname) ? input.searchToken : undefined);
+
+  // No credential offered, but the request is for the shell: serve it so the
+  // page can boot and ask for one.
+  if (!offered && isShellPath(input.method, input.pathname)) return { kind: 'public' };
 
   const known: RemoteToken[] = config.localToken
     ? [{ label: 'local', value: config.localToken }, ...config.tokens]

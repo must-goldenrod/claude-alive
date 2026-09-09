@@ -188,3 +188,17 @@ describe('remote mode on — local full-access token', () => {
     expect((await fetch(`${base}/api/tickets?token=${LOCAL}`)).status).toBe(401);
   });
 });
+
+describe('remote mode on — the dashboard shell boots without a token', () => {
+  it('serves the document and bundle so the token prompt can appear', async () => {
+    // 401 here means the page never loads, and the prompt inside it never runs.
+    expect((await fetch(`${base}/`)).status).not.toBe(401);
+    expect((await fetch(`${base}/assets/index-abc.js`)).status).not.toBe(401);
+  });
+
+  it('gives the shell nothing else — the API stays closed', async () => {
+    expect((await fetch(`${base}/api/tickets`)).status).toBe(401);
+    expect((await fetch(`${base}/api/fs/browse?dir=/`)).status).toBe(401);
+    expect((await fetch(`${base}/health`)).status).toBe(401);
+  });
+})

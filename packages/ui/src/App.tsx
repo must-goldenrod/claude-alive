@@ -36,6 +36,7 @@ const TicketsView = lazy(() =>
   import('./views/tickets/TicketsView.tsx').then(m => ({ default: m.TicketsView })),
 );
 import { WorkspaceTreeView } from './views/workspace/WorkspaceTreeView';
+import { isAuthReloading } from './lib/auth.ts';
 import { BoardView } from './views/board/BoardView.tsx';
 
 export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data' | 'board';
@@ -128,6 +129,9 @@ export default function App() {
   // needed. This is unconditional by design: the user must always be asked first.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
+      // The one exception: the token prompt reloads on purpose, and nothing is
+      // live to lose because the app never got past authentication.
+      if (isAuthReloading()) return;
       e.preventDefault();
       // Required for legacy browsers; modern ones display a generic message.
       e.returnValue = '';

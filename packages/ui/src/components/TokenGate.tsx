@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { onAuthFailure, storeToken } from '../lib/auth.ts';
+import { beginAuthReload, onAuthFailure, storeToken } from '../lib/auth.ts';
 
 /**
  * Asks for a token when the server answers 401.
@@ -24,6 +24,7 @@ export function TokenGate() {
     const token = value.trim();
     if (!token) return;
     storeToken(token);
+    beginAuthReload();
     window.location.reload();
   };
 

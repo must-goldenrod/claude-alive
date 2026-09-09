@@ -309,13 +309,14 @@ switch (command) {
         }
         process.exit(1);
       }
-      if (!noOpen) {
-        // In remote mode the dashboard needs the local token to get past the
-        // gate, and a browser cannot set a header — hand it over in the URL
-        // once; the page moves it into localStorage and strips it.
-        const token = localToken();
-        openBrowser(remote && token ? `${url}/?token=${encodeURIComponent(token)}` : url);
-      }
+      // In remote mode the dashboard's own API calls need the local token, and a
+      // browser cannot set a header — hand it over in the URL once; the page
+      // moves it into localStorage and strips it. Printed as well as opened, so
+      // a second browser (or another machine) can be pointed at it.
+      const token = remote ? localToken() : undefined;
+      const dashboardUrl = token ? `${url}/?token=${encodeURIComponent(token)}` : url;
+      if (token) console.log(`  Dashboard (authenticated): ${dashboardUrl}`);
+      if (!noOpen) openBrowser(dashboardUrl);
     }, 900);
     break;
   }

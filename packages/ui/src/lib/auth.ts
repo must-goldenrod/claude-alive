@@ -86,6 +86,23 @@ export function wsProtocols(token: string | null = readStoredToken()): string[] 
   return token ? [`${WS_TOKEN_PROTOCOL_PREFIX}${token}`] : undefined;
 }
 
+/**
+ * Set just before the token prompt reloads the page. The app guards reloads
+ * with a `beforeunload` prompt so an accidental Cmd-R cannot tear down live
+ * terminals — but at this exact moment there is nothing live to lose (the app
+ * never authenticated), and asking "leave site?" in the middle of signing in
+ * reads like the sign-in failed.
+ */
+let reloadingForAuth = false;
+
+export function beginAuthReload(): void {
+  reloadingForAuth = true;
+}
+
+export function isAuthReloading(): boolean {
+  return reloadingForAuth;
+}
+
 type AuthFailureListener = () => void;
 const authFailureListeners = new Set<AuthFailureListener>();
 
