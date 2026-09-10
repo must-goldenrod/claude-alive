@@ -19,7 +19,12 @@ export interface HeadlessProcessHandle {
   stdout: Readable;
   stderr: Readable;
   kill(): void;
-  onExit(cb: (code: number | null) => void): void;
+  /**
+   * `signal` is the second half of the story and must not be dropped: a process
+   * killed by a signal it does not handle exits with `code: null`, which is
+   * indistinguishable from "never started" unless the signal comes with it.
+   */
+  onExit(cb: (code: number | null, signal?: string | null) => void): void;
 }
 
 /** Model/effort flags for one run. Already filtered against the target's capabilities. */
@@ -67,6 +72,8 @@ export interface HeadlessRunOptions {
 
 export interface HeadlessOutcome {
   exitCode: number | null;
+  /** Signal that killed the process, when the OS reported one. */
+  signal?: string | null;
   result: StreamResult | null;
   sessionId: string | null;
   stderr: string;
@@ -137,11 +144,11 @@ export function consumeHeadless(
   });
 
   const done = new Promise<HeadlessOutcome>((resolve) => {
-    proc.onExit((code) => {
+    proc.onExit((code, signal) => {
       if (settled) return;
       settled = true;
       parser.flush();
-      resolve({ exitCode: code, result: lastResult, sessionId, stderr });
+      resolve({ exitCode: code, signal: signal ?? null, result: lastResult, sessionId, stderr });
     });
   });
 
@@ -160,8 +167,8 @@ function realSpawn(args: HeadlessSpawnArgs): HeadlessProcessHandle {
     stderr: child.stderr,
     kill: () => child.kill(),
     onExit: (cb) => {
-      child.on('error', () => cb(null)); // e.g. ENOENT: claude not found
-      child.on('exit', (code) => cb(code));
+      child.on('error', () => cb(null, null)); // e.g. ENOENT: claude not found
+      child.on('exit', (code, signal) => cb(code, signal));
     },
   };
 }

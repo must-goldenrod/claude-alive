@@ -11,13 +11,22 @@ import { realpathSync, existsSync } from 'node:fs';
 import { addUsage } from '@claude-alive/core';
 import type {
   Ticket, TicketFailureReason, TicketUsage, TicketTurn,
-  TicketVerification, TicketCommit, TicketDecisionPanel,
+  TicketVerification, TicketCommit, TicketDecisionPanel, TicketAgentExit,
 } from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
+import { describeAgentExit } from './agentExit.js';
 
 export interface MainOutcome {
   exitCode: number | null;
-  result: { result: string | null; isError: boolean; model?: string | null; usage?: TicketUsage | null } | null;
+  /** Signal that killed the agent, when the OS reported one (see `agentExit.ts`). */
+  signal?: string | null;
+  result: {
+    result: string | null;
+    isError: boolean;
+    model?: string | null;
+    usage?: TicketUsage | null;
+    subtype?: string | null;
+  } | null;
   sessionId: string | null;
   stderr: string;
 }
@@ -216,8 +225,14 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     pump();
   }
 
-  async function fail(id: string, reason: TicketFailureReason, error: string, verification?: Ticket['verification']): Promise<void> {
-    await apply(id, { state: 'failed', failureReason: reason, error, verification, endedAt: now() });
+  async function fail(
+    id: string,
+    reason: TicketFailureReason,
+    error: string,
+    verification?: Ticket['verification'],
+    agentExit?: TicketAgentExit,
+  ): Promise<void> {
+    await apply(id, { state: 'failed', failureReason: reason, error, verification, agentExit, endedAt: now() });
     releaseSlot(id);
   }
 
@@ -342,10 +357,21 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     const r = outcome.result;
     const ok = outcome.exitCode === 0 && r != null && !r.isError;
     if (!ok) {
-      const msg =
-        outcome.stderr.trim() ||
-        (outcome.exitCode === null ? 'failed to spawn claude' : `main agent exited (code ${outcome.exitCode})`);
-      await fail(id, 'error', msg);
+      // A dead agent gets an explanation, not a number. `describeAgentExit`
+      // separates "stopped from outside" from "crashed" from "never started" —
+      // three endings the old single line ran together — and records the facts
+      // (signal, wallclock, round, whether the session can be resumed) that make
+      // the failure investigable after the fact.
+      const { exit, summary } = describeAgentExit({
+        exitCode: outcome.exitCode,
+        signal: outcome.signal,
+        stderr: outcome.stderr,
+        result: r,
+        ...(cur?.startedAt !== undefined ? { ranMs: Math.max(0, now() - cur.startedAt) } : {}),
+        round: (cur?.rounds ?? 0) + 1,
+        resumable: Boolean(outcome.sessionId ?? cur?.claudeSessionId),
+      });
+      await fail(id, 'error', summary, undefined, exit);
       return;
     }
 
@@ -597,6 +623,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         endedAt: undefined,
         error: undefined,
         failureReason: undefined,
+        agentExit: undefined,
         verification: undefined,
         commit: undefined,
         result: undefined,

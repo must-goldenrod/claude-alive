@@ -29,6 +29,7 @@ export {
 export type { TicketRunPreset, TicketRunProfile, TicketEffort } from './tickets/runProfile.js';
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
+  TicketAgentExit, TicketAgentExitCause,
   TicketTurn, TicketTurnRole, TicketTurnKind,
   VerificationOpinion, PanelConsensus, TicketCommit,
   DecisionStage, DecisionOpinion, TicketDecisionPanel,

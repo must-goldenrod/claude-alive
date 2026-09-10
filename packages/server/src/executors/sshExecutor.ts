@@ -99,8 +99,8 @@ function realSshSpawn(args: string[], stdin?: string): HeadlessProcessHandle {
     stderr: child.stderr,
     kill: () => child.kill(),
     onExit: (cb) => {
-      child.on('error', () => cb(null));
-      child.on('exit', (code) => cb(code));
+      child.on('error', () => cb(null, null));
+      child.on('exit', (code, signal) => cb(code, signal));
     },
   };
 }

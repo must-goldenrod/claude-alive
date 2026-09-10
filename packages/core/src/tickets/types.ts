@@ -38,6 +38,58 @@ export interface TicketTurn {
   at: number;
 }
 
+/**
+ * How an agent process stopped, in the terms the exit itself gives us.
+ *
+ * A bare number ("code 143") is unreadable: it does not say whether the agent
+ * crashed, was stopped by something else, or never started at all — and those
+ * three want three different responses from a human. The cause names that
+ * difference so the UI can explain it instead of printing the number.
+ *
+ * - `terminated`   SIGTERM. A stop request from outside; the agent shut itself
+ *                  down. Not a crash, and not a verdict on the work.
+ * - `interrupted`  SIGINT. An interrupt (Ctrl-C, a parent shell) reached it.
+ * - `hangup`       SIGHUP. Its terminal or parent went away.
+ * - `killed`       SIGKILL. Force-killed with no chance to shut down —
+ *                  typically OS memory pressure or `kill -9`.
+ * - `spawn-failed` No exit status at all: the process never ran.
+ * - `exited`       An ordinary non-zero exit the agent chose itself.
+ * - `no-result`    Exited 0 but streamed no usable final result.
+ */
+export type TicketAgentExitCause =
+  | 'terminated'
+  | 'interrupted'
+  | 'hangup'
+  | 'killed'
+  | 'spawn-failed'
+  | 'exited'
+  | 'no-result';
+
+/**
+ * The recorded facts of one agent process's death. Stored on the ticket so the
+ * detail view can explain the failure in the reader's language, and so a run
+ * that was stopped from outside stays distinguishable from one that broke.
+ */
+export interface TicketAgentExit {
+  cause: TicketAgentExitCause;
+  /** Process exit status, when the process actually exited. */
+  code?: number;
+  /** POSIX signal name, reported by the OS or inferred from a 128+n exit code. */
+  signal?: string;
+  /** True when `signal` was inferred from the exit code rather than reported. */
+  signalInferred?: boolean;
+  /** Wallclock the run lasted before it stopped, ms. */
+  ranMs?: number;
+  /** Which agent run this was (1 = the first). */
+  round?: number;
+  /** True when a Claude session id was captured, so `claude --resume` still works. */
+  resumable: boolean;
+  /** `subtype` of the final result event, e.g. "error_max_turns". */
+  resultSubtype?: string;
+  /** Tail of the process's stderr, trimmed to a storable length. */
+  stderr?: string;
+}
+
 /** Why a ticket ended in `failed`. Distinguishes real failure from operational aborts. */
 export type TicketFailureReason =
   | 'error' // the main agent crashed / non-zero exit
@@ -244,6 +296,13 @@ export interface Ticket {
    */
   panelReview?: boolean;
   failureReason?: TicketFailureReason;
+  /**
+   * What the agent process's exit actually was, when the ticket failed on the
+   * process rather than on the work. Recorded as structured facts (not a
+   * sentence) so the UI can explain it in the reader's language and so a
+   * stopped-from-outside run never reads as a crash.
+   */
+  agentExit?: TicketAgentExit;
   /** Underlying Claude session id, for optional deep-dive. UI hides it by default. */
   claudeSessionId?: string;
   error?: string;

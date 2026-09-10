@@ -6,6 +6,8 @@ import {
   formatStarted, formatTokens, formatCost, formatDuration, reviewPhase,
 } from '../views/tickets/ticketDisplay.ts';
 import { failureLine } from '../views/tickets/failureLine.ts';
+import { AgentExitReport } from '../views/tickets/AgentExitReport.tsx';
+import { legacyAgentExit } from '../views/tickets/legacyAgentExit.ts';
 import { useNow } from '../views/dashboard/hooks/useNow.ts';
 import { formatAge } from '../utils/age.ts';
 import { COLORS, screen, topBar, body, primaryButton, secondaryButton, actionBar, input, TYPE, clamp1 } from './styles.ts';
@@ -109,6 +111,9 @@ export function MobileTicketDetail({
   const review = verificationBadge(ticket, t);
   const remote = ticket.location?.kind === 'ssh' ? ticket.location.ssh : undefined;
   const rows = runRows(ticket, t);
+  // Same fallback as the desktop modal: an old ticket's one-line message is
+  // parsed back into the exit facts so it gets the explanation too.
+  const agentExit = ticket.agentExit ?? legacyAgentExit(ticket);
   const age = formatAge(now - (ticket.endedAt ?? ticket.startedAt ?? ticket.createdAt));
 
   const send = async () => {
@@ -201,7 +206,17 @@ export function MobileTicketDetail({
 
         {ticket.state === 'failed' && (
           <Section label={t('tickets.failureLabel')}>
-            <Panel accent="#e5534b">{failureLine(ticket, t)}</Panel>
+            <Panel accent="#e5534b">
+              {failureLine(ticket, t)}
+              {/* The phone gets the same explanation as the desktop: a bare exit
+                  code is least readable exactly where the reader is furthest
+                  from a terminal. */}
+              {agentExit && (
+                <div style={{ marginTop: 10 }}>
+                  <AgentExitReport exit={agentExit} t={t} />
+                </div>
+              )}
+            </Panel>
           </Section>
         )}
 

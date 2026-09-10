@@ -213,14 +213,71 @@ describe('TicketRunner lifecycle', () => {
     expect(broadcasts.map((b) => b.state)).toEqual(['running', 'verifying', 'done']);
   });
 
-  it('fails when the main agent exits non-zero', async () => {
+  it('fails when the main agent exits non-zero, keeping both the code and stderr', async () => {
     const { runner } = makeRunner({
       spawnMain: () => ({ kill() {}, done: Promise.resolve({ exitCode: 1, result: null, sessionId: null, stderr: 'boom' }) }),
     });
     const t = await store.create({ goal: 'g', cwd: '/repo' });
     runner.enqueue(t);
     await until(() => store.get(t.id)?.state === 'failed');
-    expect(store.get(t.id)).toMatchObject({ failureReason: 'error', error: 'boom' });
+    const failed = store.get(t.id)!;
+    expect(failed.failureReason).toBe('error');
+    expect(failed.error).toContain('code 1');
+    expect(failed.error).toContain('boom');
+    expect(failed.agentExit).toMatchObject({ cause: 'exited', code: 1, stderr: 'boom' });
+  });
+
+  it('records a SIGTERM-killed agent as terminated-from-outside, not a crash', async () => {
+    // The real incident: `claude` handles SIGTERM itself and exits 143, so the
+    // ticket only ever showed "main agent exited (code 143)".
+    const { runner } = makeRunner({
+      spawnMain: () => ({ kill() {}, done: Promise.resolve({ exitCode: 143, result: null, sessionId: 'sess-143', stderr: '' }) }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'failed');
+    const failed = store.get(t.id)!;
+    expect(failed.agentExit).toMatchObject({
+      cause: 'terminated',
+      code: 143,
+      signal: 'SIGTERM',
+      signalInferred: true,
+      round: 1,
+      resumable: true,
+    });
+    expect(failed.agentExit?.ranMs).toBeGreaterThanOrEqual(0);
+    expect(failed.error).toContain('SIGTERM');
+  });
+
+  it('does not call a signal-killed agent a failure to spawn', async () => {
+    // Node reports {code: null, signal: 'SIGKILL'}; the old code read that null
+    // as "failed to spawn claude" for a process that had been running for minutes.
+    const { runner } = makeRunner({
+      spawnMain: () => ({
+        kill() {},
+        done: Promise.resolve({ exitCode: null, signal: 'SIGKILL', result: null, sessionId: 'sess-9', stderr: '' }),
+      }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'failed');
+    const failed = store.get(t.id)!;
+    expect(failed.agentExit).toMatchObject({ cause: 'killed', signal: 'SIGKILL' });
+    expect(failed.error).not.toContain('spawn');
+  });
+
+  it('clears the recorded exit when a failed ticket is retried', async () => {
+    const { runner } = makeRunner({
+      spawnMain: () => ({ kill() {}, done: Promise.resolve({ exitCode: 143, result: null, sessionId: null, stderr: '' }) }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'failed');
+    expect(store.get(t.id)?.agentExit).toBeDefined();
+    await runner.retry(t.id);
+    await until(() => store.get(t.id)?.state === 'failed');
+    // The retry re-runs and fails again, but the record is rebuilt, never stale.
+    expect(store.get(t.id)?.agentExit?.round).toBe(1);
   });
 
   it('fails verification-failed when the verifier rejects the goal', async () => {

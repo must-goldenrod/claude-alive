@@ -46,7 +46,7 @@ export interface FlagGuardedSpawnOptions {
 
 /** Outcome used when even the fallback spawn cannot be created. */
 function spawnFailureOutcome(message: string): HeadlessOutcome {
-  return { exitCode: null, result: null, sessionId: null, stderr: message };
+  return { exitCode: null, signal: null, result: null, sessionId: null, stderr: message };
 }
 
 /**

@@ -4,6 +4,8 @@ import type {
   Ticket, TicketEvaluation, TicketTurn, TicketDelegation, EvalLabel,
   TicketVerification, TicketCommit, TicketDecisionPanel,
 } from '@claude-alive/core';
+import { AgentExitReport } from './AgentExitReport.tsx';
+import { legacyAgentExit } from './legacyAgentExit.ts';
 import { Markdown } from './Markdown.tsx';
 import {
   projectName,
@@ -59,6 +61,9 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   // a decision-driven completion, where the thread above carries only the prior
   // back-and-forth. The decision panel (when pending) lives separately at the bottom.
   const showResult = !!ticket.result;
+  // Tickets that failed before the server recorded a structured exit still carry
+  // the old one-line message; parse it back so they get the same explanation.
+  const agentExit = ticket.agentExit ?? legacyAgentExit(ticket);
   const decision = isDecision && ticket.decisionQuestion ? parseDecisionOptions(ticket.decisionQuestion) : null;
   // The 5-point rating is docked at the bottom too, so a settled ticket can be
   // rated without scrolling back down through the report.
@@ -157,6 +162,14 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
                 {ticket.failureReason ? t(`tickets.failureReason.${ticket.failureReason}`) : ''}
                 {ticket.error ? `: ${ticket.error}` : ''}
               </div>
+              {/* When the process itself died, the one-liner above is the headline
+                  and this is the explanation: what happened, what it means, what
+                  to check, what to do next. */}
+              {agentExit && (
+                <div style={{ marginTop: 10 }}>
+                  <AgentExitReport exit={agentExit} t={t} />
+                </div>
+              )}
             </Section>
           )}
 
