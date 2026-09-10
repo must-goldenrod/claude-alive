@@ -21,6 +21,7 @@ import type {
 } from '@claude-alive/core';
 import { extractJsonObject, readString, type Panel, type PanelMemberResult } from './litellmPanel.js';
 import { normalizeChoice } from './choiceLabel.js';
+import { VERDICT_LANGUAGE_RULE } from '../verdictLanguage.js';
 
 export const DECISION_SYSTEM = [
   'You are one of several independent advisors resolving a decision an autonomous',
@@ -37,6 +38,10 @@ export const DECISION_SYSTEM = [
   'Answer with ONE JSON object and nothing else:',
   '{"choice": "<option label, or empty>", "recommendation": "<the answer, one actionable line>",',
   ' "rationale": "<why, 1-2 sentences>", "confidence": <0.0-1.0>}',
+  '',
+  // The recommendation is fed straight back to the agent AND shown to the human
+  // who may take the decision over, so both readers get it in the same language.
+  VERDICT_LANGUAGE_RULE,
 ].join('\n');
 
 const MAX_CONTEXT_CHARS = 8_000;
@@ -63,12 +68,12 @@ export function toDecisionOpinion(member: PanelMemberResult): DecisionOpinion {
     ...(member.respondedModel ? { respondedModel: member.respondedModel } : {}),
   };
   if (member.content === null) {
-    return { ...base, recommendation: '', rationale: '', error: member.error ?? 'no answer' };
+    return { ...base, recommendation: '', rationale: '', error: member.error ?? '응답 없음' };
   }
   const obj = extractJsonObject(member.content);
   const recommendation = obj ? readString(obj, 'recommendation') : null;
   if (!recommendation) {
-    return { ...base, recommendation: '', rationale: '', error: 'no parseable recommendation' };
+    return { ...base, recommendation: '', rationale: '', error: '권고안을 읽을 수 없음' };
   }
   const confidence = obj && typeof obj.confidence === 'number' ? obj.confidence : undefined;
   return {
@@ -101,7 +106,7 @@ export function consensusKey(o: DecisionOpinion): string {
 export const MIN_DECISION_CONFIDENCE = 0.5;
 
 /** The one escalation the semantic tiebreak can still rescue. */
-export const NO_CONVERGENCE = 'advisors did not converge on one answer';
+export const NO_CONVERGENCE = '자문 모델들이 하나의 답으로 모이지 않았습니다';
 
 /**
  * Actions a wrong answer cannot be walked back from cheaply.
@@ -126,7 +131,7 @@ export function needsUnanimity(question: string, resolution: string): boolean {
 
 /** Escalation reason when a majority agreed but the action is not undoable. */
 export const NEEDS_UNANIMITY =
-  'advisors were not unanimous on an action that cannot be undone — a human decides';
+  '되돌릴 수 없는 작업인데 자문 모델들의 의견이 만장일치가 아닙니다 — 사람이 결정합니다';
 
 /** Advisors that actually produced an answer — the only ones with a vote. */
 export function votersOf(opinions: readonly DecisionOpinion[]): DecisionOpinion[] {
@@ -151,7 +156,7 @@ export function resolveConsensus(opinions: readonly DecisionOpinion[]): Decision
   const voters = votersOf(opinions);
   const total = voters.length;
   if (total === 0) {
-    return { stage: 'failed', consensus: { agree: 0, total: 0 }, reason: 'no advisor produced an answer' };
+    return { stage: 'failed', consensus: { agree: 0, total: 0 }, reason: '답을 낸 자문 모델이 없습니다' };
   }
 
   const groups = new Map<string, DecisionOpinion[]>();
@@ -180,7 +185,7 @@ function scoreWinner(winner: readonly DecisionOpinion[], consensus: PanelConsens
   if (scored.length > 0) {
     const mean = scored.reduce((s, o) => s + (o.confidence ?? 0), 0) / scored.length;
     if (mean < MIN_DECISION_CONFIDENCE) {
-      return { stage: 'failed', consensus, reason: `advisors agreed but with low confidence (${mean.toFixed(2)})` };
+      return { stage: 'failed', consensus, reason: `의견은 모였지만 확신도가 낮습니다 (${mean.toFixed(2)})` };
     }
   }
 
@@ -215,6 +220,8 @@ export const TIEBREAK_SYSTEM = [
   '',
   'Answer with ONE JSON object and nothing else:',
   '{"agree": [<indices of the answers sharing one conclusion>], "why": "<one sentence>"}',
+  '',
+  VERDICT_LANGUAGE_RULE,
 ].join('\n');
 
 export function buildTiebreakPrompt(question: string, voters: readonly DecisionOpinion[]): string {
@@ -315,7 +322,7 @@ export async function adviseDecision(
       question,
       opinions: [],
       consensus: { agree: 0, total: 0 },
-      reason: e instanceof Error ? e.message : 'decision panel failed',
+      reason: e instanceof Error ? e.message : '의사결정 패널 실행에 실패했습니다',
       at,
     };
   }

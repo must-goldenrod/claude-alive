@@ -314,7 +314,7 @@ describe('TicketRunner lifecycle', () => {
     runner.enqueue(t);
     await until(() => store.get(t.id)?.state === 'failed');
     expect(store.get(t.id)).toMatchObject({ failureReason: 'error' });
-    expect(store.get(t.id)?.error).toContain('working directory does not exist');
+    expect(store.get(t.id)?.error).toContain('작업 디렉터리가 없습니다');
   });
 
   it('honors the concurrency limit', async () => {

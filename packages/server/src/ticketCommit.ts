@@ -169,10 +169,10 @@ export function createTicketCommitter(deps: TicketCommitterDeps = {}): TicketCom
 
       // Remote tickets run their agent over SSH; the changes are on that host,
       // not here, so committing locally would capture nothing.
-      if (ticket.location?.kind === 'ssh') return skip('remote ticket — commit on the remote host');
+      if (ticket.location?.kind === 'ssh') return skip('원격 티켓 — 커밋은 원격 호스트에서 이루어집니다');
 
       const isRepo = await git(['rev-parse', '--is-inside-work-tree'], ticket.cwd);
-      if (isRepo.code !== 0 || isRepo.stdout.trim() !== 'true') return skip('not a git repository');
+      if (isRepo.code !== 0 || isRepo.stdout.trim() !== 'true') return skip('git 저장소가 아닙니다');
 
       // Porcelain paths are root-relative, so staging has to run from the root
       // even though the survey is scoped to the ticket's own subtree by `-- .`.
@@ -183,32 +183,32 @@ export function createTicketCommitter(deps: TicketCommitterDeps = {}): TicketCom
         ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames', '--', '.'],
         ticket.cwd,
       );
-      if (status.code !== 0) return skip(`git status failed: ${oneLine(status.stderr)}`);
+      if (status.code !== 0) return skip(`git status 실패: ${oneLine(status.stderr)}`);
 
       const entries = parseStatusPaths(status.stdout);
-      if (entries.length === 0) return skip('nothing to commit — working tree clean');
+      if (entries.length === 0) return skip('커밋할 변경이 없습니다 — 작업 트리 깨끗');
 
       const paths = await changedSince(entries, root, ticket.startedAt, mtime);
-      if (paths.length === 0) return skip('nothing changed while the ticket ran');
+      if (paths.length === 0) return skip('티켓이 도는 동안 변경된 파일이 없습니다');
       if (paths.length > MAX_AUTO_COMMIT_FILES) {
         return skip(
-          `${paths.length} files changed (cap ${MAX_AUTO_COMMIT_FILES}) — left uncommitted for review`,
+          `파일 ${paths.length}개 변경 (상한 ${MAX_AUTO_COMMIT_FILES}) — 검토를 위해 커밋하지 않았습니다`,
         );
       }
 
       const staged = await git(['add', '--', ...paths], root);
-      if (staged.code !== 0) return { committed: false, skipped: `git add failed: ${oneLine(staged.stderr)}`, at };
+      if (staged.code !== 0) return { committed: false, skipped: `git add 실패: ${oneLine(staged.stderr)}`, at };
 
       const names = await git(['diff', '--cached', '--name-only', '--', ...paths], root);
       const files = names.stdout.split('\n').filter(Boolean).length;
-      if (files === 0) return skip('nothing to commit — working tree clean');
+      if (files === 0) return skip('커밋할 변경이 없습니다 — 작업 트리 깨끗');
 
       const message = buildCommitMessage(ticket);
       // Commit exactly these paths: anything staged elsewhere in the repo before
       // the ticket ran is not this ticket's to claim.
       const done = await git(['commit', '-m', message, '--', ...paths], root);
       if (done.code !== 0) {
-        return { committed: false, message, files, skipped: `git commit failed: ${oneLine(done.stderr || done.stdout)}`, at };
+        return { committed: false, message, files, skipped: `git commit 실패: ${oneLine(done.stderr || done.stdout)}`, at };
       }
 
       const sha = await git(['rev-parse', '--short', 'HEAD'], root);

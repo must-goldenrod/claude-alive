@@ -97,35 +97,43 @@ function classify(exitCode: number | null, reported: string | null | undefined):
   return { cause: 'exited' };
 }
 
-/** `after 7m 45s`, or nothing when the duration is unknown. */
+/** ` (7m 45s 실행)`, or nothing when the duration is unknown. */
 function ranClause(ranMs: number | undefined): string {
   const ran = formatRanFor(ranMs);
-  return ran ? ` after ${ran}` : '';
+  return ran ? ` (${ran} 실행)` : '';
 }
 
+/**
+ * The stored one-liner, in Korean.
+ *
+ * This string is what the ticket card and the API show, so it is written in the
+ * reader's language like every other judgement the UI surfaces. Only the
+ * identifiers stay verbatim: signal names, exit codes and the process's own
+ * stderr are things a reader copies into a terminal, not prose.
+ */
 function summarize(exit: TicketAgentExit): string {
   const ran = ranClause(exit.ranMs);
   const code = exit.code !== undefined ? ` (exit ${exit.code})` : '';
   const detail = exit.stderr ? `: ${exit.stderr}` : '';
   switch (exit.cause) {
     case 'terminated':
-      return `agent stopped by SIGTERM${code}${ran} — terminated from outside, not a crash`;
+      return `에이전트가 SIGTERM 으로 종료됨${code}${ran} — 바깥에서 내린 종료 요청이며 비정상 종료가 아님`;
     case 'interrupted':
-      return `agent interrupted by SIGINT${code}${ran} — an interrupt reached the process`;
+      return `에이전트가 SIGINT 로 중단됨${code}${ran} — 인터럽트가 프로세스에 전달됨`;
     case 'hangup':
-      return `agent hung up by SIGHUP${code}${ran} — its parent or terminal went away`;
+      return `에이전트가 SIGHUP 으로 끊김${code}${ran} — 부모 프로세스나 터미널이 사라짐`;
     case 'killed':
-      return `agent force-killed by SIGKILL${code}${ran} — no chance to shut down, usually memory pressure`;
+      return `에이전트가 SIGKILL 로 강제 종료됨${code}${ran} — 정리할 기회 없음, 대개 메모리 압박`;
     case 'spawn-failed':
-      return exit.stderr ? `agent never started${detail}` : 'agent never started and reported no error output';
+      return exit.stderr ? `에이전트가 시작조차 못 함${detail}` : '에이전트가 시작조차 못 했고 오류 출력도 없음';
     case 'no-result':
       return exit.resultSubtype
-        ? `agent exited cleanly${ran} but its final result was an error (${exit.resultSubtype})`
-        : `agent exited cleanly${ran} but streamed no final result`;
+        ? `에이전트는 정상 종료했지만${ran} 최종 결과가 오류였음 (${exit.resultSubtype})`
+        : `에이전트는 정상 종료했지만${ran} 최종 결과를 내지 않음`;
     case 'exited':
       return exit.stderr
-        ? `agent exited with code ${exit.code}${ran}${detail}`
-        : `agent exited with code ${exit.code}${ran} with no error output`;
+        ? `에이전트가 code ${exit.code} 로 종료됨${ran}${detail}`
+        : `에이전트가 code ${exit.code} 로 종료됨${ran} — 오류 출력 없음`;
   }
 }
 

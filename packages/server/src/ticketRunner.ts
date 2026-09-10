@@ -285,7 +285,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       }
     } else {
       if (!cwdExists(ticket.cwd)) {
-        await fail(id, 'error', `working directory does not exist: ${ticket.cwd}`);
+        await fail(id, 'error', `작업 디렉터리가 없습니다: ${ticket.cwd}`);
         return;
       }
       let checkCwd = ticket.cwd;
@@ -293,12 +293,12 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         try {
           checkCwd = canonicalize(ticket.cwd);
         } catch {
-          await fail(id, 'cwd-not-allowed', `cwd does not resolve: ${ticket.cwd}`);
+          await fail(id, 'cwd-not-allowed', `작업 디렉터리를 확인할 수 없습니다: ${ticket.cwd}`);
           return;
         }
       }
       if (!isCwdAllowed(checkCwd, allowedRoots)) {
-        await fail(id, 'cwd-not-allowed', `cwd not in allowlist: ${ticket.cwd}`);
+        await fail(id, 'cwd-not-allowed', `허용 목록에 없는 작업 디렉터리입니다: ${ticket.cwd}`);
         return;
       }
     }
@@ -313,7 +313,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     try {
       handle = spawnMain(started, { onSessionId: (sid) => void noteSession(id, sid) });
     } catch (e) {
-      await fail(id, 'error', `failed to spawn agent: ${String(e)}`);
+      await fail(id, 'error', `에이전트를 실행하지 못했습니다: ${String(e)}`);
       return;
     }
     attach(id, handle);
@@ -341,7 +341,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         onSessionId: (sid) => void noteSession(ticket.id, sid),
       });
     } catch (e) {
-      await fail(ticket.id, 'error', `failed to resume agent: ${String(e)}`);
+      await fail(ticket.id, 'error', `에이전트를 이어서 실행하지 못했습니다: ${String(e)}`);
       return;
     }
     attach(ticket.id, handle);
@@ -447,13 +447,13 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         });
         releaseSlot(id);
       } else {
-        await fail(id, 'verification-failed', verdict.reason || 'goal not met', verdict);
+        await fail(id, 'verification-failed', verdict.reason || '목표 미달성', verdict);
       }
     } catch (e) {
       if (store.get(id)?.state === 'verifying') {
         // Carry the gate's own words. Every inconclusive ticket used to record
         // the same sentence, which made 14 of them unexplainable after the fact.
-        const cause = e instanceof Error && e.message ? e.message : 'verification could not be completed';
+        const cause = e instanceof Error && e.message ? e.message : '검증을 마치지 못했습니다';
         await fail(id, 'verification-inconclusive', cause);
       } else {
         releaseSlot(id);
@@ -464,7 +464,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
   async function onTimeout(id: string): Promise<void> {
     if (isTerminal(store.get(id))) return;
     handles.get(id)?.kill();
-    await fail(id, 'timeout', 'exceeded wallclock timeout');
+    await fail(id, 'timeout', '실행 제한 시간을 넘겼습니다');
   }
 
   /**
@@ -479,7 +479,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     if (!answer) return t;
     if (!t.claudeSessionId) {
       // No session to resume — the reply cannot continue the conversation.
-      await fail(id, 'error', 'no Claude session to resume for this reply');
+      await fail(id, 'error', '이어서 진행할 Claude 세션이 없습니다');
       return store.get(id);
     }
     const userTurn: TicketTurn = { role: 'user', kind: 'prompt', text: answer, by, at: now() };
@@ -503,7 +503,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
         onSessionId: (sid) => void noteSession(id, sid),
       });
     } catch (e) {
-      await fail(id, 'error', `failed to resume agent: ${String(e)}`);
+      await fail(id, 'error', `에이전트를 이어서 실행하지 못했습니다: ${String(e)}`);
       return store.get(id);
     }
     attach(id, handle);
@@ -527,7 +527,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
     try {
       return await commitWork({ ...ticket, verification });
     } catch (e) {
-      return { committed: false, skipped: `commit threw: ${String(e)}`, at: now() };
+      return { committed: false, skipped: `커밋 중 오류: ${String(e)}`, at: now() };
     }
   }
 
@@ -585,7 +585,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
             await apply(t.id, {
               state: 'failed',
               failureReason: 'interrupted',
-              error: 'server restarted before this ticket captured a resumable session',
+              error: '재개 가능한 세션이 기록되기 전에 서버가 재시작되었습니다',
               endedAt: now(),
             });
           }
@@ -600,7 +600,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
             decisionPanel: {
               ...t.decisionPanel,
               stage: 'failed',
-              reason: 'server restarted while the advisory panel was running',
+              reason: '자문 패널이 실행 중일 때 서버가 재시작되었습니다',
             },
           });
         }
@@ -647,7 +647,7 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       handles.get(id)?.kill();
       const qi = queue.indexOf(id);
       if (qi >= 0) queue.splice(qi, 1);
-      const t = await apply(id, { state: 'failed', failureReason: 'cancelled', error: 'cancelled by user', endedAt: now() });
+      const t = await apply(id, { state: 'failed', failureReason: 'cancelled', error: '사용자가 취소했습니다', endedAt: now() });
       releaseSlot(id);
       return t;
     },

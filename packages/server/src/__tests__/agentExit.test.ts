@@ -34,6 +34,9 @@ describe('describeAgentExit', () => {
     expect(summary).toContain('SIGTERM');
     expect(summary).toContain('143');
     expect(summary).toContain('7m 45s');
+    // Written in the reader's language: the card shows this verbatim.
+    expect(summary).toMatch(/[가-힣]/);
+    expect(summary).not.toMatch(/\b(agent|exited|stopped)\b/);
   });
 
   it('reads a SIGKILL the OS reported, with no exit code at all', () => {
@@ -45,7 +48,7 @@ describe('describeAgentExit', () => {
     expect(exit.signalInferred).toBeUndefined();
     expect(exit.code).toBeUndefined();
     expect(summary).toContain('SIGKILL');
-    expect(summary).not.toContain('never started');
+    expect(summary).not.toContain('시작조차');
   });
 
   it('infers SIGINT and SIGHUP from their 128+n exit codes', () => {
@@ -58,7 +61,7 @@ describe('describeAgentExit', () => {
   it('calls a missing exit status with no signal a failure to start', () => {
     const { exit, summary } = describeAgentExit({ exitCode: null, signal: null, stderr: 'spawn claude ENOENT' });
     expect(exit.cause).toBe('spawn-failed');
-    expect(summary).toContain('never started');
+    expect(summary).toContain('시작조차 못 함');
     expect(summary).toContain('ENOENT');
     expect(exit.stderr).toBe('spawn claude ENOENT');
   });
@@ -74,7 +77,7 @@ describe('describeAgentExit', () => {
   it('reports a clean exit that produced no final result', () => {
     const { exit, summary } = describeAgentExit({ exitCode: 0, ranMs: 3_000, result: null });
     expect(exit.cause).toBe('no-result');
-    expect(summary).toContain('no final result');
+    expect(summary).toContain('최종 결과를 내지 않음');
   });
 
   it('names the subtype when the agent reported an error result', () => {

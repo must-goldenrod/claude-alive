@@ -78,7 +78,7 @@ describe('createLitellmPanel', () => {
   it('treats an empty answer as no answer', async () => {
     const panel = createLitellmPanel(stubClient({ a: '   ' }), { models: ['a'], fallbacks: false });
     const [m] = await panel.run({ system: 's', user: 'u' });
-    expect(m).toMatchObject({ content: null, error: 'empty answer' });
+    expect(m).toMatchObject({ content: null, error: '빈 응답' });
   });
 
   it('runs members in parallel, not one after another', async () => {

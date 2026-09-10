@@ -22,7 +22,7 @@ describe('toOpinion', () => {
     expect(toOpinion({ model: 'x', content: null, error: 'HTTP 429' })).toMatchObject({ passed: null, error: 'HTTP 429' });
   });
   it('abstains rather than guessing when the answer has no verdict', () => {
-    expect(toOpinion({ model: 'x', content: 'looks fine to me' })).toMatchObject({ passed: null, error: 'no parseable verdict' });
+    expect(toOpinion({ model: 'x', content: 'looks fine to me' })).toMatchObject({ passed: null, error: '판정을 읽을 수 없음' });
   });
 });
 

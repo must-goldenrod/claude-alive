@@ -22,6 +22,7 @@
  */
 import type { Ticket, TicketVerification, VerificationOpinion, PanelConsensus } from '@claude-alive/core';
 import { extractJsonObject, readString, type Panel, type PanelMemberResult } from './litellmPanel.js';
+import { VERDICT_LANGUAGE_RULE } from '../verdictLanguage.js';
 
 /**
  * Reviewed verbatim as measured. Two things in here are load-bearing and were
@@ -54,6 +55,10 @@ export const VERIFICATION_SYSTEM = [
   '',
   'Answer with ONE JSON object and nothing else:',
   '{"gap": "<the weakest point, one sentence>", "passed": true|false, "reason": "<one sentence>"}',
+  '',
+  // Language only. The judging text above is the measured wording and is not
+  // touched; this line constrains how the answer is written, never what it says.
+  VERDICT_LANGUAGE_RULE,
 ].join('\n');
 
 /** Cap on the report text sent to reviewers; a huge body starves the question. */
@@ -76,7 +81,7 @@ export function buildVerificationPanelPrompt(goal: string, report: string | null
 /** Turn one raw panel answer into a vote. An unparseable answer abstains. */
 export function toOpinion(member: PanelMemberResult): VerificationOpinion {
   if (member.content === null) {
-    return { model: member.model, passed: null, reason: '', error: member.error ?? 'no answer' };
+    return { model: member.model, passed: null, reason: '', error: member.error ?? '응답 없음' };
   }
   const obj = extractJsonObject(member.content);
   const passed = obj && typeof obj.passed === 'boolean' ? obj.passed : null;
@@ -86,7 +91,7 @@ export function toOpinion(member: PanelMemberResult): VerificationOpinion {
       ...(member.respondedModel ? { respondedModel: member.respondedModel } : {}),
       passed: null,
       reason: '',
-      error: 'no parseable verdict',
+      error: '판정을 읽을 수 없음',
     };
   }
   const gap = obj ? readString(obj, 'gap') : null;
@@ -136,10 +141,10 @@ export function mergeVerdict(
   const consensus: PanelConsensus = { agree: agreeing, total: voters.length + 1 };
 
   const reason = !gate.passed
-    ? gate.reason || 'gate rejected the result'
+    ? gate.reason || '게이트가 결과를 반려했습니다'
     : panelVetoes
-      ? `panel rejected: ${fails.map((f) => f.reason).find(Boolean) ?? 'goal not met'}`
-      : gate.reason || 'goal met';
+      ? `패널 반려: ${fails.map((f) => f.reason).find(Boolean) ?? '목표 미달성'}`
+      : gate.reason || '목표 달성';
 
   return {
     passed,

@@ -121,7 +121,7 @@ export function createLitellmPanel(
 
       const askSeat = async (model: string): Promise<PanelMemberResult> => {
         const chain = useFallbacks ? seatChain(model, models) : [model];
-        let lastError = 'no answer';
+        let lastError = '응답 없음';
         for (const candidate of chain) {
           try {
             const r = await client.chat(
@@ -134,7 +134,7 @@ export function createLitellmPanel(
             );
             const content = r.content.trim();
             if (content) return { model, respondedModel: r.model ?? candidate, content };
-            lastError = 'empty answer';
+            lastError = '빈 응답';
           } catch (e) {
             lastError = e instanceof Error ? e.message : String(e);
           }

@@ -27,6 +27,7 @@ import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/c
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
 import { reviewWithPanel } from './panel/verificationPanel.js';
 import { extractJsonObject, type Panel } from './panel/litellmPanel.js';
+import { VERDICT_LANGUAGE_RULE } from './verdictLanguage.js';
 
 export interface Verifier {
   /** Resolves with a verdict, or throws if no parseable verdict could be obtained. */
@@ -97,6 +98,8 @@ export function buildVerificationPrompt(goal: string, mainResult: string | null,
     'Output ONLY a single JSON object on its own line, no prose, of the exact form:',
     '{"coverage": "<the least-covered part of the goal, one sentence>", "passed": true|false,',
     ' "reason": "<one concise sentence>"}',
+    '',
+    VERDICT_LANGUAGE_RULE,
   ].join('\n');
 }
 
@@ -140,9 +143,9 @@ export function extractVerdict(text: string | null): TicketVerification | null {
 export function describeGateFailure(outcome: HeadlessOutcome): string {
   const body = (outcome.result?.result ?? '').trim();
   const stderr = outcome.stderr.trim();
-  if (body) return `verifier answered without a parseable verdict: ${body.slice(0, 300)}`;
-  if (stderr) return `verifier produced no output (exit ${outcome.exitCode}): ${stderr.slice(0, 300)}`;
-  return `verifier produced no output (exit ${outcome.exitCode})`;
+  if (body) return `검증기가 판정 형식이 아닌 답을 냈습니다: ${body.slice(0, 300)}`;
+  if (stderr) return `검증기가 출력을 내지 못했습니다 (exit ${outcome.exitCode}): ${stderr.slice(0, 300)}`;
+  return `검증기가 출력을 내지 못했습니다 (exit ${outcome.exitCode})`;
 }
 
 export function createVerifier(options: VerifierOptions = {}): Verifier {
@@ -191,7 +194,7 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
         cause = describeGateFailure(outcome);
         log(`[verify] ticket #${ticket.seq} attempt ${attempt}/${GATE_ATTEMPTS}: ${cause}`);
       }
-      throw new Error(cause || 'verifier produced no parseable verdict');
+      throw new Error(cause || '검증기가 판정을 내지 못했습니다');
     },
   };
 

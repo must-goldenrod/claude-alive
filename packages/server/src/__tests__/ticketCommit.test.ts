@@ -159,7 +159,7 @@ describe('createTicketCommitter', () => {
     });
     const c = await createTicketCommitter({ git, mtime: async () => 100 }).commit(running());
     expect(c.committed).toBe(false);
-    expect(c.skipped).toBe('nothing changed while the ticket ran');
+    expect(c.skipped).toBe('티켓이 도는 동안 변경된 파일이 없습니다');
     expect(calls.some((a) => a[0] === 'commit')).toBe(false);
   });
 
@@ -169,8 +169,8 @@ describe('createTicketCommitter', () => {
     const { git, calls } = gitStub({ ...REPO_OK, 'status --porcelain=v1': { stdout: z(...many) } });
     const c = await createTicketCommitter({ git, mtime: freshMtime }).commit(running());
     expect(c.committed).toBe(false);
-    expect(c.skipped).toContain(`${MAX_AUTO_COMMIT_FILES + 1} files changed`);
-    expect(c.skipped).toContain('left uncommitted for review');
+    expect(c.skipped).toContain(`파일 ${MAX_AUTO_COMMIT_FILES + 1}개 변경`);
+    expect(c.skipped).toContain('커밋하지 않았습니다');
     expect(calls.some((a) => a[0] === 'add' || a[0] === 'commit')).toBe(false);
   });
 
@@ -190,14 +190,14 @@ describe('createTicketCommitter', () => {
     const { git, calls } = gitStub({ ...REPO_OK, 'status --porcelain=v1': { stdout: '' } });
     const c = await createTicketCommitter({ git }).commit(running());
     expect(c.committed).toBe(false);
-    expect(c.skipped).toContain('clean');
+    expect(c.skipped).toContain('작업 트리 깨끗');
     expect(calls.some((a) => a[0] === 'commit')).toBe(false);
   });
 
   it('skips a directory that is not a git repository', async () => {
     const { git } = gitStub({ 'rev-parse --is-inside-work-tree': { code: 128, stderr: 'not a git repo' } });
     const c = await createTicketCommitter({ git }).commit(running());
-    expect(c).toMatchObject({ committed: false, skipped: 'not a git repository' });
+    expect(c).toMatchObject({ committed: false, skipped: 'git 저장소가 아닙니다' });
   });
 
   it('skips a remote ticket — the changes are on the other host', async () => {

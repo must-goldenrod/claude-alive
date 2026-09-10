@@ -219,7 +219,7 @@ describe('decision advisory panel', () => {
     });
     await runner.recover();
     expect(store.get(t.id)?.decisionPanel?.stage).toBe('failed');
-    expect(store.get(t.id)?.decisionPanel?.reason).toContain('server restarted');
+    expect(store.get(t.id)?.decisionPanel?.reason).toContain('서버가 재시작');
   });
 });
 

@@ -68,7 +68,7 @@ describe('resolveConsensus', () => {
       op('b', { choice: 'A', confidence: 0.3 }),
     ]);
     expect(out.stage).toBe('failed');
-    expect(out.reason).toContain('low confidence');
+    expect(out.reason).toContain('확신도가 낮습니다');
   });
 
   it('adopts when confident advisors agree', () => {
@@ -96,7 +96,7 @@ describe('toDecisionOpinion', () => {
   });
   it('marks an unparseable answer as an error so it cannot vote', () => {
     expect(toDecisionOpinion({ model: 'x', content: 'I would go with B I think' })).toMatchObject({
-      error: 'no parseable recommendation',
+      error: '권고안을 읽을 수 없음',
     });
   });
 });
