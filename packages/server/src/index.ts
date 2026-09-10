@@ -746,12 +746,12 @@ function validateRemoteTicketCreate(input: { cwd: string; location?: { kind: str
   if (input.location?.kind === 'ssh') {
     const host = input.location.ssh?.host;
     if (!host || !remoteAccess.sshHosts.includes(host)) {
-      return 'Remote tickets on this host are not allowed. Add it to CLAUDE_ALIVE_REMOTE_SSH_HOSTS.';
+      return '이 호스트로는 원격 티켓을 만들 수 없습니다. CLAUDE_ALIVE_REMOTE_SSH_HOSTS 에 추가하세요.';
     }
     return null;
   }
   if (!isCwdAllowed(input.cwd, remoteAccess.ticketRoots)) {
-    return 'cwd is not in the ticket-root allowlist';
+    return '티켓 루트 허용 목록에 없는 작업 디렉터리입니다';
   }
   return null;
 }
@@ -770,16 +770,16 @@ const httpServer = createHttpServer({
     validateCwd: (cwd, isRemote) => {
       if (!isAbsolute(cwd)) {
         return isRemote
-          ? 'Remote path must be absolute (e.g. /Users/dev/project). "~" is not expanded.'
-          : 'Working directory must be an absolute path (e.g. /Users/you/project)';
+          ? '원격 경로는 절대 경로여야 합니다 (예: /Users/dev/project). "~" 는 확장되지 않습니다.'
+          : '작업 디렉터리는 절대 경로여야 합니다 (예: /Users/you/project)';
       }
       // Remote (ssh) paths live on another machine — don't stat the local fs.
       // The runner validates the remote directory over SSH (`ssh test -d`).
       if (isRemote) return null;
       try {
-        if (!statSync(cwd).isDirectory()) return 'Working directory is not a directory';
+        if (!statSync(cwd).isDirectory()) return '작업 디렉터리가 디렉터리가 아닙니다';
       } catch {
-        return `Working directory does not exist: ${cwd}`;
+        return `작업 디렉터리가 없습니다: ${cwd}`;
       }
       return null;
     },

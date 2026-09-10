@@ -725,7 +725,9 @@
     "panelReview": "Cross-check with other models",
     "panelReviewHint": "Sends the goal and the report to third-party models. Off = local gate only.",
     "panelOffLabel": "Panel off — local gate only",
-    "runsOn": "Runs on {{target}} over SSH"
+    "runsOn": "Runs on {{target}} over SSH",
+    "createFailed": "Could not create the ticket (HTTP {{status}})",
+    "createNetworkError": "Cannot reach the server — is it running?"
   },
   "spread": {
     "empty": "No open terminals",

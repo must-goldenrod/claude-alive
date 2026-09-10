@@ -564,7 +564,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     // ── Ticket dashboard (spec 2026-07-21) ──────────────────────────────────
     // These routes drive RCE-equivalent autonomous agents → loopback callers only.
     if (tickets && url.pathname.startsWith('/api/tickets') && !sensitiveAllowed) {
-      sendJson(res, 403, { error: 'Ticket API is restricted to loopback' }, req);
+      sendJson(res, 403, { error: '티켓 API 는 로컬(loopback) 호출만 허용됩니다' }, req);
       return;
     }
     if (tickets && req.method === 'GET' && url.pathname === '/api/tickets') {
@@ -575,7 +575,7 @@ export function createHttpServer(options: HttpRouterOptions) {
       try {
         const parsed = TicketCreateBodySchema.safeParse(JSON.parse(await readBody(req, res)));
         if (!parsed.success) {
-          sendJson(res, 400, { error: 'Invalid body: goal and cwd are required' }, req);
+          sendJson(res, 400, { error: '요청 형식 오류: goal 과 cwd 가 필요합니다' }, req);
           return;
         }
         const cwdError = tickets.validateCwd?.(parsed.data.cwd, parsed.data.location?.kind === 'ssh');
@@ -603,13 +603,13 @@ export function createHttpServer(options: HttpRouterOptions) {
     const ticketRetryMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/retry$/);
     if (tickets && req.method === 'POST' && ticketRetryMatch) {
       const ticket = await tickets.retry(ticketRetryMatch[1]!);
-      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: '티켓을 찾을 수 없습니다' }, req);
       return;
     }
     const ticketCancelMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/cancel$/);
     if (tickets && req.method === 'POST' && ticketCancelMatch) {
       const ticket = await tickets.cancel(ticketCancelMatch[1]!);
-      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+      sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: '티켓을 찾을 수 없습니다' }, req);
       return;
     }
     // POST /api/tickets/:id/reply — follow-up prompt for a decision ticket.
@@ -619,11 +619,11 @@ export function createHttpServer(options: HttpRouterOptions) {
         const parsed = JSON.parse(await readBody(req, res)) as { prompt?: unknown };
         const prompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
         if (!prompt) {
-          sendJson(res, 400, { error: 'Invalid body: prompt is required' }, req);
+          sendJson(res, 400, { error: '요청 형식 오류: prompt 가 필요합니다' }, req);
           return;
         }
         const ticket = await tickets.reply(ticketReplyMatch[1]!, prompt);
-        sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: 'Ticket not found' }, req);
+        sendJson(res, ticket ? 200 : 404, ticket ? { ticket } : { error: '티켓을 찾을 수 없습니다' }, req);
       } catch {
         sendJson(res, 400, { error: 'Invalid JSON' }, req);
       }
@@ -636,11 +636,11 @@ export function createHttpServer(options: HttpRouterOptions) {
       try {
         const parsed = EvaluateBodySchema.safeParse(JSON.parse(await readBody(req, res)));
         if (!parsed.success) {
-          sendJson(res, 400, { error: 'Invalid body: label must be good|bad|unrated' }, req);
+          sendJson(res, 400, { error: '요청 형식 오류: label 은 good|bad|unrated 중 하나여야 합니다' }, req);
           return;
         }
         const evaluation = await tickets.evaluate(ticketEvalMatch[1]!, parsed.data);
-        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: 'Ticket not found' }, req);
+        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: '티켓을 찾을 수 없습니다' }, req);
       } catch {
         sendJson(res, 400, { error: 'Invalid JSON' }, req);
       }
@@ -657,7 +657,7 @@ export function createHttpServer(options: HttpRouterOptions) {
           return;
         }
         const evaluation = await tickets.setReflected(ticketReflectMatch[1]!, parsed.data.reflected);
-        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: 'Ticket not found' }, req);
+        sendJson(res, evaluation ? 200 : 404, evaluation ? { evaluation } : { error: '티켓을 찾을 수 없습니다' }, req);
       } catch {
         sendJson(res, 400, { error: 'Invalid JSON' }, req);
       }
@@ -679,7 +679,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     const ticketDeleteMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)$/);
     if (tickets && req.method === 'DELETE' && ticketDeleteMatch) {
       const ok = await tickets.remove(ticketDeleteMatch[1]!);
-      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: 'Ticket not found' }, req);
+      sendJson(res, ok ? 200 : 404, ok ? { ok: true } : { error: '티켓을 찾을 수 없습니다' }, req);
       return;
     }
 

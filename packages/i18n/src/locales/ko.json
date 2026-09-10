@@ -725,7 +725,9 @@
     "panelReview": "타 모델 교차검증",
     "panelReviewHint": "목표와 결과를 외부 모델에 전송합니다. 끄면 로컬 게이트만 사용합니다.",
     "panelOffLabel": "패널 미사용 — 로컬 게이트 단독",
-    "runsOn": "{{target}} 에서 SSH로 실행"
+    "runsOn": "{{target}} 에서 SSH로 실행",
+    "createFailed": "티켓을 만들지 못했습니다 (HTTP {{status}})",
+    "createNetworkError": "서버에 연결할 수 없습니다 — 서버가 실행 중인가요?"
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",

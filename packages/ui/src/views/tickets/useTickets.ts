@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type {
   Ticket, TicketEvaluation, EvalLabel, TicketLocation, TicketRunPreset, WSServerMessage,
 } from '@claude-alive/core';
@@ -52,6 +53,7 @@ export interface UseTicketsResult {
  * the returned ticket optimistically so the card reacts before the broadcast.
  */
 export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): UseTicketsResult {
+  const { t } = useTranslation();
   const [byId, setById] = useState<Record<string, Ticket>>({});
   const [evalById, setEvalById] = useState<Record<string, TicketEvaluation>>({});
   const [loading, setLoading] = useState(false);
@@ -118,15 +120,17 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
-        return body.error ?? `Request failed (${res.status})`;
+        // The server's own message when it sent one; it is written for a human
+        // and is already in the reader's language.
+        return body.error ?? t('tickets.createFailed', { status: res.status });
       }
       const { ticket } = (await res.json()) as { ticket: Ticket };
       setById((prev) => ({ ...prev, [ticket.id]: ticket }));
       return null;
     } catch {
-      return 'Network error — is the server running?';
+      return t('tickets.createNetworkError');
     }
-  }, []);
+  }, [t]);
 
   const mutate = useCallback(async (id: string, path: string, method: 'POST' | 'DELETE'): Promise<boolean> => {
     try {
