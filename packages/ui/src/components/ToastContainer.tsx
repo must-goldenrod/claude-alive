@@ -52,7 +52,7 @@ function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string)
         alignItems: 'flex-start',
         gap: 10,
         padding: '10px 16px',
-        background: 'rgba(13, 17, 23, 0.92)',
+        background: 'var(--frame-bg)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         border: `1px solid ${config.borderColor}`,

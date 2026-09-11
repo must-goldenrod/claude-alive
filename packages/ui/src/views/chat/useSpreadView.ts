@@ -218,7 +218,7 @@ export function useSpreadView(params: UseSpreadViewParams): void {
       label.style.cssText =
         `position:absolute;top:0;left:0;right:0;height:${LABEL_H}px;display:flex;align-items:center;` +
         `gap:6px;padding:0 8px;font-family:var(--font-mono);font-size:10px;font-weight:600;` +
-        `color:var(--text-secondary);background:rgba(0,0,0,0.55);white-space:nowrap;overflow:hidden;` +
+        `color:var(--text-secondary);background:var(--frame-bg-solid);white-space:nowrap;overflow:hidden;` +
         `z-index:2;cursor:grab;`;
       label.textContent = '';
 
