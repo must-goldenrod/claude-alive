@@ -50,7 +50,32 @@
       "paddingX": "좌우 여백",
       "paddingY": "상하 여백",
       "scrollback": "스크롤 버퍼",
-      "lines": "줄"
+      "lines": "줄",
+      "customColors": "색상 직접 지정",
+      "colorRevert": "프리셋 색으로 되돌리기",
+      "colorResetAll": "모든 색을 프리셋으로 되돌리기",
+      "previewPrompt": "$ claude --version",
+      "colors": {
+        "background": "배경",
+        "foreground": "글자",
+        "cursor": "커서",
+        "black": "검정",
+        "red": "빨강",
+        "green": "초록",
+        "yellow": "노랑",
+        "blue": "파랑",
+        "magenta": "자홍",
+        "cyan": "청록",
+        "white": "흰색",
+        "brightBlack": "밝은 검정",
+        "brightRed": "밝은 빨강",
+        "brightGreen": "밝은 초록",
+        "brightYellow": "밝은 노랑",
+        "brightBlue": "밝은 파랑",
+        "brightMagenta": "밝은 자홍",
+        "brightCyan": "밝은 청록",
+        "brightWhite": "밝은 흰색"
+      }
     },
     "alerts": {
       "cpu": {

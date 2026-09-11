@@ -21,7 +21,7 @@ import { loadOpenTabs, saveOpenTabs } from './openTabsStore.ts';
 import type { PersistedTab } from './openTabsStore.ts';
 import { makeTabId, generateFallbackUuid } from './tabId.ts';
 import { useSpreadView } from './useSpreadView.ts';
-import { getSettings, getThemeById, getFontFamily, subscribeSettings } from '../../services/settings.ts';
+import { getSettings, resolveTerminalTheme, getFontFamily, subscribeSettings } from '../../services/settings.ts';
 import type { AppSettings } from '../../services/settings.ts';
 
 export type TerminalEventHandler = (msg: WSServerMessage) => void;
@@ -145,7 +145,7 @@ function buildTermOptions(s: AppSettings) {
     fontSize: t.fontSize,
     lineHeight: t.lineHeight,
     letterSpacing: t.letterSpacing,
-    theme: getThemeById(t.themeId),
+    theme: resolveTerminalTheme(t.themeId, t.colorOverrides),
     cursorBlink: t.cursorBlink,
     cursorStyle: t.cursorStyle,
     cursorWidth: t.cursorWidth,
@@ -531,6 +531,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     container.style.padding = `${settings.terminal.paddingY}px ${settings.terminal.paddingX}px`;
     container.style.overflow = 'hidden';
     container.style.height = '100%';
+    // Paint the padding gutter with the terminal background so a light theme
+    // doesn't sit inside a dark frame.
+    container.style.background = buildTermOptions(settings).theme.background;
     // Set initial visibility here rather than relying solely on the [activeTabId]
     // display-toggle effect: containers are created lazily in a rAF, so restoring
     // several persisted tabs at once mounts their containers AFTER activeTabId has
@@ -984,6 +987,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       const padding = `${s.terminal.paddingY}px ${s.terminal.paddingX}px`;
       for (const [, container] of containersRef.current) {
         container.style.padding = padding;
+        container.style.background = opts.theme.background;
       }
       // Refit the active tab so the cell grid matches the new metrics. Skipped in Spread
       // View — a scaled tile must not trigger a shared-pty resize.

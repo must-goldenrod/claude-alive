@@ -11,6 +11,7 @@ import {
 } from '../services/settings';
 import { playTestSound } from '../services/sound';
 import { BackendsPanel } from '../views/backends/BackendsView';
+import { TerminalColorEditor } from './TerminalColorEditor';
 
 interface SettingsModalProps {
   open: boolean;
@@ -198,7 +199,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <SelectButtons
                   value={settings.terminal.themeId}
                   onChange={(themeId) =>
-                    setSettings(prev => ({ ...prev, terminal: { ...prev.terminal, themeId } }))
+                    // A new preset is a fresh starting point — drop custom colours from the old one.
+                    setSettings(prev => ({ ...prev, terminal: { ...prev.terminal, themeId, colorOverrides: {} } }))
                   }
                   options={TERMINAL_THEMES.map(t => ({
                     value: t.id,
@@ -206,6 +208,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     swatch: t.theme.background === 'transparent' ? undefined : t.theme.background,
                     accent: t.theme.cursor,
                   }))}
+                />
+              </FieldRow>
+
+              <FieldRow label={t('settings.terminal.customColors')}>
+                <TerminalColorEditor
+                  themeId={settings.terminal.themeId}
+                  overrides={settings.terminal.colorOverrides}
+                  onChange={(colorOverrides) =>
+                    setSettings(prev => ({ ...prev, terminal: { ...prev.terminal, colorOverrides } }))
+                  }
                 />
               </FieldRow>
 
