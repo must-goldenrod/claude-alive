@@ -156,7 +156,7 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
         background: isSelected
           ? 'rgba(88, 166, 255, 0.14)'
           : hovered
-            ? 'rgba(255,255,255,0.08)'
+            ? 'var(--surface-3)'
             : 'transparent',
         boxShadow: isSelected ? 'inset 0 0 0 1px rgba(88, 166, 255, 0.35)' : undefined,
       }}
@@ -174,7 +174,7 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
             height: 44,
             borderRadius: 14,
             overflow: 'hidden',
-            background: 'rgba(255,255,255,0.04)',
+            background: 'var(--surface-2)',
             transition: 'transform 0.2s ease',
             transform: hovered ? 'scale(1.06)' : 'scale(1)',
           }}
@@ -227,7 +227,7 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
                 ref={nameInputRef}
                 className="text-sm font-medium rounded-md px-1 py-0.5 outline-none flex-1 min-w-0"
                 style={{
-                  background: 'rgba(255,255,255,0.08)',
+                  background: 'var(--surface-3)',
                   color: 'var(--text-primary)',
                   border: '1px solid var(--accent-blue)',
                   lineHeight: 1.4,
@@ -370,7 +370,7 @@ function SidebarProjectGroup({
       <div
         className="w-full flex items-center gap-3 px-6 py-1 text-left transition-all"
         style={{
-          background: hovered && !editing ? 'rgba(255,255,255,0.03)' : 'transparent',
+          background: hovered && !editing ? 'var(--surface-1)' : 'transparent',
           borderRadius: 8,
         }}
         onMouseEnter={() => setHovered(true)}
@@ -393,7 +393,7 @@ function SidebarProjectGroup({
             ref={editInputRef}
             className="text-[15px] font-bold rounded-md px-1.5 py-0.5 outline-none flex-1 min-w-0"
             style={{
-              background: 'rgba(255,255,255,0.06)',
+              background: 'var(--hover)',
               color: 'var(--text-primary)',
               border: '1px solid var(--accent-blue)',
             }}

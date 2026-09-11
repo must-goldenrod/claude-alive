@@ -69,7 +69,7 @@ export function CompletionLog({ completedSessions }: CompletionLogProps) {
           sorted.map((session, i) => (
             <div
               key={`${session.sessionId}-${i}`}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs hover:bg-[var(--hover)] transition-colors"
             >
               <span className="shrink-0" style={{ color: 'var(--accent-green)' }}>●</span>
               <span

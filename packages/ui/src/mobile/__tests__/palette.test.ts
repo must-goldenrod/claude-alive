@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { COLORS } from '../styles.ts';
+import { MUTED_ON_DARK, MUTED_ON_LIGHT } from '../styles.ts';
 
 /** Relative luminance per WCAG, for a `#rrggbb` string. */
 function luminance(hex: string): number {
@@ -16,10 +16,14 @@ function contrast(fg: string, bg: string): number {
 const GROUND = '#0d1117';
 
 describe('phone palette', () => {
-  it('keeps secondary text legible on the dark ground it always sits on', () => {
+  it('keeps secondary text legible on the dark ground', () => {
     // Every phone screen paints #0d1117. The desktop's #8b949e clears 4.5:1 on a
     // monitor and vanishes on a handset outdoors, so the phone lifts it.
-    expect(contrast(COLORS.muted, GROUND)).toBeGreaterThan(7);
+    expect(contrast(MUTED_ON_DARK, GROUND)).toBeGreaterThan(7);
+  });
+
+  it('keeps secondary text legible on the light ground', () => {
+    expect(contrast(MUTED_ON_LIGHT, '#ffffff')).toBeGreaterThan(4.5);
   });
 
   it('records why the border colour must never be used as text', () => {

@@ -491,7 +491,7 @@ function SoundSection({
     <div
       style={{
         padding: 14,
-        background: 'rgba(255,255,255,0.02)',
+        background: 'var(--surface-1)',
         border: '1px solid var(--border-color)',
         borderRadius: 10,
         display: 'flex',
@@ -552,7 +552,7 @@ function AlertSection({
     <div
       style={{
         padding: 14,
-        background: 'rgba(255,255,255,0.02)',
+        background: 'var(--surface-1)',
         border: '1px solid var(--border-color)',
         borderRadius: 10,
         display: 'flex',
@@ -655,7 +655,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
         height: 20,
         borderRadius: 12,
         border: '1px solid ' + (checked ? 'var(--accent-blue)' : 'var(--border-color)'),
-        background: checked ? 'rgba(88,166,255,0.25)' : 'rgba(255,255,255,0.04)',
+        background: checked ? 'rgba(88,166,255,0.25)' : 'var(--surface-2)',
         position: 'relative',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
@@ -703,7 +703,7 @@ function SelectButtons<T extends string>({
               padding: '6px 10px',
               borderRadius: 8,
               border: '1px solid ' + (selected ? 'var(--accent-blue)' : 'var(--border-color)'),
-              background: selected ? 'rgba(88,166,255,0.12)' : 'rgba(255,255,255,0.02)',
+              background: selected ? 'rgba(88,166,255,0.12)' : 'var(--surface-1)',
               color: selected ? 'var(--accent-blue)' : 'var(--text-primary)',
               cursor: 'pointer',
               fontSize: 12,
@@ -718,7 +718,7 @@ function SelectButtons<T extends string>({
                   height: 12,
                   borderRadius: 3,
                   background: opt.swatch,
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid var(--border-color)',
                   display: 'inline-block',
                 }}
               />
@@ -755,7 +755,7 @@ function SelectDropdown({
       onChange={(e) => onChange(e.target.value)}
       style={{
         padding: '8px 10px',
-        background: 'rgba(255,255,255,0.04)',
+        background: 'var(--surface-2)',
         border: '1px solid var(--border-color)',
         borderRadius: 8,
         color: 'var(--text-primary)',
@@ -815,7 +815,7 @@ const primaryBtnStyle: React.CSSProperties = {
   background: 'var(--accent-blue)',
   border: '1px solid var(--accent-blue)',
   borderRadius: 8,
-  color: '#0d1117',
+  color: 'var(--on-accent)',
   cursor: 'pointer',
   fontSize: 13,
   fontWeight: 600,

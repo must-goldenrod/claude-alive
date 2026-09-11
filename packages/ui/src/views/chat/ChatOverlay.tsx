@@ -1624,7 +1624,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                   background: 'var(--accent-amber, #d29922)',
                   border: '1px solid var(--accent-amber, #d29922)',
                   borderRadius: 8,
-                  color: '#0d1117',
+                  color: 'var(--on-accent)',
                   cursor: 'pointer',
                 }}
               >
@@ -1770,7 +1770,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                                 transition: 'background 0.15s ease',
                                 color: 'var(--text-primary)',
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
                               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                             >
                               <span style={{ fontSize: 12, opacity: 0.6 }}>&#9733;</span>
@@ -1908,7 +1908,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                               color: 'var(--text-primary)',
                               fontSize: 12,
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                           >
                             <span style={{ opacity: 0.5, fontSize: 11 }}>&#128193;</span>
@@ -1935,7 +1935,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
                           style={{
                             width: '100%',
                             padding: '6px 10px',
-                            background: 'rgba(255,255,255,0.05)',
+                            background: 'var(--surface-2)',
                             border: '1px solid var(--border-color)',
                             borderRadius: 6,
                             color: 'var(--text-primary)',

@@ -290,7 +290,12 @@ export function getFontFamily(id: string): string {
 
 export type CursorStyle = 'block' | 'bar' | 'underline';
 
+/** App chrome colour mode. 'system' follows the OS prefers-color-scheme. */
+export type AppearanceMode = 'dark' | 'light' | 'system';
+export const APPEARANCE_MODES: readonly AppearanceMode[] = ['dark', 'light', 'system'];
+
 export interface AppSettings {
+  appearance: { mode: AppearanceMode };
   sound: {
     completion: { enabled: boolean; volume: number };
     error: { enabled: boolean; volume: number };
@@ -326,6 +331,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  appearance: { mode: 'dark' },
   sound: {
     completion: { enabled: true, volume: 0.7 },
     error: { enabled: true, volume: 0.7 },
@@ -374,7 +380,13 @@ function sanitize(raw: unknown): AppSettings {
   const alertsCpu = (alerts.cpu ?? {}) as Partial<AppSettings['alerts']['cpu']>;
   const alertsMem = (alerts.memory ?? {}) as Partial<AppSettings['alerts']['memory']>;
   const backend = (obj.backend ?? {}) as Partial<AppSettings['backend']>;
+  const appearance = (obj.appearance ?? {}) as Partial<AppSettings['appearance']>;
   return {
+    appearance: {
+      mode: APPEARANCE_MODES.includes(appearance.mode as AppearanceMode)
+        ? (appearance.mode as AppearanceMode)
+        : DEFAULT_SETTINGS.appearance.mode,
+    },
     sound: {
       completion: {
         enabled: typeof sound.completion?.enabled === 'boolean' ? sound.completion.enabled : DEFAULT_SETTINGS.sound.completion.enabled,

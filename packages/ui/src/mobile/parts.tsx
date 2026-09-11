@@ -60,7 +60,7 @@ export function Badge({ text, color, filled }: { text: string; color: string; fi
         flexShrink: 0,
         border: `1px solid ${color}`,
         background: filled ? color : 'transparent',
-        color: filled ? '#0d1117' : color,
+        color: filled ? 'var(--on-accent)' : color,
       }}
     >
       {text}

@@ -11,6 +11,7 @@ import {
   setNotificationsEnabled,
   requestNotificationPermission,
 } from '../services/notifications.ts';
+import { AppearanceToggle } from './AppearanceToggle.tsx';
 
 interface HeaderBarProps {
   viewMode: ViewMode;
@@ -69,7 +70,7 @@ function MetricPill({ label, ratio, primary, secondary, percent, color, trailing
         padding: '0 10px',
         height: 28,
         borderRadius: 8,
-        background: 'rgba(255, 255, 255, 0.04)',
+        background: 'var(--surface-2)',
         border: '1px solid var(--border-color)',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
@@ -87,7 +88,7 @@ function MetricPill({ label, ratio, primary, secondary, percent, color, trailing
           width: 48,
           height: 4,
           borderRadius: 2,
-          background: 'rgba(255, 255, 255, 0.08)',
+          background: 'var(--surface-3)',
           overflow: 'hidden',
         }}
       >
@@ -177,7 +178,7 @@ function NavGroup({
       aria-label={ariaLabel}
       style={{
         display: 'flex',
-        background: 'rgba(255, 255, 255, 0.04)',
+        background: 'var(--surface-2)',
         border: '1px solid var(--border-color)',
         borderRadius: 8,
         padding: 2,
@@ -467,6 +468,8 @@ export function HeaderBar({
             </svg>
           </button>
         )}
+
+        <AppearanceToggle style={iconButtonStyle} />
 
         <button
           onClick={toggleLang}

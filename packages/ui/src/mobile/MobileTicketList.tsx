@@ -63,7 +63,7 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
       {/* No title bar: the tab above already says which list this is, and a
           390px screen has no vertical space for a heading that repeats it. */}
       {!connected && (
-        <div style={{ padding: '8px 12px 0', fontSize: 12, color: '#e5534b', flexShrink: 0 }}>{t('mobile.offline')}</div>
+        <div style={{ padding: '8px 12px 0', fontSize: 12, color: 'var(--accent-red)', flexShrink: 0 }}>{t('mobile.offline')}</div>
       )}
 
       <div role="tablist" style={{ display: 'flex', gap: 6, padding: '10px 12px 0', overflowX: 'auto', flexShrink: 0 }}>
@@ -77,7 +77,7 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
               ...chip,
               border: `1px solid ${filter === tab.id ? COLORS.accent : COLORS.border}`,
               background: filter === tab.id ? COLORS.accent : 'transparent',
-              color: filter === tab.id ? '#0d1117' : COLORS.muted,
+              color: filter === tab.id ? 'var(--on-accent)' : COLORS.muted,
             }}
           >
             {tab.text} {counts[tab.id]}

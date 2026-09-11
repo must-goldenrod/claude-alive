@@ -71,7 +71,7 @@ export function EventStream({ events, agents }: EventStreamProps) {
           return (
             <div
               key={entry.id}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs hover:bg-white/5 transition-colors"
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs hover:bg-[var(--hover)] transition-colors"
             >
               <span className="shrink-0 text-xs" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
                 {time}

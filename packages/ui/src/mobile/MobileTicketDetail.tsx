@@ -45,11 +45,11 @@ function sshDisplay(target: SshTarget): string {
  */
 function verificationBadge(ticket: Ticket, t: (k: string) => string) {
   const phase = reviewPhase(ticket);
-  if (phase === 'verifying') return { text: t('mobile.statusBadgeVerifying'), color: '#d29922' };
+  if (phase === 'verifying') return { text: t('mobile.statusBadgeVerifying'), color: 'var(--accent-amber)' };
   const verdict = ticket.verification;
   if (!verdict) return null;
-  if (verdict.passed === false || verdict.flagged) return { text: t('mobile.statusBadgeFlagged'), color: '#e5534b' };
-  if (verdict.passed) return { text: t('mobile.statusBadgeVerified'), color: '#3fb950' };
+  if (verdict.passed === false || verdict.flagged) return { text: t('mobile.statusBadgeFlagged'), color: 'var(--accent-red)' };
+  if (verdict.passed) return { text: t('mobile.statusBadgeVerified'), color: 'var(--accent-green)' };
   return { text: t('mobile.statusBadgeUnverified'), color: COLORS.muted };
 }
 
@@ -154,7 +154,7 @@ export function MobileTicketDetail({
           <Badge text={t(`tickets.status.${ticket.state}`)} color={STATUS_COLOR[status]} filled />
           {review && <Badge text={review.text} color={review.color} />}
           {remote ? (
-            <Badge text={`${t('mobile.locationSsh')} ${sshDisplay(remote)}`} color="#a371f7" />
+            <Badge text={`${t('mobile.locationSsh')} ${sshDisplay(remote)}`} color="var(--accent-purple)" />
           ) : (
             <Badge text={t('mobile.locationLocal')} color={COLORS.muted} />
           )}
@@ -206,7 +206,7 @@ export function MobileTicketDetail({
 
         {ticket.state === 'failed' && (
           <Section label={t('tickets.failureLabel')}>
-            <Panel accent="#e5534b">
+            <Panel accent="var(--accent-red)">
               {failureLine(ticket, t)}
               {/* The phone gets the same explanation as the desktop: a bare exit
                   code is least readable exactly where the reader is furthest
@@ -274,7 +274,7 @@ export function MobileTicketDetail({
                       ...secondaryButton, ...TYPE.button, minHeight: 40, padding: '0 12px',
                       borderColor: active ? COLORS.accent : COLORS.border,
                       background: active ? COLORS.accent : 'transparent',
-                      color: active ? '#0d1117' : COLORS.text,
+                      color: active ? 'var(--on-accent)' : COLORS.text,
                     }}
                   >
                     {t(rating.textKey)}
@@ -299,7 +299,7 @@ export function MobileTicketDetail({
         )}
         <button
           onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
-          style={{ ...secondaryButton, flex: 1, borderColor: '#e5534b', color: '#e5534b' }}
+          style={{ ...secondaryButton, flex: 1, borderColor: 'var(--accent-red)', color: 'var(--accent-red)' }}
         >
           {confirmDelete ? t('mobile.deleteConfirm') : t('mobile.deleteTicket')}
         </button>

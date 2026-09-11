@@ -8,6 +8,10 @@
  */
 import type { CSSProperties } from 'react';
 
+/** Phone secondary text per mode; index.css --text-muted-strong mirrors these. */
+export const MUTED_ON_DARK = '#a9b4c0';
+export const MUTED_ON_LIGHT = '#59636e';
+
 export const COLORS = {
   bg: 'var(--bg-primary, #0d1117)',
   surface: 'var(--bg-secondary, #161b22)',
@@ -17,12 +21,12 @@ export const COLORS = {
    * Secondary text, one step brighter than the desktop's `--text-secondary`.
    *
    * A phone is read at arm's length, outdoors, at whatever brightness the
-   * screen decided on — and every one of these screens is dark. #8b949e holds
+   * screen decided on. On the dark ground #8b949e holds
    * up on a monitor and disappears on a handset, so the phone palette lifts it
    * rather than inheriting. `border` is for borders only: at #30363d it is
    * invisible as text, which is exactly what the "로컬" badge looked like.
    */
-  muted: '#a9b4c0',
+  muted: `var(--text-muted-strong, ${MUTED_ON_DARK})`,
   accent: 'var(--accent-blue, #58a6ff)',
 } as const;
 
@@ -123,7 +127,7 @@ export const primaryButton: CSSProperties = {
   borderRadius: 10,
   border: 'none',
   background: COLORS.accent,
-  color: '#0d1117',
+  color: 'var(--on-accent)',
   fontSize: 15,
   fontWeight: 600,
   cursor: 'pointer',

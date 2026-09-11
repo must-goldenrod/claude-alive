@@ -45,8 +45,8 @@ const RECENT_MS = 60 * 60 * 1000;
 const MAX_ROWS = 60;
 
 function stateColor(state: string): string {
-  if (BUSY.has(state)) return '#3fb950';
-  if (WAITING.has(state)) return '#d29922';
+  if (BUSY.has(state)) return 'var(--accent-green)';
+  if (WAITING.has(state)) return 'var(--accent-amber)';
   return COLORS.muted;
 }
 
@@ -87,7 +87,7 @@ export function MobileSessionList({ sessions, loading, onOpen, onRefresh }: Mobi
                   <span
                     aria-label={t('mobile.needsApproval')}
                     title={t('mobile.needsApproval')}
-                    style={{ ...TYPE.badge, marginLeft: 'auto', color: '#d29922' }}
+                    style={{ ...TYPE.badge, marginLeft: 'auto', color: 'var(--accent-amber)' }}
                   >
                     ●
                   </span>

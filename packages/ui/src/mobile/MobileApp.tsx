@@ -163,7 +163,7 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
                   ...chip,
                   border: `1px solid ${tab === id ? COLORS.accent : COLORS.border}`,
                   background: tab === id ? COLORS.accent : 'transparent',
-                  color: tab === id ? '#0d1117' : COLORS.muted,
+                  color: tab === id ? 'var(--on-accent)' : COLORS.muted,
                 }}
               >
                 {t(id === 'tickets' ? 'mobile.tabTickets' : 'mobile.tabSessions')}

@@ -1160,5 +1160,11 @@
     "pullToRefresh": "당겨서 새로고침",
     "releaseToRefresh": "놓으면 새로고침",
     "refreshing": "새로고침 중…"
+  },
+  "appearance": {
+    "toggle": "화면 모드: {{current}} (클릭 시 {{next}})",
+    "dark": "다크",
+    "light": "라이트",
+    "system": "시스템 설정"
   }
 }

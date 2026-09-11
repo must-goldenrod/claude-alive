@@ -19,6 +19,17 @@
   --state-despawning: #6e7681;
   --state-removed: #484f58;
 
+  /* Neutral tints layered on a surface (hover, raised rows, inputs). Dark mode
+     lifts with white, light mode sinks with ink — so views never hardcode either. */
+  --surface-1: rgba(255, 255, 255, 0.02);
+  --surface-2: rgba(255, 255, 255, 0.04);
+  --surface-3: rgba(255, 255, 255, 0.08);
+  --hover: rgba(255, 255, 255, 0.06);
+  /* Text on a filled accent (blue/green button). */
+  --on-accent: #0d1117;
+  /* Phone secondary text — one step brighter than --text-secondary. */
+  --text-muted-strong: #a9b4c0;
+
   --font-ui: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
 
@@ -49,6 +60,44 @@
 
   --dur-fast: 120ms;
   --dur-base: 200ms;
+
+  color-scheme: dark;
+}
+
+/* Light palette (GitHub Light). Set by services/appearance.ts on <html>. */
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-card: #eaeef2;
+  --border-color: #d0d7de;
+  --text-primary: #1f2328;
+  --text-secondary: #59636e;
+  --accent-green: #1a7f37;
+  --accent-blue: #0969da;
+  --accent-amber: #9a6700;
+  --accent-red: #cf222e;
+  --accent-purple: #8250df;
+  --accent-teal: #1b7c83;
+  --accent-pink: #bf3989;
+  --state-despawning: #6e7781;
+  --state-removed: #8c959f;
+
+  --surface-1: rgba(31, 35, 40, 0.03);
+  --surface-2: rgba(31, 35, 40, 0.05);
+  --surface-3: rgba(31, 35, 40, 0.09);
+  --hover: rgba(31, 35, 40, 0.07);
+  --on-accent: #ffffff;
+  --text-muted-strong: #59636e;
+  /* Dark mode leaves these undefined so each call site keeps its own fallback. */
+  --border-default: #d0d7de;
+  --bg-tertiary: #eaeef2;
+  --text-tertiary: #6e7781;
+  --accent-orange: #bc4c00;
+
+  --elev-1: 0 1px 2px rgba(31, 35, 40, 0.12);
+  --elev-2: 0 8px 24px rgba(31, 35, 40, 0.16);
+
+  color-scheme: light;
 }
 
 html, body, #root {
@@ -70,11 +119,11 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(139, 148, 158, 0.2);
+  background: color-mix(in srgb, var(--text-secondary) 30%, transparent);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 148, 158, 0.35);
+  background: color-mix(in srgb, var(--text-secondary) 50%, transparent);
 }
 
 @keyframes pulse {

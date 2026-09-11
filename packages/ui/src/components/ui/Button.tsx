@@ -4,7 +4,7 @@ import { radius, text } from './tokens.ts';
 type Variant = 'primary' | 'ghost' | 'danger';
 
 const VARIANT: Record<Variant, { bg: string; fg: string; border: string }> = {
-  primary: { bg: 'var(--accent-blue)', fg: '#0d1117', border: 'transparent' },
+  primary: { bg: 'var(--accent-blue)', fg: 'var(--on-accent)', border: 'transparent' },
   ghost: { bg: 'transparent', fg: 'var(--text-secondary)', border: 'var(--border-color)' },
   danger: { bg: 'transparent', fg: 'var(--accent-red)', border: 'var(--accent-red)' },
 };

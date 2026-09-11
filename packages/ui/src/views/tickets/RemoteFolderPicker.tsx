@@ -255,7 +255,7 @@ export function RemoteFolderPicker({ ssh, onSelect, onClose }: RemoteFolderPicke
                   onClick={() => browse(join(path, name))}
                   onDoubleClick={() => pick(join(path, name))}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', color: 'var(--text-primary, #e6edf3)', fontSize: 12 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--hover)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >
                   <span style={{ opacity: 0.5, fontSize: 11 }}>📁</span>
@@ -282,7 +282,7 @@ export function RemoteFolderPicker({ ssh, onSelect, onClose }: RemoteFolderPicke
               borderRadius: 8,
               border: 'none',
               background: path ? 'var(--accent-blue, #58a6ff)' : 'var(--bg-tertiary, #21262d)',
-              color: path ? '#0d1117' : 'var(--text-secondary, #8b949e)',
+              color: path ? 'var(--on-accent)' : 'var(--text-secondary, #8b949e)',
               cursor: path ? 'pointer' : 'not-allowed',
               whiteSpace: 'nowrap',
             }}

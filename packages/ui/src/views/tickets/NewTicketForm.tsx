@@ -306,7 +306,7 @@ export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicket
             borderRadius: 8,
             border: 'none',
             background: canSubmit ? 'var(--accent-blue, #58a6ff)' : 'var(--bg-tertiary, #21262d)',
-            color: canSubmit ? '#0d1117' : 'var(--text-secondary, #8b949e)',
+            color: canSubmit ? 'var(--on-accent)' : 'var(--text-secondary, #8b949e)',
             cursor: canSubmit ? 'pointer' : 'not-allowed',
             whiteSpace: 'nowrap',
           }}

@@ -194,7 +194,7 @@ export function TicketDissection({ record, guideRefreshKey, onLabel, onReflect }
               alignSelf: 'flex-start', fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 10,
               cursor: busy ? 'default' : 'pointer',
               background: record.reflected ? 'var(--accent-teal)' : 'var(--bg-card)',
-              color: record.reflected ? '#04231d' : 'var(--text-primary)',
+              color: record.reflected ? 'var(--on-accent)' : 'var(--text-primary)',
               border: `1px solid ${record.reflected ? 'var(--accent-teal)' : 'var(--border-color)'}`,
               opacity: busy ? 0.7 : 1,
             }}
@@ -234,7 +234,7 @@ function ScoreButton({ active, color, onClick, disabled, children }: { active: b
       style={{
         fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 8, cursor: disabled ? 'default' : 'pointer',
         background: active ? color : 'var(--bg-card)',
-        color: active ? '#04231d' : 'var(--text-secondary)',
+        color: active ? 'var(--on-accent)' : 'var(--text-secondary)',
         border: `1px solid ${active ? color : 'var(--border-color)'}`,
         opacity: disabled ? 0.6 : 1,
       }}

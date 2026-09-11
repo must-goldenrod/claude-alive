@@ -197,7 +197,7 @@ function MetricBox({
       style={{
         flex: 1,
         padding: '10px 14px',
-        background: highlight ? 'rgba(248, 81, 73, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+        background: highlight ? 'rgba(248, 81, 73, 0.12)' : 'var(--surface-2)',
         border: `1px solid ${highlight ? 'var(--accent-red)' : 'var(--border-color)'}`,
         borderRadius: 10,
       }}

@@ -1161,5 +1161,11 @@
     "pullToRefresh": "Pull to refresh",
     "releaseToRefresh": "Release to refresh",
     "refreshing": "Refreshing…"
+  },
+  "appearance": {
+    "toggle": "Theme: {{current}} (click for {{next}})",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
   }
 }

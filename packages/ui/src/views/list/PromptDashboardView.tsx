@@ -597,7 +597,7 @@ export function PromptDashboardView({ active, onSelectPrompt }: PromptDashboardV
                     gap: 12,
                     padding: '8px 10px',
                     borderLeft: `3px solid ${color}`,
-                    background: 'rgba(255,255,255,0.02)',
+                    background: 'var(--surface-1)',
                     borderRadius: 6,
                   }}
                 >

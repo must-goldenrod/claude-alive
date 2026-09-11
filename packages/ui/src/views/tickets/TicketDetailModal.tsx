@@ -344,7 +344,7 @@ function EvalSection({
                 padding: '9px 4px',
                 fontWeight: 600,
                 textAlign: 'center',
-                color: on ? '#0d1117' : s.accent,
+                color: on ? 'var(--on-accent)' : s.accent,
                 borderColor: s.accent,
                 background: on ? s.accent : `color-mix(in srgb, ${s.accent} 10%, transparent)`,
                 cursor: saving ? 'wait' : 'pointer',
@@ -603,7 +603,7 @@ function DecisionPanel({
                   fontSize: 12,
                   fontWeight: 700,
                   fontFamily: 'var(--font-mono, monospace)',
-                  color: '#0d1117',
+                  color: 'var(--on-accent)',
                   background: color,
                 }}
               >
@@ -691,7 +691,7 @@ function ReplyComposer({
           borderRadius: 8,
           border: 'none',
           background: canSend ? color : 'var(--bg-tertiary, #21262d)',
-          color: canSend ? '#0d1117' : 'var(--text-secondary, #8b949e)',
+          color: canSend ? 'var(--on-accent)' : 'var(--text-secondary, #8b949e)',
           cursor: canSend ? 'pointer' : 'not-allowed',
           whiteSpace: 'nowrap',
         }}

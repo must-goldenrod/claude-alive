@@ -58,7 +58,7 @@ export function TokenGate() {
           onClick={submit}
           style={{
             marginTop: 12, width: '100%', padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
-            border: 'none', background: 'var(--accent-blue, #58a6ff)', color: '#0d1117', fontSize: 13, fontWeight: 600,
+            border: 'none', background: 'var(--accent-blue, #58a6ff)', color: 'var(--on-accent)', fontSize: 13, fontWeight: 600,
           }}
         >
           {t('auth.submit')}

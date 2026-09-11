@@ -81,7 +81,7 @@ export function MobileTerminal({ title, subtitle, output, canType, exited, onBac
           {output || t('mobile.terminalAttaching')}
         </pre>
         {exited && (
-          <p style={{ ...TYPE.meta, color: '#e5534b', marginTop: 12 }}>{t('mobile.terminalGone')}</p>
+          <p style={{ ...TYPE.meta, color: 'var(--accent-red)', marginTop: 12 }}>{t('mobile.terminalGone')}</p>
         )}
         <div ref={endRef} />
       </PullToRefresh>
@@ -112,7 +112,7 @@ export function MobileTerminal({ title, subtitle, output, canType, exited, onBac
             />
             <button
               onClick={send}
-              style={{ ...secondaryButton, minHeight: 48, background: COLORS.accent, color: '#0d1117', border: 'none', fontWeight: 600 }}
+              style={{ ...secondaryButton, minHeight: 48, background: COLORS.accent, color: 'var(--on-accent)', border: 'none', fontWeight: 600 }}
             >
               {t('mobile.terminalSend')}
             </button>

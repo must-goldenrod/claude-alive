@@ -57,7 +57,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 40, color: '#e5534b', fontFamily: 'monospace', textAlign: 'center' }}>
+        <div style={{ padding: 40, color: 'var(--accent-red)', fontFamily: 'monospace', textAlign: 'center' }}>
           <p>{i18n.t('error.somethingWentWrong')}</p>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}

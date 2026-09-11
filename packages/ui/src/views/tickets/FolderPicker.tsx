@@ -302,7 +302,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                     fontSize: 12,
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                    e.currentTarget.style.background = 'var(--hover)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'transparent';
@@ -352,7 +352,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               borderRadius: 8,
               border: 'none',
               background: currentPath ? 'var(--accent-blue, #58a6ff)' : 'var(--bg-tertiary, #21262d)',
-              color: currentPath ? '#0d1117' : 'var(--text-secondary, #8b949e)',
+              color: currentPath ? 'var(--on-accent)' : 'var(--text-secondary, #8b949e)',
               cursor: currentPath ? 'pointer' : 'not-allowed',
               whiteSpace: 'nowrap',
             }}

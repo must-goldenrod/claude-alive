@@ -236,7 +236,7 @@ export function SSHPresetDialog({
             <span style={{ fontSize: 12, fontWeight: 600 }}>
               {editingId ? t('terminal.ssh.editTitle') : t('terminal.ssh.newTitle')}
             </span>
-            <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.04)', borderRadius: 6, padding: 2 }}>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 6, padding: 2 }}>
               <ModeTab
                 active={inputMode === 'freeform'}
                 onClick={() => setInputMode('freeform')}
@@ -314,7 +314,7 @@ export function SSHPresetDialog({
                   padding: '6px 10px',
                   fontSize: 10,
                   fontFamily: 'var(--font-mono)',
-                  background: 'rgba(255,255,255,0.04)',
+                  background: 'var(--surface-2)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 6,
                   color: 'var(--text-secondary)',
@@ -414,7 +414,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const textInputStyle: React.CSSProperties = {
   width: '100%',
   padding: '6px 10px',
-  background: 'rgba(255,255,255,0.04)',
+  background: 'var(--surface-2)',
   border: '1px solid var(--border-color)',
   borderRadius: 6,
   color: 'var(--text-primary)',

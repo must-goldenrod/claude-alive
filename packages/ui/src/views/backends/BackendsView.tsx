@@ -292,7 +292,7 @@ function SshHosts({ t }: { t: (key: string) => string }) {
             borderRadius: 8,
             border: 'none',
             background: host.trim() ? 'var(--accent-blue, #58a6ff)' : 'var(--bg-tertiary, #21262d)',
-            color: host.trim() ? '#0d1117' : 'var(--text-secondary, #8b949e)',
+            color: host.trim() ? 'var(--on-accent)' : 'var(--text-secondary, #8b949e)',
             cursor: host.trim() ? 'pointer' : 'not-allowed',
             whiteSpace: 'nowrap',
           }}
@@ -345,7 +345,7 @@ function BackendCard({
               fontSize: 10,
               fontWeight: 600,
               color: 'var(--text-secondary, #8b949e)',
-              background: 'rgba(255,255,255,0.05)',
+              background: 'var(--surface-2)',
               borderRadius: 5,
               padding: '1px 6px',
             }}

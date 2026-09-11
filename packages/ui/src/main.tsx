@@ -5,6 +5,7 @@ import './index.css'
 import App from './App.tsx'
 import { adoptUrlToken, installAuthFetch } from './lib/auth.ts'
 import { TokenGate } from './components/TokenGate.tsx'
+import { installAppearance } from './services/appearance.ts'
 
 // Before the first render, and before any view fetches: `claude-alive start`
 // hands the dashboard its token in the URL once, and every request from here on
@@ -12,6 +13,7 @@ import { TokenGate } from './components/TokenGate.tsx'
 // case this is a no-op and nothing about the app changes.
 adoptUrlToken()
 installAuthFetch()
+installAppearance()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

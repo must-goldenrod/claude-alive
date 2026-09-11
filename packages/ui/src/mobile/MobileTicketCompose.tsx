@@ -71,7 +71,7 @@ function Toggle({ text, hint, on, onChange }: { text: string; hint: string; on: 
           background: on ? COLORS.accent : COLORS.border,
         }}
       >
-        <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: 999, background: '#0d1117' }} />
+        <span style={{ position: 'absolute', top: 2, left: on ? 18 : 2, width: 16, height: 16, borderRadius: 999, background: 'var(--on-accent)' }} />
       </span>
       <span style={{ display: 'flex', flexDirection: 'column' }}>
         <span style={{ fontSize: 14 }}>{text}</span>
@@ -184,7 +184,7 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
               ...secondaryButton, flex: 1, minHeight: 44,
               borderColor: !isRemote ? COLORS.accent : COLORS.border,
               background: !isRemote ? COLORS.accent : 'transparent',
-              color: !isRemote ? '#0d1117' : COLORS.text,
+              color: !isRemote ? 'var(--on-accent)' : COLORS.text,
             }}
           >
             {t('mobile.locationLocal')}
@@ -196,9 +196,9 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
             onClick={() => setSheet('host')}
             style={{
               ...secondaryButton, flex: 1, minHeight: 44,
-              borderColor: isRemote ? '#a371f7' : COLORS.border,
-              background: isRemote ? '#a371f7' : 'transparent',
-              color: isRemote ? '#0d1117' : COLORS.text,
+              borderColor: isRemote ? 'var(--accent-purple)' : COLORS.border,
+              background: isRemote ? 'var(--accent-purple)' : 'transparent',
+              color: isRemote ? 'var(--on-accent)' : COLORS.text,
             }}
           >
             {isRemote && host ? sshDisplay(host as SshTarget) : t('mobile.locationSsh')}
@@ -242,7 +242,7 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
                 ...secondaryButton, minHeight: 44, padding: '0 14px', fontSize: 14,
                 borderColor: preset === id ? COLORS.accent : COLORS.border,
                 background: preset === id ? COLORS.accent : 'transparent',
-                color: preset === id ? '#0d1117' : COLORS.text,
+                color: preset === id ? 'var(--on-accent)' : COLORS.text,
               }}
             >
               {t(`tickets.preset.${id}`)}
@@ -261,7 +261,7 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
         />
         <Toggle text={t('tickets.panelReview')} hint={t('tickets.panelReviewHint')} on={panelReview} onChange={setPanelReview} />
 
-        {error && <p style={{ marginTop: 14, fontSize: 13, color: '#e5534b', lineHeight: 1.5 }}>{error}</p>}
+        {error && <p style={{ marginTop: 14, fontSize: 13, color: 'var(--accent-red)', lineHeight: 1.5 }}>{error}</p>}
       </div>
 
       <div style={actionBar}>
@@ -311,7 +311,7 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
                 key={p.id}
                 aria-label={sshDisplay(p as SshTarget)}
                 onClick={() => { setLocId(p.id); setSheet(null); }}
-                style={{ display: 'block', width: '100%', minHeight: 48, padding: '0 14px', marginBottom: 6, borderRadius: 10, textAlign: 'left', cursor: 'pointer', fontSize: 15, border: `1px solid ${locId === p.id ? '#a371f7' : COLORS.border}`, background: COLORS.surface, color: COLORS.text }}
+                style={{ display: 'block', width: '100%', minHeight: 48, padding: '0 14px', marginBottom: 6, borderRadius: 10, textAlign: 'left', cursor: 'pointer', fontSize: 15, border: `1px solid ${locId === p.id ? 'var(--accent-purple)' : COLORS.border}`, background: COLORS.surface, color: COLORS.text }}
               >
                 {sshDisplay(p as SshTarget)}
               </button>
