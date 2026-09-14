@@ -31,6 +31,17 @@ describe('MobileTicketDetail — desktop parity', () => {
     expect(screen.getByText(/토큰 갱신 로직/)).toBeInTheDocument();
   });
 
+  it('renders the result as markdown, not raw syntax', () => {
+    const result = '## 변경 요약\n\n- **토큰** 갱신 수정\n- `auth.ts` 정리\n\n| 파일 | 상태 |\n|---|---|\n| a.ts | 수정 |';
+    const { container } = render(<MobileTicketDetail {...props(base({ result }))} />);
+    expect(screen.getByText('변경 요약')).toBeInTheDocument();
+    expect(screen.getByText('토큰').tagName).toBe('STRONG');
+    expect(screen.getByText('auth.ts').tagName).toBe('CODE');
+    expect(container.querySelector('table')).not.toBeNull();
+    expect(container.textContent).not.toContain('##');
+    expect(container.textContent).not.toContain('**');
+  });
+
   it('names the state in a badge rather than only colouring a dot', () => {
     render(<MobileTicketDetail {...props(base({ state: 'running' }))} />);
     expect(screen.getByText(/실행중|Running/)).toBeInTheDocument();

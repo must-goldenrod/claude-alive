@@ -215,7 +215,8 @@ export function Markdown({ text }: { text: string }) {
     );
   }
 
-  return <div style={{ color: 'var(--text-primary, #e6edf3)', fontSize: 14 }}>{blocks}</div>;
+  // `anywhere` lets a long path or URL wrap instead of widening a phone screen.
+  return <div style={{ color: 'var(--text-primary, #e6edf3)', fontSize: 14, overflowWrap: 'anywhere' }}>{blocks}</div>;
 }
 
 function cellStyle(header: boolean): CSSProperties {

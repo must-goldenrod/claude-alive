@@ -7,6 +7,7 @@ import {
 } from '../views/tickets/ticketDisplay.ts';
 import { failureLine } from '../views/tickets/failureLine.ts';
 import { AgentExitReport } from '../views/tickets/AgentExitReport.tsx';
+import { Markdown } from '../views/tickets/Markdown.tsx';
 import { legacyAgentExit } from '../views/tickets/legacyAgentExit.ts';
 import { useNow } from '../views/dashboard/hooks/useNow.ts';
 import { formatAge } from '../utils/age.ts';
@@ -172,7 +173,9 @@ export function MobileTicketDetail({
         {waiting && (
           <Section label={t('tickets.decisionLabel')}>
             <Panel accent={COLORS.accent}>
-              <p style={{ margin: '0 0 12px', whiteSpace: 'pre-wrap' }}>{decision?.prompt ?? ticket.decisionQuestion}</p>
+              <div style={{ marginBottom: 12 }}>
+                <Markdown text={decision?.prompt ?? ticket.decisionQuestion ?? ''} />
+              </div>
               {decision?.options.map((option) => (
                 <button
                   key={option.key}
@@ -223,9 +226,7 @@ export function MobileTicketDetail({
         <Section label={t('tickets.resultLabel')}>
           <Panel>
             {ticket.result ? (
-              <pre style={{ ...TYPE.body, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {ticket.result}
-              </pre>
+              <Markdown text={ticket.result} />
             ) : (
               <span style={{ color: COLORS.muted }}>{t('tickets.noResult')}</span>
             )}
@@ -250,7 +251,7 @@ export function MobileTicketDetail({
                 )}
               </div>
               {ticket.verification.reason && (
-                <div style={{ whiteSpace: 'pre-wrap' }}>{ticket.verification.reason}</div>
+                <Markdown text={ticket.verification.reason} />
               )}
               {ticket.verification.gate?.coverage && (
                 <div style={{ ...TYPE.body, marginTop: 6, color: COLORS.muted, whiteSpace: 'pre-wrap' }}>
