@@ -88,6 +88,8 @@ const NOT_A_VERDICT_ON_THE_WORK: ReadonlySet<TicketFailureReason> = new Set([
   'cancelled',
   'interrupted',
   'cwd-not-allowed',
+  'usage-limit',
+  'model-unavailable',
   'verification-inconclusive',
   'verification-failed',
 ]);

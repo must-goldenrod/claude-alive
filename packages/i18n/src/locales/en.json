@@ -590,7 +590,9 @@
       "fast": "Fast",
       "medium": "Medium",
       "standard": "Standard",
-      "deep": "Deep"
+      "deep": "Deep",
+      "expert": "Expert",
+      "ultimate": "Ultimate"
     },
     "runPreset": "Run profile",
     "runRequestedModel": "Requested model",
@@ -645,7 +647,9 @@
       "timeout": "Timed out",
       "cancelled": "Cancelled",
       "interrupted": "Interrupted (server restart)",
-      "cwd-not-allowed": "Working directory not allowed"
+      "cwd-not-allowed": "Working directory not allowed",
+      "usage-limit": "Usage limit reached",
+      "model-unavailable": "Model unavailable"
     },
     "agentExit": {
       "cause": {

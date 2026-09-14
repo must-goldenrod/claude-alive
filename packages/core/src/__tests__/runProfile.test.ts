@@ -16,6 +16,8 @@ describe('resolveRunProfile', () => {
     expect(resolveRunProfile('medium')).toEqual({ model: 'claude-opus-5', effort: 'medium' });
     expect(resolveRunProfile('standard')).toEqual({ model: 'claude-opus-5', effort: 'high' });
     expect(resolveRunProfile('deep')).toEqual({ model: 'claude-opus-5', effort: 'max' });
+    expect(resolveRunProfile('expert')).toEqual({ model: 'claude-fable-5-1', effort: 'medium' });
+    expect(resolveRunProfile('ultimate')).toEqual({ model: 'claude-fable-5-1', effort: 'high' });
   });
 
   it('pins a full model id, never a moving alias', () => {
@@ -27,7 +29,7 @@ describe('resolveRunProfile', () => {
   });
 
   it('orders presets cheapest-first so the picker reads as a cost ramp', () => {
-    expect(TICKET_RUN_PRESET_IDS).toEqual(['fast', 'medium', 'standard', 'deep']);
+    expect(TICKET_RUN_PRESET_IDS).toEqual(['fast', 'medium', 'standard', 'deep', 'expert', 'ultimate']);
   });
 
   it('returns undefined for an unknown or absent preset (falls back to CLI defaults)', () => {

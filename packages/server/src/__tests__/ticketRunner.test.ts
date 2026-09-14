@@ -227,6 +227,28 @@ describe('TicketRunner lifecycle', () => {
     expect(failed.agentExit).toMatchObject({ cause: 'exited', code: 1, stderr: 'boom' });
   });
 
+  it('reports a spent usage limit as usage-limit, not a generic crash', async () => {
+    const { runner } = makeRunner({
+      spawnMain: () => ({
+        kill() {},
+        done: Promise.resolve({
+          exitCode: 1,
+          result: { result: "You've hit your limit · resets 3pm (Asia/Seoul)", isError: true },
+          sessionId: 'sess-limit',
+          stderr: '',
+        }),
+      }),
+    });
+    const t = await store.create({ goal: 'g', cwd: '/repo', preset: 'ultimate' });
+    runner.enqueue(t);
+    await until(() => store.get(t.id)?.state === 'failed');
+    const failed = store.get(t.id)!;
+    expect(failed.failureReason).toBe('usage-limit');
+    expect(failed.error).toContain('사용량 한도');
+    expect(failed.error).toContain('resets 3pm');
+    expect(failed.agentExit).toMatchObject({ code: 1 });
+  });
+
   it('records a SIGTERM-killed agent as terminated-from-outside, not a crash', async () => {
     // The real incident: `claude` handles SIGTERM itself and exits 143, so the
     // ticket only ever showed "main agent exited (code 143)".

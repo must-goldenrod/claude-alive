@@ -98,7 +98,9 @@ export type TicketFailureReason =
   | 'timeout' // exceeded the per-ticket wallclock cap
   | 'cancelled' // user cancelled a running ticket
   | 'interrupted' // server restarted while running/verifying (not reattachable)
-  | 'cwd-not-allowed'; // create requested a cwd outside the allowlist
+  | 'cwd-not-allowed' // create requested a cwd outside the allowlist
+  | 'usage-limit' // the account's usage / rate / spend limit stopped the agent
+  | 'model-unavailable'; // the requested model does not exist or this account can't use it
 
 /**
  * One independent reviewer's opinion in the LiteLLM verification panel.

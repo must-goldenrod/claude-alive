@@ -590,7 +590,9 @@
       "fast": "빠름",
       "medium": "중간",
       "standard": "기본",
-      "deep": "심층"
+      "deep": "심층",
+      "expert": "전문",
+      "ultimate": "최상"
     },
     "runPreset": "실행 프로필",
     "runRequestedModel": "요청 모델",
@@ -645,7 +647,9 @@
       "timeout": "시간 초과",
       "cancelled": "취소됨",
       "interrupted": "중단됨 (서버 재시작)",
-      "cwd-not-allowed": "허용되지 않은 작업 디렉터리"
+      "cwd-not-allowed": "허용되지 않은 작업 디렉터리",
+      "usage-limit": "사용량 한도 도달",
+      "model-unavailable": "모델 사용 불가"
     },
     "agentExit": {
       "cause": {

@@ -13,7 +13,7 @@
  */
 import type { TicketRunPreset } from '@claude-alive/core';
 
-export const RUN_PRESET_IDS: readonly TicketRunPreset[] = ['fast', 'medium', 'standard', 'deep'];
+export const RUN_PRESET_IDS: readonly TicketRunPreset[] = ['fast', 'medium', 'standard', 'deep', 'expert', 'ultimate'];
 
 export const DEFAULT_RUN_PRESET: TicketRunPreset = 'standard';
 
@@ -27,11 +27,13 @@ export interface RunPresetPreview {
 
 const OPUS = 'claude-opus-5';
 const SONNET = 'claude-sonnet-5';
+const FABLE = 'claude-fable-5-1';
 
 /** Model id → marketing name, mirroring core's `TICKET_MODEL_LABELS`. */
 export const MODEL_LABELS: Readonly<Record<string, string>> = {
   [OPUS]: 'Opus 5',
   [SONNET]: 'Sonnet 5',
+  [FABLE]: 'Fable 5.1',
 };
 
 /** Marketing name for a model id, or the id itself when we have no label. */
@@ -45,6 +47,8 @@ export const RUN_PRESET_PREVIEW: Record<TicketRunPreset, RunPresetPreview> = {
   medium: { model: OPUS, modelLabel: MODEL_LABELS[OPUS], effort: 'medium' },
   standard: { model: OPUS, modelLabel: MODEL_LABELS[OPUS], effort: 'high' },
   deep: { model: OPUS, modelLabel: MODEL_LABELS[OPUS], effort: 'max' },
+  expert: { model: FABLE, modelLabel: MODEL_LABELS[FABLE], effort: 'medium' },
+  ultimate: { model: FABLE, modelLabel: MODEL_LABELS[FABLE], effort: 'high' },
 };
 
 /** i18n key for a preset's button label. */
