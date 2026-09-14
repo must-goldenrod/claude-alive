@@ -3,13 +3,42 @@ import '@claude-alive/i18n';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { MobileTerminal } from '../MobileTerminal.tsx';
+import { createTermFeed } from '../termFeed.ts';
 
-afterEach(cleanup);
+// jsdom has no canvas for xterm's renderer; a fake records what reached it.
+const xterm = vi.hoisted(() => ({
+  instances: [] as Array<{ writes: string[]; cols: number; rows: number; options: Record<string, unknown> }>,
+}));
+vi.mock('@xterm/xterm', () => ({
+  Terminal: class {
+    writes: string[] = [];
+    cols: number;
+    rows: number;
+    options: Record<string, unknown>;
+    constructor(opts: { cols: number; rows: number }) {
+      this.options = { ...opts };
+      this.cols = opts.cols;
+      this.rows = opts.rows;
+      xterm.instances.push(this);
+    }
+    open() {}
+    write(data: string) { this.writes.push(data); }
+    reset() {}
+    resize(cols: number, rows: number) { this.cols = cols; this.rows = rows; }
+    dispose() {}
+  },
+}));
+
+afterEach(() => {
+  cleanup();
+  xterm.instances.length = 0;
+});
 
 const props = (over = {}) => ({
   title: 'app',
   subtitle: 'my-repo',
-  output: '',
+  feed: createTermFeed(),
+  hasOutput: false,
   canType: true,
   exited: false,
   onBack: vi.fn(),
@@ -29,9 +58,27 @@ describe('MobileTerminal', () => {
     expect(screen.getByText('my-repo')).toBeInTheDocument();
   });
 
-  it('shows the output it has received', () => {
-    render(<MobileTerminal {...props({ output: '$ ls\nREADME.md\n' })} />);
-    expect(screen.getByText(/README\.md/)).toBeInTheDocument();
+  it('hands raw pty bytes to the emulator untouched, including cursor moves', () => {
+    const feed = createTermFeed();
+    // Sent before mount: the feed holds it until the terminal is listening.
+    feed.push({ kind: 'data', data: '\x1b[2K\x1b[1AThinking' });
+    render(<MobileTerminal {...props({ feed, hasOutput: true })} />);
+    feed.push({ kind: 'data', data: '\x1b[5GDone' });
+    expect(xterm.instances[0]!.writes).toEqual(['\x1b[2K\x1b[1AThinking', '\x1b[5GDone']);
+  });
+
+  it('lays out at the pty grid the server reports, not the phone width', () => {
+    const feed = createTermFeed();
+    render(<MobileTerminal {...props({ feed })} />);
+    feed.push({ kind: 'size', cols: 120, rows: 40 });
+    expect(xterm.instances[0]).toMatchObject({ cols: 120, rows: 40 });
+  });
+
+  it('says it is connecting until the first output arrives', () => {
+    const { rerender } = render(<MobileTerminal {...props()} />);
+    expect(screen.getByText(/연결 중|Attaching/)).toBeInTheDocument();
+    rerender(<MobileTerminal {...props({ hasOutput: true })} />);
+    expect(screen.queryByText(/연결 중|Attaching/)).not.toBeInTheDocument();
   });
 
   it('sends a typed line and clears the box', () => {

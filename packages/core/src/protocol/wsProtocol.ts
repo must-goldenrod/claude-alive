@@ -58,6 +58,9 @@ export type WSServerMessage =
   // Sent in response to `terminal:attach` when the pty is still alive: replays
   // the scrollback ring buffer so the reattaching browser restores its screen.
   | { type: 'terminal:restore'; tabId: string; data: string }
+  // The pty's grid, sent before a restore and after every resize. Viewers that
+  // do not own the size (the phone) render at it instead of reflowing.
+  | { type: 'terminal:size'; tabId: string; cols: number; rows: number }
   // Sent in response to `terminal:attach` when the pty is gone (server restart).
   // The UI can offer to resume the conversation via `claude --resume`.
   | { type: 'terminal:dormant'; tabId: string; claudeSessionId: string }

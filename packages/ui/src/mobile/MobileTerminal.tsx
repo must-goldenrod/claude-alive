@@ -1,14 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS, screen, topBar, secondaryButton, input, TYPE, clamp1 } from './styles.ts';
 import { PullToRefresh } from './PullToRefresh.tsx';
+import { MobileXterm } from './MobileXterm.tsx';
+import type { TermFeed } from './termFeed.ts';
 
 export interface MobileTerminalProps {
   title: string;
   /** The checkout this pty runs in, shown under the title. */
   subtitle?: string;
-  /** Everything the pty has emitted since attach, control codes stripped. */
-  output: string;
+  /** Raw pty bytes and size changes, drained by the emulator. */
+  feed: TermFeed;
+  /** False until the pty has sent anything, so the pane can say it is connecting. */
+  hasOutput: boolean;
   /** False at the `watch` level: the pane renders, the keyboard does not. */
   canType: boolean;
   exited: boolean;
@@ -35,21 +39,14 @@ const KEYS: ReadonlyArray<{ label: string; sequence: string }> = [
 /**
  * A pty on a phone.
  *
- * Not a terminal emulator: output arrives with control sequences already
- * stripped, and input goes a line at a time. A 390px screen cannot render an
- * 80-column TUI, and typing into a character-level emulator with a soft
- * keyboard is worse than useless — but "read what it said, answer the prompt,
- * press Ctrl-C" is what a phone is actually for.
+ * Output renders in the same emulator as the desktop (see `MobileXterm`), so a
+ * Claude session keeps its layout. Input still goes a line at a time: typing
+ * into a character-level emulator with a soft keyboard is worse than useless —
+ * "read what it said, answer the prompt, press Ctrl-C" is what a phone is for.
  */
-export function MobileTerminal({ title, subtitle, output, canType, exited, onBack, onSend, onKey, onRefresh }: MobileTerminalProps) {
+export function MobileTerminal({ title, subtitle, feed, hasOutput, canType, exited, onBack, onSend, onKey, onRefresh }: MobileTerminalProps) {
   const { t } = useTranslation();
   const [line, setLine] = useState('');
-  const endRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const end = endRef.current;
-    if (typeof end?.scrollIntoView === 'function') end.scrollIntoView({ block: 'end' });
-  }, [output]);
 
   const send = () => {
     const text = line.trim();
@@ -74,16 +71,14 @@ export function MobileTerminal({ title, subtitle, output, canType, exited, onBac
         </span>
       </div>
 
-      <PullToRefresh onRefresh={onRefresh} style={{ padding: 12, background: '#000' }}>
-        <pre
-          style={{ ...TYPE.code, margin: 0, color: '#d1d5db', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-        >
-          {output || t('mobile.terminalAttaching')}
-        </pre>
-        {exited && (
-          <p style={{ ...TYPE.meta, color: 'var(--accent-red)', marginTop: 12 }}>{t('mobile.terminalGone')}</p>
+      <PullToRefresh onRefresh={onRefresh} style={{ padding: '8px 4px' }}>
+        {!hasOutput && (
+          <p style={{ ...TYPE.meta, color: COLORS.muted, margin: '0 8px 8px' }}>{t('mobile.terminalAttaching')}</p>
         )}
-        <div ref={endRef} />
+        <MobileXterm feed={feed} />
+        {exited && (
+          <p style={{ ...TYPE.meta, color: 'var(--accent-red)', margin: '12px 8px 0' }}>{t('mobile.terminalGone')}</p>
+        )}
       </PullToRefresh>
 
       {canType ? (

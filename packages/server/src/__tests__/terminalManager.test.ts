@@ -97,6 +97,19 @@ describe('TerminalManager', () => {
     }
   });
 
+  it('tells every viewer the pty grid: before the replay on attach, and on each resize', () => {
+    const a = fakeWs();
+    ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    ctx.manager.resize('T1', 120, 40);
+    expect(a.received).toContainEqual({ type: 'terminal:size', tabId: 'T1', cols: 120, rows: 40 });
+
+    const b = fakeWs();
+    ctx.manager.attach('T1', b.ws);
+    const types = b.received.map((m) => m.type);
+    expect(b.received[0]).toEqual({ type: 'terminal:size', tabId: 'T1', cols: 120, rows: 40 });
+    expect(types.indexOf('terminal:size')).toBeLessThan(types.indexOf('terminal:restore'));
+  });
+
   it('does NOT force a redraw when reattaching to an exited terminal', () => {
     const a = fakeWs();
     ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });

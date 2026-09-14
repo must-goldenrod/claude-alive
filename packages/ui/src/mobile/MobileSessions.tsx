@@ -4,7 +4,7 @@ import type { RawMessageSubscribe } from '../App.tsx';
 import { MobileSessionList, type MobileSession } from './MobileSessionList.tsx';
 import { MobileTerminal } from './MobileTerminal.tsx';
 import { MobileSpawnPicker } from './MobileSpawnPicker.tsx';
-import { appendOutput } from './ansi.ts';
+import { createTermFeed, type TermFeed } from './termFeed.ts';
 import { projectName } from '../views/tickets/ticketDisplay.ts';
 import type { MobileProject } from './types.ts';
 import type { RemoteTerminalLevel } from './capabilities.ts';
@@ -77,7 +77,13 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState<MobileSession | null>(null);
   const [attachedTab, setAttachedTab] = useState<string | null>(null);
-  const [output, setOutput] = useState('');
+  // A fresh feed per opened terminal: the xterm resets when it changes.
+  const [feed, setFeed] = useState<TermFeed>(() => createTermFeed());
+  const [hasOutput, setHasOutput] = useState(false);
+  const clearOutput = useCallback(() => {
+    setFeed(createTermFeed());
+    setHasOutput(false);
+  }, []);
   const [exited, setExited] = useState(false);
   const [picking, setPicking] = useState(false);
 
@@ -106,21 +112,27 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
     if (!attachedTab) return;
     return subscribeRaw((msg: WSServerMessage) => {
       if (msg.type === 'terminal:output' && msg.tabId === attachedTab) {
-        setOutput((prev) => appendOutput(prev, msg.data));
+        feed.push({ kind: 'data', data: msg.data });
+        setHasOutput(true);
       } else if (msg.type === 'terminal:restore' && msg.tabId === attachedTab) {
-        setOutput(appendOutput('', msg.data));
+        // A replay is the whole scrollback: start from a clean screen.
+        feed.push({ kind: 'reset' });
+        feed.push({ kind: 'data', data: msg.data });
+        if (msg.data) setHasOutput(true);
+      } else if (msg.type === 'terminal:size' && msg.tabId === attachedTab) {
+        feed.push({ kind: 'size', cols: msg.cols, rows: msg.rows });
       } else if (msg.type === 'terminal:exited' && msg.tabId === attachedTab) {
         setExited(true);
       } else if ((msg.type === 'terminal:dormant' || msg.type === 'terminal:missing') && msg.tabId === attachedTab) {
         setExited(true);
       }
     });
-  }, [attachedTab, subscribeRaw]);
+  }, [attachedTab, subscribeRaw, feed]);
 
   /** Open a session straight into its pty; a session Alive never spawned has none. */
   const openSession = useCallback(async (session: MobileSession) => {
     setOpen(session);
-    setOutput('');
+    clearOutput();
     setExited(false);
     setAttachedTab(null);
     try {
@@ -135,7 +147,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
     } catch {
       setExited(true);
     }
-  }, [send]);
+  }, [send, clearOutput]);
 
   /**
    * Start a shell from the phone. Sized 60x24 rather than inherited: the pty
@@ -145,28 +157,29 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
   const spawn = useCallback((cwd: string) => {
     const tabId = `phone-${Date.now().toString(36)}`;
     setPicking(false);
-    setOutput('');
+    clearOutput();
     setExited(false);
     setOpen({ sessionId: tabId, displayName: projectName(cwd), state: 'running', cwd, lastActivityAt: Date.now(), needsApproval: false });
     setAttachedTab(tabId);
     send({ type: 'terminal:spawn', tabId, cwd, mode: 'shell', source: 'local' });
     send({ type: 'terminal:resize', tabId, cols: 60, rows: 24 });
-  }, [send]);
+  }, [send, clearOutput]);
 
-  const close = () => { setOpen(null); setAttachedTab(null); setOutput(''); };
+  const close = () => { setOpen(null); setAttachedTab(null); clearOutput(); };
 
   if (open) {
     return (
       <MobileTerminal
         title={open.displayName || open.sessionId.slice(0, 12)}
         subtitle={projectName(open.cwd)}
-        output={output}
+        feed={feed}
+        hasOutput={hasOutput}
         canType={attachedTab !== null && (terminalLevel === 'input' || terminalLevel === 'shell')}
         exited={exited}
         onBack={close}
         onSend={(data) => attachedTab && send({ type: 'terminal:input', tabId: attachedTab, data })}
         onKey={(sequence) => attachedTab && send({ type: 'terminal:input', tabId: attachedTab, data: sequence })}
-        onRefresh={attachedTab ? () => { setOutput(''); send({ type: 'terminal:attach', tabId: attachedTab }); } : undefined}
+        onRefresh={attachedTab ? () => { clearOutput(); send({ type: 'terminal:attach', tabId: attachedTab }); } : undefined}
       />
     );
   }

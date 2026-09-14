@@ -224,6 +224,9 @@ export class TerminalManager {
     managed.cols = cols;
     managed.rows = rows;
     managed.term.resize(cols, rows);
+    // Every viewer renders at the pty's grid, not its own: a phone watching a
+    // desktop-sized Claude session must lay out 120 columns, not reflow them.
+    this.fanout(managed, { type: 'terminal:size', tabId, cols, rows });
   }
 
   /** Explicit user close: destroy the pty and forget the terminal entirely. */
@@ -243,6 +246,8 @@ export class TerminalManager {
 
   private subscribe(managed: ManagedTerminal, ws: WebSocket): void {
     managed.subscribers.add(ws);
+    // Size first, so the replay below is laid out on the grid it was drawn for.
+    this.send(ws, { type: 'terminal:size', tabId: managed.meta.tabId, cols: managed.cols, rows: managed.rows });
     this.send(ws, { type: 'terminal:restore', tabId: managed.meta.tabId, data: managed.scrollback });
     if (managed.exited) {
       this.send(ws, { type: 'terminal:exited', tabId: managed.meta.tabId, exitCode: 0 });
