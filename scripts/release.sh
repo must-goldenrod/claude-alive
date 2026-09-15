@@ -1,5 +1,9 @@
 #!/bin/bash
-# Release a new version of claude-alive to npm.
+# Cut a new local release of claude-alive (version bump, changelog, tag).
+#
+# The package is no longer distributed on npmjs.com: the bundle is generated
+# with `"private": true`, so `npm publish` refuses it. Install the build with
+# `pnpm run repack` (local tarball → global install → server restart).
 #
 # Usage:
 #   bash scripts/release.sh patch   # 0.2.0 → 0.2.1
@@ -11,7 +15,6 @@
 #   2. Updates CHANGELOG.md from git history
 #   3. Builds the npm package (reads version from package.json)
 #   4. Creates a git tag
-#   5. Publishes to npmjs.com
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -63,14 +66,9 @@ git add package.json CHANGELOG.md
 git commit -m "release: v$NEW_VERSION"
 git tag "v$NEW_VERSION"
 
-# 6. Publish to npm
 echo ""
-echo "Publishing to npm..."
-cd "$ROOT/npm-dist"
-npm publish --access public
-
-echo ""
-echo "Done! claude-alive@$NEW_VERSION published."
+echo "Done! claude-alive v$NEW_VERSION tagged (not published — npm distribution is discontinued)."
 echo ""
 echo "Next steps:"
 echo "  git push origin main --tags"
+echo "  pnpm run repack    # install this build globally and restart the server"

@@ -74,6 +74,7 @@ cat > "$OUT/package.json" << PKGJSON
 {
   "name": "claude-alive",
   "version": "$VERSION",
+  "private": true,
   "description": "Real-time animated UI for Claude Code sessions, powered by hooks",
   "license": "MIT",
   "type": "module",
@@ -108,9 +109,6 @@ cat > "$OUT/package.json" << PKGJSON
     "url": "git+https://github.com/hoyoungyang0526/claude-alive.git"
   },
   "homepage": "https://github.com/hoyoungyang0526/claude-alive",
-  "publishConfig": {
-    "access": "public"
-  },
   "keywords": [
     "claude",
     "claude-code",

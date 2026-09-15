@@ -54,24 +54,10 @@ claude-alive는 Claude Code 세션을 픽셀아트 오피스로 실시간 시각
 - **Claude Code** installed and working
 - *(Optional)* **Python 3 + numpy** — only for the [Efficio](#efficio--waste-aware-self-evaluation--낭비-인지-자기평가) self-eval tool / Efficio 자기평가 도구를 쓸 때만
 
-### Option A: npm install (recommended / 권장)
+> The npm package is no longer distributed; install from source.
+> npm 패키지 배포는 중단되었습니다. 소스에서 설치하세요.
 
-```bash
-# Install globally / 전역 설치
-npm install -g claude-alive
-
-# Register hooks with Claude Code / 훅 등록
-claude-alive install
-
-# Start the dashboard / 대시보드 시작
-claude-alive start
-```
-
-Open **http://localhost:3141** — any running Claude Code session will appear automatically.
-
-http://localhost:3141 을 열면 실행 중인 Claude Code 세션이 자동으로 나타납니다.
-
-### Option B: From source / 소스에서 빌드
+### From source / 소스에서 빌드
 
 ```bash
 # 1. Clone / 클론
@@ -411,7 +397,7 @@ The terminal uses a **separate WebSocket endpoint** (`/ws/terminal`) from the mo
 
 ### Usage / 사용법
 
-Run from the repo root (Option B / 소스 빌드 기준). All commands use **0 tokens** / 전 과정 0 토큰:
+Run from the repo root (from source / 소스 빌드 기준). All commands use **0 tokens** / 전 과정 0 토큰:
 
 ```bash
 # 1. Scan sessions → ~/.efficio/efficio.db (first run also fits the baseline model)
