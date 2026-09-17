@@ -52,12 +52,14 @@ import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
 import { createFlagSupportCache } from './agentFlags.js';
 import { sshListDirs } from './executors/sshBrowse.js';
-import { createLitellmClient } from './orchestrator/litellmClient.js';
+import { createLitellmClient, DEFAULT_LITELLM_BASE_URL } from './orchestrator/litellmClient.js';
 import { createLitellmPanel, resolvePanelModels } from './panel/litellmPanel.js';
 import { parsePanelExcludedRoots, panelAllowedFor } from './panel/panelPolicy.js';
 import { adviseDecision as runDecisionPanel } from './panel/decisionPanel.js';
 import { createTicketCommitter } from './ticketCommit.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
+import { reloadDelegateCatalog, MODELS_FILE } from './orchestrator/delegateModels.js';
+import { createGatewaySettings } from './gatewaySettings.js';
 import { ensureDelegateCli, resolveDelegateModel } from './orchestrator/delegateCli.js';
 import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
@@ -183,7 +185,8 @@ const canonicalPipeline = createCanonicalPipeline({
   locationId: 'local',
   onChange: signalCatalogChanged,
   // Full conversation from the Claude JSONL transcript when one exists (§F.7).
-  readTranscript: (providerSessionId) => readTranscriptConversation(providerSessionId),
+  readTranscript: (providerSessionId) =>
+    readTranscriptConversation(providerSessionId, undefined, store.getAgent(providerSessionId)?.transcriptPath),
   // Read-only git probe for workspace identity; augmentPath so a reduced
   // launchd PATH does not make every workspace look like a plain folder.
   runner: async (command, args) => {
@@ -507,7 +510,6 @@ for (const ticket of ticketStore.list()) {
 // tickets then run as plain tickets rather than being handed a tool that fails.
 const delegateCmd = ensureDelegateCli();
 const delegateBinDir = delegateCmd ? dirname(delegateCmd) : null;
-const delegateModel = resolveDelegateModel(process.env);
 if (!delegateCmd) {
   console.log('[server] ca-delegate not available in this install — tickets run without orchestration');
 }
@@ -529,20 +531,29 @@ const executorFor = (location: TicketLocation | undefined) =>
 // and the decision advisory panel. Built before the runner because both gates
 // are wired into it at construction. Absent LITELLM_KEY leaves both undefined,
 // and every gate degrades to the single-reviewer behaviour it had before.
-const litellmClient = process.env.LITELLM_KEY
-  ? createLitellmClient({
-      baseUrl: process.env.LITELLM_BASE_URL ?? 'https://litellm.must.codes',
-      apiKey: process.env.LITELLM_KEY,
-    })
-  : undefined;
-const reviewPanel = litellmClient
-  ? createLitellmPanel(litellmClient, { models: resolvePanelModels(process.env) })
-  : undefined;
-if (reviewPanel) {
-  console.log(`[panel] review panel: ${reviewPanel.models.join(', ')}`);
-} else {
-  console.log('[panel] LITELLM_KEY not set — verification runs gate-only, decisions wait for a human');
+// Held in a mutable holder: the dashboard's gateway settings rebuild both
+// without a restart (see gatewaySettings.ts), so consumers read via getters.
+// A keyless gateway (Ollama, vLLM) is configured by LITELLM_BASE_URL alone.
+const gateway: {
+  client: ReturnType<typeof createLitellmClient> | undefined;
+  panel: ReturnType<typeof createLitellmPanel> | undefined;
+} = { client: undefined, panel: undefined };
+function rebuildGateway(): void {
+  const baseUrl = process.env.LITELLM_BASE_URL?.trim();
+  const apiKey = process.env.LITELLM_KEY?.trim() ?? '';
+  gateway.client = baseUrl || apiKey
+    ? createLitellmClient({ baseUrl: baseUrl || DEFAULT_LITELLM_BASE_URL, apiKey })
+    : undefined;
+  gateway.panel = gateway.client
+    ? createLitellmPanel(gateway.client, { models: resolvePanelModels(process.env) })
+    : undefined;
+  if (gateway.panel) {
+    console.log(`[panel] review panel: ${gateway.panel.models.join(', ')}`);
+  } else {
+    console.log('[panel] no LLM gateway configured — verification runs gate-only, decisions wait for a human');
+  }
 }
+rebuildGateway();
 
 // Auto-commit after a passing verdict. `CLAUDE_ALIVE_AUTO_COMMIT=0` disables it
 // server-wide; a single ticket opts out with `autoCommit: false` at creation.
@@ -557,7 +568,7 @@ if (panelExcludedRoots.length > 0) {
   console.log(`[panel] panels disabled under: ${panelExcludedRoots.join(', ')}`);
 }
 const panelFor = (ticket: import('@claude-alive/core').Ticket) =>
-  reviewPanel && panelAllowedFor(ticket, panelExcludedRoots) ? reviewPanel : undefined;
+  gateway.panel && panelAllowedFor(ticket, panelExcludedRoots) ? gateway.panel : undefined;
 
 /**
  * A remote ticket's changes land on the SSH host, where the server cannot run
@@ -576,7 +587,7 @@ const ticketVerifier = createVerifier({
       ...(flags && (flags.model || flags.effort) ? { run: flags } : {}),
       ...(orchestrated && delegateBinDir ? { pathPrepend: delegateBinDir } : {}),
     }).done,
-  ...(reviewPanel ? { panel: panelFor } : {}),
+  panel: panelFor,
 });
 const ticketRunner = createTicketRunner({
   store: ticketStore,
@@ -595,7 +606,7 @@ const ticketRunner = createTicketRunner({
       ? // Follow-up reply: wrap the raw answer and resume the same session.
         buildMainPrompt(opts.prompt, '', promptOpts)
       : orchestrated && delegateCmd
-        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd, delegateModel, promptOpts)
+        ? buildOrchestratorPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, delegateCmd, resolveDelegateModel(process.env), promptOpts)
         : buildMainPrompt(ticket.goal, evalStore.guideFor(ticket.cwd).text, promptOpts);
     // Run profile snapshotted on the ticket at creation. Read from the ticket (not
     // re-resolved from the preset) so retries and decision replies reuse exactly
@@ -640,12 +651,13 @@ const ticketRunner = createTicketRunner({
   ...(ticketCommitter ? { commitWork: (ticket) => ticketCommitter.commit(ticket) } : {}),
   // Multi-model advisory panel for a parked decision. Without a gateway the
   // ticket simply waits for the human, as it always did.
-  ...(reviewPanel
-    ? {
-        adviseDecision: (ticket, question) => runDecisionPanel({ panel: reviewPanel }, ticket, question),
-        advisoryEnabled: (ticket) => panelFor(ticket) !== undefined,
-      }
-    : {}),
+  // Always wired: advisoryEnabled is false while no gateway is configured.
+  adviseDecision: (ticket, question) => {
+    const panel = gateway.panel;
+    if (!panel) return Promise.reject(new Error('no LLM gateway configured'));
+    return runDecisionPanel({ panel }, ticket, question);
+  },
+  advisoryEnabled: (ticket) => panelFor(ticket) !== undefined,
   // Location-aware cwd validation (local fs, or remote `ssh test -d`).
   validateCwd: (ticket) => executorFor(ticket.location).validateCwd(ticket.cwd),
   broadcast: (ticket) => {
@@ -695,7 +707,7 @@ function findOnPath(bin: string): string | null {
   return null;
 }
 const backendRegistry = createBackendRegistry({
-  litellm: litellmClient,
+  getLitellm: () => gateway.client,
   findClaude: () => findOnPath('claude'),
 });
 
@@ -846,6 +858,18 @@ const httpServer = createHttpServer({
   saveProjectName,
   removeProjectName,
   efficio,
+  gatewaySettings: createGatewaySettings({
+    envFile: SERVER_ENV_FILE,
+    modelsFile: process.env.CA_DELEGATE_MODELS_FILE?.trim() && process.env.CA_DELEGATE_MODELS_FILE.trim() !== 'builtin'
+      ? process.env.CA_DELEGATE_MODELS_FILE.trim()
+      : MODELS_FILE,
+    env: process.env,
+    onApply: () => {
+      reloadDelegateCatalog(process.env);
+      rebuildGateway();
+      console.log('[gateway] settings saved from the dashboard — gateway client reloaded');
+    },
+  }),
   backends: {
     list: () => backendRegistry.list(),
     check: async (id: string) =>

@@ -14,7 +14,7 @@
  *    reach a verdict from the reviewers that did answer.
  */
 import type { LitellmClient } from '../orchestrator/litellmClient.js';
-import { buildDelegateChain } from '../orchestrator/delegateModels.js';
+import { buildDelegateChain, ACTIVE_DELEGATE_CATALOG } from '../orchestrator/delegateModels.js';
 
 /** One reviewer's raw answer. `content` is null when the member did not answer. */
 export interface PanelMemberResult {
@@ -63,12 +63,13 @@ export const DEFAULT_PANEL_MODELS: readonly string[] = Object.freeze([
 /** Per-member ceiling. A hung reviewer must not hold a ticket's gate open. */
 export const DEFAULT_PANEL_TIMEOUT_MS = 120_000;
 
-/** `CA_PANEL_MODELS=a,b,c` overrides the roster without a rebuild. */
+/** `CA_PANEL_MODELS=a,b,c`, then models.json `panelModels`, then the default roster. */
 export function resolvePanelModels(env: NodeJS.ProcessEnv): readonly string[] {
+  const fallback = ACTIVE_DELEGATE_CATALOG.panelModels ?? DEFAULT_PANEL_MODELS;
   const raw = env.CA_PANEL_MODELS?.trim();
-  if (!raw) return DEFAULT_PANEL_MODELS;
+  if (!raw) return fallback;
   const models = raw.split(',').map((m) => m.trim()).filter(Boolean);
-  return models.length > 0 ? Object.freeze(models) : DEFAULT_PANEL_MODELS;
+  return models.length > 0 ? Object.freeze(models) : fallback;
 }
 
 /**

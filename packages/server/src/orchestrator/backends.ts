@@ -11,8 +11,10 @@ import type { BackendId, BackendStatus } from '@claude-alive/core';
 import type { LitellmClient } from './litellmClient.js';
 
 export interface BackendRegistryDeps {
-  /** Present when LITELLM_KEY is configured. */
+  /** Present when a gateway is configured. Prefer `getLitellm` when it can change at runtime. */
   litellm?: LitellmClient;
+  /** Current gateway client (re-evaluated per call, so saved settings apply without a restart). */
+  getLitellm?: () => LitellmClient | undefined;
   /** Resolve the local `claude` binary; returns null when not found. */
   findClaude?: () => string | null;
 }
@@ -23,6 +25,7 @@ export interface BackendRegistry {
 }
 
 export function createBackendRegistry(deps: BackendRegistryDeps): BackendRegistry {
+  const litellm = (): LitellmClient | undefined => (deps.getLitellm ? deps.getLitellm() : deps.litellm);
   function base(id: BackendId): BackendStatus {
     switch (id) {
       case 'claude-local':
@@ -37,7 +40,7 @@ export function createBackendRegistry(deps: BackendRegistryDeps): BackendRegistr
   return {
     list() {
       const items: BackendStatus[] = [base('claude-local')];
-      if (deps.litellm) items.push(base('litellm'));
+      if (litellm()) items.push(base('litellm'));
       return items;
     },
 
@@ -48,8 +51,9 @@ export function createBackendRegistry(deps: BackendRegistryDeps): BackendRegistr
         return { ...b, connected: Boolean(path), detail: path ?? 'claude not found on PATH' };
       }
       if (id === 'litellm') {
-        if (!deps.litellm) return { ...b, connected: false, detail: 'LITELLM_KEY not configured' };
-        const r = await deps.litellm.checkConnection();
+        const client = litellm();
+        if (!client) return { ...b, connected: false, detail: 'gateway not configured' };
+        const r = await client.checkConnection();
         return r.ok
           ? { ...b, connected: true, models: r.models, detail: `${r.models?.length ?? 0} models` }
           : { ...b, connected: false, detail: r.error };

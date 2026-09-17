@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
 import {
   DELEGATE_MODELS,
@@ -6,6 +9,11 @@ import {
   describeDelegateModels,
   findDelegateModel,
   resolveModelId,
+  parseDelegateCatalog,
+  loadDelegateCatalog,
+  BUILTIN_DELEGATE_MODELS,
+  reloadDelegateCatalog,
+  ACTIVE_DELEGATE_CATALOG,
 } from '../delegateModels.js';
 
 describe('catalogue integrity', () => {
@@ -117,5 +125,68 @@ describe('describeDelegateModels', () => {
     expect(text.split('\n')).toHaveLength(DELEGATE_MODELS.length);
     expect(text).toContain('kimi (kimi-k3)');
     expect(text).toContain('grok (grok-4.5)');
+  });
+});
+
+describe('user catalogue (models.json)', () => {
+  const file = JSON.stringify({
+    defaultModel: 'gpt-mini',
+    panelModels: ['a', 'b', 'c'],
+    models: [
+      { id: 'gpt-mini', aliases: ['mini'], kind: 'fast', note: 'cheap', fallbacks: ['gpt-big', 'gpt-mini'] },
+      { id: 'gpt-big', kind: 'nonsense' },
+    ],
+  });
+
+  it('parses a valid file, drops self-fallbacks and defaults unknown kinds', () => {
+    const c = parseDelegateCatalog(JSON.parse(file), '/x/models.json');
+    if ('error' in c) throw new Error(c.error);
+    expect(c.models.map((m) => m.id)).toEqual(['gpt-mini', 'gpt-big']);
+    expect(c.models[0]!.fallbacks).toEqual(['gpt-big']);
+    expect(c.models[1]!.kind).toBe('utility');
+    expect(c.defaultModel).toBe('gpt-mini');
+    expect(c.panelModels).toEqual(['a', 'b', 'c']);
+    expect(c.fallbackTail).toEqual(['gpt-mini', 'gpt-big']);
+  });
+
+  it('rejects a file without models', () => {
+    expect(parseDelegateCatalog({ models: [] }, 'f')).toHaveProperty('error');
+    expect(parseDelegateCatalog([], 'f')).toHaveProperty('error');
+    expect(parseDelegateCatalog({ models: [{ aliases: ['x'] }] }, 'f')).toHaveProperty('error');
+  });
+
+  it('loads the file named by CA_DELEGATE_MODELS_FILE', () => {
+    const c = loadDelegateCatalog({ CA_DELEGATE_MODELS_FILE: '/x/models.json' }, () => file);
+    expect(c.source).toBe('/x/models.json');
+    expect(c.models).toHaveLength(2);
+  });
+
+  it('falls back to the built-in preset when the file is missing, broken, or pinned', () => {
+    const missing = loadDelegateCatalog({}, () => {
+      throw new Error('ENOENT');
+    });
+    expect(missing.source).toBe('builtin');
+    const broken = loadDelegateCatalog({ CA_DELEGATE_MODELS_FILE: '/x' }, () => '{not json');
+    expect(broken.models).toBe(BUILTIN_DELEGATE_MODELS);
+    expect(loadDelegateCatalog({ CA_DELEGATE_MODELS_FILE: 'builtin' }, () => file).source).toBe('builtin');
+  });
+});
+
+describe('reloadDelegateCatalog', () => {
+  it('swaps the live catalogue seen by importers and lookups', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ca-models-'));
+    const file = join(dir, 'models.json');
+    writeFileSync(file, JSON.stringify({ defaultModel: 'live-a', models: [{ id: 'live-a', aliases: ['la'] }] }));
+    try {
+      reloadDelegateCatalog({ CA_DELEGATE_MODELS_FILE: file });
+      expect(ACTIVE_DELEGATE_CATALOG.source).toBe(file);
+      expect(ACTIVE_DELEGATE_CATALOG.defaultModel).toBe('live-a');
+      expect(DELEGATE_MODELS.map((m) => m.id)).toEqual(['live-a']);
+      expect(resolveModelId('la')).toBe('live-a');
+    } finally {
+      reloadDelegateCatalog({ CA_DELEGATE_MODELS_FILE: 'builtin' });
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(DELEGATE_MODELS).toBe(BUILTIN_DELEGATE_MODELS);
   });
 });

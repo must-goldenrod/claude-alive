@@ -33,6 +33,19 @@ describe('createLitellmClient', () => {
     expect(await client.checkConnection()).toEqual({ ok: false, error: 'HTTP 401' });
   });
 
+  it('omits Authorization for a keyless gateway and sends it when a key is set', async () => {
+    const seen: Array<Record<string, string> | undefined> = [];
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      seen.push(init?.headers as Record<string, string> | undefined);
+      expect(init?.signal).toBeDefined();
+      return jsonResponse({ data: [] });
+    }) as typeof fetch;
+    await createLitellmClient({ baseUrl: 'http://localhost:11434', apiKey: '' }, { fetch: fetchImpl }).checkConnection();
+    await createLitellmClient({ baseUrl: 'http://localhost:11434', apiKey: 'k' }, { fetch: fetchImpl }).checkConnection();
+    expect(seen[0]).not.toHaveProperty('Authorization');
+    expect(seen[1]).toEqual({ Authorization: 'Bearer k' });
+  });
+
   // The grok/kimi-k3 routes answer 400 "MissingSessionID"; the glm routes answer
   // 500 when the field IS present. So: plain first, session id only on demand.
   it('chat sends no session id on the first attempt', async () => {
@@ -135,6 +148,15 @@ describe('createBackendRegistry', () => {
     expect(r.connected).toBe(true);
     expect(r.models).toEqual(['m1', 'm2']);
     expect(r.detail).toBe('2 models');
+  });
+
+  it('reads the client through getLitellm on every call', async () => {
+    let current: typeof litellm | undefined;
+    const registry = createBackendRegistry({ getLitellm: () => current });
+    expect(registry.list().map((b) => b.id)).toEqual(['claude-local']);
+    current = litellm;
+    expect(registry.list().map((b) => b.id)).toEqual(['claude-local', 'litellm']);
+    expect((await registry.check('litellm')).connected).toBe(true);
   });
 
   it('reports litellm not configured', async () => {

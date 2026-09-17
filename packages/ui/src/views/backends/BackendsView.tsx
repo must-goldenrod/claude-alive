@@ -42,6 +42,13 @@ export function BackendsPanel({ active }: BackendsPanelProps) {
     if (active) void refresh();
   }, [active, refresh]);
 
+  // A gateway saved in the form above adds or removes the litellm card.
+  useEffect(() => {
+    const onChanged = () => void refresh();
+    window.addEventListener('claude-alive:gateway-changed', onChanged);
+    return () => window.removeEventListener('claude-alive:gateway-changed', onChanged);
+  }, [refresh]);
+
   const check = useCallback(async (id: string) => {
     setChecking(id);
     try {

@@ -62,3 +62,10 @@ export type {
 export type {
   UsageWindow, ScopedUsageWindow, UsageLimitsSnapshot,
 } from './usage/rateLimits.js';
+export {
+  upsertEnvValue,
+  readEnvKey,
+  parseModelIds,
+  buildModelsFile,
+  writePrivateFile,
+} from './env/envFile.js';
