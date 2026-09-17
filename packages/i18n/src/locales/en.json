@@ -121,6 +121,22 @@
         "localOnly": "Only this computer can change the gateway (remote devices are read-only).",
         "unavailable": "This server version cannot configure a gateway from the dashboard. Update and restart the server.",
         "savedWithoutModels": "Gateway saved, but the model list was not written: {{error}}"
+      },
+      "engine": {
+        "title": "Agent engine",
+        "hint": "Which model API new tickets and Claude terminals use. The Claude CLI, hooks and ticket flow stay the same; the gateway engine points the CLI at the LLM gateway above. Applies to the next ticket or terminal without a restart — running and existing tickets keep their engine.",
+        "option": {
+          "claude": "Claude (login)",
+          "gateway": "LLM gateway"
+        },
+        "needsGateway": "Connect and save an LLM gateway above before selecting it.",
+        "presetModels": "Gateway model per run profile",
+        "presetModelsHint": "Effort still comes from the run profile. Claude.ai connectors and subscription usage do not apply to gateway runs.",
+        "save": "Save engine",
+        "saving": "Saving…",
+        "saved": "Engine saved — new tickets and terminals use it now",
+        "localOnly": "Only this computer can change the engine.",
+        "unavailable": "This server version cannot switch the engine. Update and restart the server."
       }
     },
     "notifications": {
@@ -683,7 +699,8 @@
       "interrupted": "Interrupted (server restart)",
       "cwd-not-allowed": "Working directory not allowed",
       "usage-limit": "Usage limit reached",
-      "model-unavailable": "Model unavailable"
+      "model-unavailable": "Model unavailable",
+      "gateway-error": "Gateway error"
     },
     "agentExit": {
       "cause": {
@@ -790,7 +807,12 @@
     "panelOffLabel": "Panel off — local gate only",
     "runsOn": "Runs on {{target}} over SSH",
     "createFailed": "Could not create the ticket (HTTP {{status}})",
-    "createNetworkError": "Cannot reach the server — is it running?"
+    "createNetworkError": "Cannot reach the server — is it running?",
+    "engineGateway": "Gateway",
+    "engineGatewayHint": "Runs through the LLM gateway (Settings → Backend → Agent engine)",
+    "modelPick": "Model",
+    "modelPickPreset": "Run profile default ({{model}})",
+    "runEngine": "Engine"
   },
   "spread": {
     "empty": "No open terminals",

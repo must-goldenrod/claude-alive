@@ -40,6 +40,7 @@ import { isAuthReloading } from './lib/auth.ts';
 import { useIsPhone } from './mobile/useIsPhone.ts';
 import { MobileApp } from './mobile/MobileApp.tsx';
 import { BoardView } from './views/board/BoardView.tsx';
+import { applyEngineUpdate } from './services/engineSettings.ts';
 
 export type ViewMode = 'animation' | 'list' | 'prompt' | 'efficio' | 'archive' | 'ticketMgmt' | 'spread' | 'jarvis' | 'workspace' | 'tickets' | 'data' | 'board';
 
@@ -547,6 +548,10 @@ export default function App() {
   }, []);
 
   const { tree: runTree } = useRunTree(true, subscribeRaw);
+  // Engine changes saved on any dashboard re-label every open ticket form.
+  useEffect(() => subscribeRaw((msg) => {
+    if (msg.type === 'engine:update') applyEngineUpdate(msg.settings);
+  }), [subscribeRaw]);
   const isPhone = useIsPhone();
   // Which checkout is a repository's main one, so selecting a repo alone can
   // still name a concrete folder for the ticket composer.

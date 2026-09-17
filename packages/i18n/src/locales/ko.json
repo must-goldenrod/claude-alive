@@ -121,6 +121,22 @@
         "localOnly": "게이트웨이는 이 컴퓨터에서만 변경할 수 있습니다 (원격 기기는 읽기 전용).",
         "unavailable": "이 서버 버전은 대시보드에서 게이트웨이를 설정할 수 없습니다. 서버를 업데이트한 뒤 재시작하세요.",
         "savedWithoutModels": "게이트웨이는 저장했지만 모델 목록은 저장하지 못했습니다: {{error}}"
+      },
+      "engine": {
+        "title": "에이전트 엔진",
+        "hint": "새 티켓과 Claude 터미널이 쓸 모델 API 입니다. Claude CLI·훅·티켓 흐름은 그대로이고, 게이트웨이 엔진은 CLI 를 위의 LLM 게이트웨이로 연결합니다. 재시작 없이 다음 티켓·터미널부터 적용되며, 실행 중이거나 이미 만든 티켓은 원래 엔진을 유지합니다.",
+        "option": {
+          "claude": "Claude (로그인)",
+          "gateway": "LLM 게이트웨이"
+        },
+        "needsGateway": "먼저 위에서 LLM 게이트웨이를 연결하고 저장하세요.",
+        "presetModels": "실행 프로필별 게이트웨이 모델",
+        "presetModelsHint": "노력 수준은 실행 프로필 값을 그대로 씁니다. 게이트웨이 실행에는 claude.ai 커넥터와 구독 사용량이 적용되지 않습니다.",
+        "save": "엔진 저장",
+        "saving": "저장 중…",
+        "saved": "엔진을 저장했습니다 — 새 티켓·터미널부터 적용됩니다",
+        "localOnly": "엔진은 이 컴퓨터에서만 변경할 수 있습니다.",
+        "unavailable": "이 서버 버전은 엔진을 전환할 수 없습니다. 서버를 업데이트한 뒤 재시작하세요."
       }
     },
     "notifications": {
@@ -683,7 +699,8 @@
       "interrupted": "중단됨 (서버 재시작)",
       "cwd-not-allowed": "허용되지 않은 작업 디렉터리",
       "usage-limit": "사용량 한도 도달",
-      "model-unavailable": "모델 사용 불가"
+      "model-unavailable": "모델 사용 불가",
+      "gateway-error": "게이트웨이 오류"
     },
     "agentExit": {
       "cause": {
@@ -790,7 +807,12 @@
     "panelOffLabel": "패널 미사용 — 로컬 게이트 단독",
     "runsOn": "{{target}} 에서 SSH로 실행",
     "createFailed": "티켓을 만들지 못했습니다 (HTTP {{status}})",
-    "createNetworkError": "서버에 연결할 수 없습니다 — 서버가 실행 중인가요?"
+    "createNetworkError": "서버에 연결할 수 없습니다 — 서버가 실행 중인가요?",
+    "engineGateway": "게이트웨이",
+    "engineGatewayHint": "LLM 게이트웨이로 실행됩니다 (설정 → 백엔드 → 에이전트 엔진)",
+    "modelPick": "모델",
+    "modelPickPreset": "실행 프로필 기본값 ({{model}})",
+    "runEngine": "엔진"
   },
   "spread": {
     "empty": "열린 터미널이 없습니다",

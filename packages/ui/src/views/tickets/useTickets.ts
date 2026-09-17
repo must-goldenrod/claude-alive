@@ -21,6 +21,8 @@ export type TicketCreateFn = (
   autoCommit?: boolean,
   /** False keeps this ticket's text off the external review panels. */
   panelReview?: boolean,
+  /** Direct gateway model pick; the server uses it only on the gateway engine. */
+  model?: string,
 ) => Promise<string | null>;
 
 /** Applies a human evaluation label; resolves the updated record or null on failure. */
@@ -102,7 +104,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     });
   }, [subscribeRaw]);
 
-  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation, orchestrated?: boolean, preset?: TicketRunPreset, autoCommit?: boolean, panelReview?: boolean): Promise<string | null> => {
+  const createTicket = useCallback(async (goal: string, cwd: string, location?: TicketLocation, orchestrated?: boolean, preset?: TicketRunPreset, autoCommit?: boolean, panelReview?: boolean, model?: string): Promise<string | null> => {
     try {
       const res = await fetch(`${API_BASE}/api/tickets`, {
         method: 'POST',
@@ -116,6 +118,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
           // Only the opt-out crosses the wire; omitted means the server default (on).
           ...(autoCommit === false ? { autoCommit: false } : {}),
           ...(panelReview === false ? { panelReview: false } : {}),
+          ...(model ? { model } : {}),
         }),
       });
       if (!res.ok) {

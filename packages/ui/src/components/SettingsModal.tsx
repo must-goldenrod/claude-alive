@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { TerminalFontPreview } from './TerminalFontPreview.tsx';
 import { GatewaySettingsForm } from './GatewaySettingsForm.tsx';
+import { EngineSettingsForm } from './EngineSettingsForm.tsx';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -418,6 +419,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               />
               <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />
               <GatewaySettingsForm active={tab === 'backend'} />
+              <EngineSettingsForm active={tab === 'backend'} />
               <BackendsPanel active={tab === 'backend'} />
             </>
           )}
