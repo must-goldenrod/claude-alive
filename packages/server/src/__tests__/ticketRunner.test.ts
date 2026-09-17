@@ -249,6 +249,43 @@ describe('TicketRunner lifecycle', () => {
     expect(failed.agentExit).toMatchObject({ code: 1 });
   });
 
+  it('classifies a gateway refusal as gateway-error only for gateway tickets', async () => {
+    const refused = () => ({
+      kill() {},
+      done: Promise.resolve({
+        exitCode: 1,
+        result: { result: 'API Error: 401 Authentication Error', isError: true },
+        sessionId: null,
+        stderr: '',
+      }),
+    });
+    const { runner } = makeRunner({ spawnMain: refused });
+    const gw = await store.create({ goal: 'g', cwd: '/repo', preset: 'standard', engine: 'gateway', model: 'glm-5.3' });
+    const claude = await store.create({ goal: 'g', cwd: '/repo', preset: 'standard' });
+    runner.enqueue(gw);
+    runner.enqueue(claude);
+    await until(() => store.get(gw.id)?.state === 'failed' && store.get(claude.id)?.state === 'failed');
+    expect(store.get(gw.id)!.failureReason).toBe('gateway-error');
+    expect(store.get(claude.id)!.failureReason).toBe('error');
+  });
+
+  it('drops the Claude-priced cost from a gateway run but keeps tokens', async () => {
+    const usage = { inputTokens: 10, outputTokens: 5, totalTokens: 15, costUsd: 0.33 };
+    const spawnMain = () => ({
+      kill() {},
+      done: Promise.resolve({ exitCode: 0, result: { result: 'done\nHEADLINE: ok', isError: false, usage }, sessionId: 's', stderr: '' }),
+    });
+    const { runner, broadcasts } = makeRunner({ spawnMain });
+    const gw = await store.create({ goal: 'g', cwd: '/repo', engine: 'gateway', model: 'glm-5.3' });
+    const claude = await store.create({ goal: 'g', cwd: '/repo' });
+    runner.enqueue(gw);
+    runner.enqueue(claude);
+    await until(() => broadcasts.filter((b) => b.state === 'done').length === 2);
+    expect(store.get(gw.id)!.usage).toMatchObject({ inputTokens: 10, totalTokens: 15 });
+    expect(store.get(gw.id)!.usage?.costUsd).toBeUndefined();
+    expect(store.get(claude.id)!.usage?.costUsd).toBe(0.33);
+  });
+
   it('records a SIGTERM-killed agent as terminated-from-outside, not a crash', async () => {
     // The real incident: `claude` handles SIGTERM itself and exits 143, so the
     // ticket only ever showed "main agent exited (code 143)".

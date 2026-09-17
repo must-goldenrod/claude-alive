@@ -6,6 +6,7 @@ import {
   sshBaseArgs,
   buildRemoteCommand,
   shellQuote,
+  planRemoteEnv,
   type SshProcessSpawner,
 } from '../sshExecutor.js';
 import type { HeadlessProcessHandle } from '../../headlessClaude.js';
@@ -109,5 +110,44 @@ describe('createSshExecutor.validateCwd', () => {
     const ex = createSshExecutor(TARGET, { spawnProcess });
     await ex.validateCwd('/srv/app');
     expect(args[args.length - 1]).toBe("test -d '/srv/app' && echo __CA_CWD_OK__");
+  });
+});
+
+describe('remote agent env (gateway engine)', () => {
+  it('exports plain vars quoted and reads secrets from stdin, never from argv', () => {
+    const plan = planRemoteEnv({ ANTHROPIC_MODEL: "glm-5.3'x", ANTHROPIC_AUTH_TOKEN: 'sk-secret' });
+    expect(plan.prefix).toBe(
+      "export ANTHROPIC_MODEL='glm-5.3'\\''x' && IFS= read -r ANTHROPIC_AUTH_TOKEN && export ANTHROPIC_AUTH_TOKEN && ",
+    );
+    expect(plan.stdinLines).toEqual(['sk-secret']);
+    expect(plan.prefix).not.toContain('sk-secret');
+  });
+
+  it('rejects unsafe names and multi-line secrets', () => {
+    expect(() => planRemoteEnv({ 'A;rm': 'x' })).toThrow(/invalid env var name/);
+    expect(() => planRemoteEnv({ ANTHROPIC_AUTH_TOKEN: 'a\nb' })).toThrow(/single line/);
+    expect(planRemoteEnv(undefined)).toEqual({ prefix: '', stdinLines: [] });
+  });
+
+  it('spawn puts the secret ahead of the goal on stdin and the exports in the command', async () => {
+    let capturedArgs: string[] = [];
+    let capturedStdin: string | undefined;
+    const spawnProcess: SshProcessSpawner = (args, stdin) => {
+      capturedArgs = args;
+      capturedStdin = stdin;
+      return fakeProc('{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"s1"}\n');
+    };
+    const ex = createSshExecutor(TARGET, { spawnProcess });
+    await ex.spawn({
+      goal: 'the goal',
+      cwd: '/srv/app',
+      permissionMode: 'bypassPermissions',
+      extraEnv: { ANTHROPIC_BASE_URL: 'https://gw', ANTHROPIC_AUTH_TOKEN: 'sk-secret' },
+    }).done;
+    expect(capturedStdin).toBe('sk-secret\nthe goal');
+    const remote = capturedArgs[capturedArgs.length - 1]!;
+    expect(remote).toContain("export ANTHROPIC_BASE_URL='https://gw' && IFS= read -r ANTHROPIC_AUTH_TOKEN");
+    expect(remote).toContain("cd '/srv/app' && claude -p");
+    expect(capturedArgs.join(' ')).not.toContain('sk-secret');
   });
 });

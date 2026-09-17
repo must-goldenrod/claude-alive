@@ -46,6 +46,8 @@ export interface VerifierOptions {
     orchestrated?: boolean;
     /** Model/effort the ticket ran with; the gate inherits them (see `verify`). */
     flags?: { model?: string; effort?: string };
+    /** Engine env the ticket ran with; the gate runs on the same engine. */
+    extraEnv?: Record<string, string>;
   }) => Promise<HeadlessOutcome>;
   /**
    * Independent LiteLLM reviewers layered on top of the Claude gate. Omitted
@@ -55,6 +57,8 @@ export interface VerifierOptions {
    * leave the machine gets the gate alone while everything else gets the panel.
    */
   panel?: Panel | ((ticket: Ticket) => Panel | undefined);
+  /** Extra agent env for a ticket's gate run (the gateway engine's env). */
+  agentEnv?: (ticket: Ticket) => Record<string, string> | undefined;
   now?: () => number;
   /** Where a failed gate attempt is reported. Injectable so tests stay quiet. */
   log?: (message: string) => void;
@@ -173,6 +177,7 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
             ...(ticket.requestedModel ? { model: ticket.requestedModel } : {}),
             ...(ticket.effort ? { effort: ticket.effort } : {}),
           },
+          ...(options.agentEnv?.(ticket) ? { extraEnv: options.agentEnv(ticket) } : {}),
         });
 
       // Two attempts. The gate is a separate `claude` process on the far side of

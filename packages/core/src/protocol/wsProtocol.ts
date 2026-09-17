@@ -1,3 +1,4 @@
+import type { EngineSettings } from '../tickets/engine.js';
 import type { AgentInfo, AgentState, CompletedSession, ToolAnimation } from '../events/types.js';
 import type { AgentStats, EventLogEntry } from '../state/sessionStore.js';
 import type { EfficioStatus } from '../efficio/types.js';
@@ -83,6 +84,9 @@ export type WSServerMessage =
   // Without this a deleted ticket lingered on every other client's board and in
   // the sidebar, still offering actions against work that no longer exists.
   | { type: 'ticket:removed'; ticketId: string }
+  // Settings → engine changed (Claude login vs LLM gateway, preset→model map).
+  // Every open dashboard re-renders its ticket form from this without a reload.
+  | { type: 'engine:update'; settings: EngineSettings }
   // An evaluation record was created (ticket settled) or a human label was applied.
   | { type: 'evaluation:update'; evaluation: TicketEvaluation }
   // Repo->worktree->run tree. Sent once on connect; live changes ride on run:update.

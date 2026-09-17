@@ -55,6 +55,8 @@ export interface SpawnOptions {
   resumeSessionId?: string;
   /** Display name for `claude -n <name>`. */
   displayName?: string;
+  /** Extra env merged over the cleaned process env (e.g. the gateway engine). */
+  extraEnv?: Record<string, string>;
 }
 
 /**
@@ -142,6 +144,7 @@ export class ClaudeTerminal {
       claudeSessionId,
       resumeSessionId,
       displayName,
+      extraEnv,
     } = opts;
 
     this.onData = handler;
@@ -151,7 +154,7 @@ export class ClaudeTerminal {
     this.reportedErrors.clear();
 
     const shell = userShell();
-    const env = cleanEnv();
+    const env = { ...cleanEnv(), ...extraEnv };
     const cwdResolved = cwd || homedir();
 
     if (mode === 'claude') {

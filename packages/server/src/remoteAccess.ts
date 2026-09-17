@@ -176,6 +176,10 @@ const REMOTE_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'POST', pattern: /^\/api\/tickets$/ },
   { method: 'POST', pattern: /^\/api\/tickets\/[^/]+\/(cancel|retry|reply)$/ },
   { method: 'GET', pattern: /^\/api\/evaluations$/ },
+  // Read-only engine view so a device's ticket form labels presets with the
+  // model that will actually run. Saving stays local-only.
+  { method: 'GET', pattern: /^\/api\/settings\/engine$/ },
+  { method: 'GET', pattern: /^\/api\/settings\/engine\/models$/ },
   { method: 'GET', pattern: /^\/api\/remote\/projects$/ },
   { method: 'GET', pattern: /^\/api\/remote\/branches$/ },
   // What this server will let the device do. Without it the app cannot tell a

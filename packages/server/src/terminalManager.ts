@@ -39,6 +39,8 @@ export interface CreateTerminalOptions {
   claudeSessionId?: string;
   resumeSessionId?: string;
   displayName?: string;
+  /** Extra env for the pty (the gateway engine's env for a Claude terminal). */
+  extraEnv?: Record<string, string>;
 }
 
 interface ManagedTerminal {
@@ -166,6 +168,7 @@ export class TerminalManager {
         claudeSessionId: opts.claudeSessionId,
         resumeSessionId: opts.resumeSessionId,
         displayName: opts.displayName,
+        ...(opts.extraEnv ? { extraEnv: opts.extraEnv } : {}),
       });
     } catch (err) {
       // pty.spawn can throw synchronously (e.g. cwd no longer exists for a

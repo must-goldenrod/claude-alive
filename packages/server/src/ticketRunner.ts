@@ -15,7 +15,12 @@ import type {
 } from '@claude-alive/core';
 import type { TicketStore } from './ticketStore.js';
 import { describeAgentExit } from './agentExit.js';
-import { classifyAgentQuotaError } from './agentQuotaError.js';
+import { classifyAgentQuotaError, classifyGatewayError } from './agentQuotaError.js';
+
+function withoutCost(usage: TicketUsage): TicketUsage {
+  const { costUsd: _cost, ...rest } = usage;
+  return rest;
+}
 
 export interface MainOutcome {
   exitCode: number | null;
@@ -374,14 +379,18 @@ export function createTicketRunner(options: TicketRunnerOptions): TicketRunner {
       });
       // A spent usage window or an inaccessible model is the account's state,
       // not the work's: name it so the reader knows to wait or switch presets.
-      const quota = classifyAgentQuotaError([r?.result, outcome.stderr]);
+      const quota =
+        classifyAgentQuotaError([r?.result, outcome.stderr]) ??
+        (cur?.engine === 'gateway' ? classifyGatewayError([r?.result, outcome.stderr]) : undefined);
       await fail(id, quota?.reason ?? 'error', quota?.summary ?? summary, undefined, exit);
       return;
     }
 
     // Usage is cumulative across the initial run and every follow-up reply; each
     // completed agent run bumps the round counter.
-    const runUsage = r.usage ?? undefined;
+    // The CLI prices every run at Claude rates; for a gateway model that number is
+    // fiction, so it is dropped rather than shown as a cost.
+    const runUsage = r.usage && cur?.engine === 'gateway' ? withoutCost(r.usage) : (r.usage ?? undefined);
     const cumulativeUsage = addUsage(cur?.usage, runUsage);
     const rounds = (cur?.rounds ?? 0) + 1;
     const sessionId = outcome.sessionId ?? cur?.claudeSessionId;

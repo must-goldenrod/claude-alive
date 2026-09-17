@@ -16,7 +16,7 @@
  */
 import type { TicketFailureReason } from '@claude-alive/core';
 
-export type AgentQuotaReason = Extract<TicketFailureReason, 'usage-limit' | 'model-unavailable'>;
+export type AgentQuotaReason = Extract<TicketFailureReason, 'usage-limit' | 'model-unavailable' | 'gateway-error'>;
 
 const USAGE_LIMIT_RE =
   /usage limit reached|hit your limit|out of extra usage|spend limit reached|usage credit limit|credit balance (?:is )?too low|rate_limit_error|rate limited|api error:? 429|429 too many requests|limit reached[^\n]{0,40}resets?/i;
@@ -63,4 +63,22 @@ export function classifyAgentQuotaError(texts: ReadonlyArray<string | null | und
     };
   }
   return undefined;
+}
+
+/**
+ * Gateway-engine failures that are the gateway's state, not the work's: a
+ * rejected key, an unreachable host, or the gateway's own 5xx. Checked only for
+ * tickets that ran through the gateway (usage/model patterns are checked first).
+ */
+const GATEWAY_ERROR_RE =
+  /api error:? (?:401|403|5\d\d)\b|authentication_error|permission_error|unable to connect to api|connection ?refused|econnrefused|enotfound|fetch failed|getaddrinfo/i;
+
+export function classifyGatewayError(texts: ReadonlyArray<string | null | undefined>): AgentQuotaError | undefined {
+  const text = texts.filter((t): t is string => typeof t === 'string' && t.length > 0).join('\n');
+  const line = text ? matchingLine(text, GATEWAY_ERROR_RE) : undefined;
+  if (!line) return undefined;
+  return {
+    reason: 'gateway-error',
+    summary: `LLM 게이트웨이가 요청을 거부했거나 연결할 수 없음 — 설정 → 백엔드에서 게이트웨이 연결을 확인하세요: ${line}`,
+  };
 }

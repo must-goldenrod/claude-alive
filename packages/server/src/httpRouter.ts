@@ -3,7 +3,7 @@ import { readdir } from 'node:fs/promises';
 import { isAbsolute, resolve as pathResolve } from 'node:path';
 import { homedir } from 'node:os';
 import { z } from 'zod';
-import { TICKET_RUN_PRESET_IDS } from '@claude-alive/core';
+import { TICKET_RUN_PRESET_IDS, isValidGatewayModelId } from '@claude-alive/core';
 import type { HookEventPayload, HookEventData, HookEventName } from '@claude-alive/core';
 import { createStaticHandler } from './staticFiles.js';
 import { handleRunRequest } from './runRoutes.js';
@@ -16,6 +16,8 @@ import {
 } from './remoteAccess.js';
 import type { EfficioReader } from './efficioReader.js';
 import { GatewaySettingsValidationError, type GatewaySettings } from './gatewaySettings.js';
+import { EngineSettingsValidationError } from './engineSettings.js';
+import type { EngineSettings } from '@claude-alive/core';
 
 // --- Zod schemas for runtime input validation ---
 
@@ -154,6 +156,8 @@ export interface HttpRouterOptions {
       orchestrated?: boolean;
       autoCommit?: boolean;
       panelReview?: boolean;
+      preset?: (typeof TICKET_RUN_PRESET_IDS)[number];
+      model?: string;
     }) => Promise<unknown>;
     retry: (id: string) => Promise<unknown | undefined>;
     /** Continue a `decision` ticket with a follow-up prompt. Undefined = unknown id. */
@@ -195,6 +199,18 @@ export interface HttpRouterOptions {
    * only: it writes the API key to disk.
    */
   gatewaySettings?: GatewaySettings;
+
+  /**
+   * Agent engine (Claude login vs LLM gateway) and the preset→gateway-model map.
+   * GET is open to any caller that may create tickets (the form needs it); saving
+   * is local-only like the gateway settings.
+   */
+  engineSettings?: {
+    get: () => { settings: EngineSettings; gatewayConfigured: boolean };
+    save: (raw: unknown) => { settings: EngineSettings; gatewayConfigured: boolean };
+    /** Models the configured gateway serves (for the pickers). */
+    models: () => Promise<{ ok: boolean; models?: string[]; error?: string }>;
+  };
 
   /**
    * Local git branch operations for the ticket composer. Absent when the git
@@ -286,6 +302,9 @@ const TicketCreateBodySchema = z.object({
   // Closed enum, never free-form model/effort strings: the values become CLI
   // argv, so the allowlist lives at the boundary rather than downstream.
   preset: z.enum(TICKET_RUN_PRESET_IDS).optional(),
+  // Direct gateway model pick. Used only when the engine is the gateway; the id
+  // pattern is the argv allowlist for free-form model strings.
+  model: z.string().refine(isValidGatewayModelId, 'invalid model id').optional(),
 });
 
 const EvaluateBodySchema = z.object({
@@ -402,6 +421,7 @@ export function createHttpServer(options: HttpRouterOptions) {
     tickets,
     backends,
     gatewaySettings,
+    engineSettings,
     git,
     sshBrowse,
     remoteAccess,
@@ -713,6 +733,46 @@ export function createHttpServer(options: HttpRouterOptions) {
       }
       sendJson(res, 200, { evaluations: tickets.listEvaluations() }, req);
       return;
+    }
+
+    // ── Agent engine settings ────────────────────────────────────────────────
+    if (engineSettings && url.pathname.startsWith('/api/settings/engine')) {
+      if (!sensitiveAllowed) {
+        sendJson(res, 403, { error: 'Engine settings are restricted to loopback' }, req);
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/settings/engine') {
+        sendJson(res, 200, engineSettings.get(), req);
+        return;
+      }
+      if (req.method === 'GET' && url.pathname === '/api/settings/engine/models') {
+        sendJson(res, 200, await engineSettings.models(), req);
+        return;
+      }
+      if (req.method === 'POST' && url.pathname === '/api/settings/engine') {
+        if (remoteCaller) {
+          sendJson(res, 403, { error: 'Engine settings can only be changed from this computer' }, req);
+          return;
+        }
+        let raw: unknown;
+        try {
+          raw = JSON.parse(await readBody(req, res));
+        } catch {
+          if (!res.headersSent) sendJson(res, 400, { error: 'Invalid JSON' }, req);
+          return;
+        }
+        try {
+          sendJson(res, 200, engineSettings.save(raw), req);
+        } catch (error) {
+          if (error instanceof EngineSettingsValidationError) {
+            sendJson(res, 400, { error: error.message }, req);
+            return;
+          }
+          console.error('[engine] settings save failed:', error);
+          sendJson(res, 500, { error: 'Failed to save engine settings' }, req);
+        }
+        return;
+      }
     }
 
     // ── LLM gateway settings ─────────────────────────────────────────────────

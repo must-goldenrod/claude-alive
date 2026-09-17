@@ -6,6 +6,7 @@
  * only status + a final summary — the intermediate process (grep, SQL, tool
  * calls) is never surfaced.
  */
+import type { TicketEngine } from './engine.js';
 import type { TicketLocation } from './location.js';
 import type { TicketDelegation } from './orchestration.js';
 import type { TicketEffort, TicketRunPreset } from './runProfile.js';
@@ -100,7 +101,8 @@ export type TicketFailureReason =
   | 'interrupted' // server restarted while running/verifying (not reattachable)
   | 'cwd-not-allowed' // create requested a cwd outside the allowlist
   | 'usage-limit' // the account's usage / rate / spend limit stopped the agent
-  | 'model-unavailable'; // the requested model does not exist or this account can't use it
+  | 'model-unavailable' // the requested model does not exist or this account can't use it
+  | 'gateway-error'; // the LLM gateway refused or could not be reached (gateway engine only)
 
 /**
  * One independent reviewer's opinion in the LiteLLM verification panel.
@@ -266,6 +268,11 @@ export interface Ticket {
    * it stays accurate even if the preset table is redefined later.
    */
   effort?: TicketEffort;
+  /**
+   * `gateway` when the run is served by the LLM gateway (Settings → engine).
+   * Absent = the Claude login, which is every ticket before the feature.
+   */
+  engine?: 'gateway';
   /** Run preset the human selected (fast/standard/deep). Absent = pre-feature ticket. */
   preset?: TicketRunPreset;
   /** Model alias requested at launch (e.g. "opus"), before the CLI resolved a version. */
@@ -351,6 +358,13 @@ export interface TicketCreateInput {
   autoCommit?: boolean;
   /** Opt out of the external review panels (nothing leaves the machine). Omitted = enabled. */
   panelReview?: boolean;
+  /**
+   * Engine snapshot, set by the server from Settings — never taken from the HTTP
+   * body. `gateway` runs the CLI against the LLM gateway with `model`.
+   */
+  engine?: TicketEngine;
+  /** Gateway model id for a `gateway` ticket (resolved by the server). Ignored for `claude`. */
+  model?: string;
 }
 
 /** States the UI renders as "in progress". */

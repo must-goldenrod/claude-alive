@@ -101,6 +101,21 @@ describe('createVerifier', () => {
     });
   });
 
+  it('runs the gate with the ticket engine env and the ticket model', async () => {
+    const seen: Array<{ flags?: unknown; extraEnv?: unknown }> = [];
+    const v = createVerifier({
+      run: async (opts) => {
+        seen.push({ flags: opts.flags, extraEnv: opts.extraEnv });
+        return outcome('{"passed": true, "reason": "ok"}');
+      },
+      agentEnv: (t) => (t.engine === 'gateway' ? { ANTHROPIC_MODEL: t.requestedModel ?? '' } : undefined),
+    });
+    await v.verify({ goal: 'g', cwd: '/r', id: '1', state: 'verifying', createdAt: 0, engine: 'gateway', requestedModel: 'glm-5.3', effort: 'high' }, 'r');
+    await v.verify({ goal: 'g', cwd: '/r', id: '2', state: 'verifying', createdAt: 0 }, 'r');
+    expect(seen[0]).toEqual({ flags: { model: 'glm-5.3', effort: 'high' }, extraEnv: { ANTHROPIC_MODEL: 'glm-5.3' } });
+    expect(seen[1]!.extraEnv).toBeUndefined();
+  });
+
   it('throws (fail-closed) when no verdict can be parsed', async () => {
     const v = createVerifier({ run: async () => outcome('the model rambled with no json'), log: () => {} });
     await expect(

@@ -27,6 +27,11 @@ export {
   DEFAULT_TICKET_RUN_PRESET, isTicketRunPreset, isTicketEffort, resolveRunProfile,
 } from './tickets/runProfile.js';
 export type { TicketRunPreset, TicketRunProfile, TicketEffort } from './tickets/runProfile.js';
+export {
+  TICKET_ENGINES, DEFAULT_ENGINE_SETTINGS, DEFAULT_GATEWAY_PRESET_MODELS, GATEWAY_MODEL_MAIN, GATEWAY_MODEL_FAST,
+  isTicketEngine, isValidGatewayModelId, normalizeEngineSettings, resolveGatewayModel,
+} from './tickets/engine.js';
+export type { TicketEngine, EngineSettings, GatewayPresetModels } from './tickets/engine.js';
 export type {
   Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
   TicketAgentExit, TicketAgentExitCause,
