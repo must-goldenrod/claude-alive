@@ -2,6 +2,8 @@ import '@claude-alive/i18n';
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { loadTerminalFont } from './services/terminalFonts.ts'
+import { getFontFamily, getSettings } from './services/settings.ts'
 import App from './App.tsx'
 import { adoptUrlToken, installAuthFetch } from './lib/auth.ts'
 import { TokenGate } from './components/TokenGate.tsx'
@@ -14,6 +16,8 @@ import { installAppearance } from './services/appearance.ts'
 adoptUrlToken()
 installAuthFetch()
 installAppearance()
+// Start fetching the chosen terminal face before the first terminal measures its grid.
+void loadTerminalFont(getFontFamily(getSettings().terminal.fontFamilyId), getSettings().terminal.fontSize)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

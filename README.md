@@ -118,8 +118,9 @@ npm uninstall -g claude-alive
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CLAUDE_ALIVE_PORT` | `3141` | Server port / 서버 포트 |
-| `LITELLM_KEY` | — | litellm gateway key; enables the orchestrator's `ca-delegate` sub-agent tool / 오케스트레이터 위임 도구 활성화 |
+| `LITELLM_KEY` | — | litellm gateway key; enables the orchestrator's `ca-delegate` sub-agent tool — optional for keyless gateways such as Ollama (`LITELLM_BASE_URL` alone is enough). Also settable from **Settings → Backend**, applied without a restart / 오케스트레이터 위임 도구 활성화. 키 없는 게이트웨이는 생략 가능, 대시보드 **설정 → 백엔드**에서도 설정(재시작 불필요) |
 | `LITELLM_BASE_URL` | `https://litellm.must.codes` | litellm gateway base URL / 게이트웨이 주소 |
+| `CA_DELEGATE_MODELS_FILE` | `~/.claude-alive/models.json` | Delegation model catalogue; absent file = built-in table (`builtin` forces it) / 위임 모델 카탈로그, 파일 없으면 내장 표 |
 | `CA_DELEGATE_MODEL` | `gemini/gemini-3.5-flash-lite` | Default delegation model / 기본 위임 모델 |
 | `CA_DELEGATE_FALLBACKS` | per-model table | Comma-separated fallback chain used for every model / 모든 모델에 적용할 대체 체인 |
 | `CA_DELEGATE_TIMEOUT_MS` | `180000` | Per-attempt timeout before falling back / 시도별 타임아웃 |
@@ -786,4 +787,4 @@ PRs should focus on one feature or fix.
 
 ## License / 라이선스
 
-[MIT](LICENSE)
+[MIT](LICENSE). The terminal fonts JetBrains Mono, Fira Code, Cascadia Code, Source Code Pro and IBM Plex Mono are bundled under the SIL Open Font License 1.1 (via @fontsource) / 터미널 폰트 5종은 OFL-1.1 로 번들

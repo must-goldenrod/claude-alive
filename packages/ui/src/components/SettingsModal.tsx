@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { TerminalFontPreview } from './TerminalFontPreview.tsx';
+import { GatewaySettingsForm } from './GatewaySettingsForm.tsx';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -229,6 +231,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   }
                   options={FONT_PRESETS.map(f => ({ value: f.id, label: f.label }))}
                 />
+                <TerminalFontPreview terminal={settings.terminal} />
               </FieldRow>
 
               <SliderRow
@@ -325,6 +328,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
           {tab === 'alerts' && (
             <>
+              <FieldRow label={t('settings.notifications.title')}>
+                <ToggleRow
+                  label={t('settings.notifications.toasts')}
+                  checked={settings.notifications.toasts}
+                  onChange={(toasts) =>
+                    setSettings(prev => ({ ...prev, notifications: { ...prev.notifications, toasts } }))
+                  }
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{t('settings.notifications.toastsHint')}</div>
+              </FieldRow>
               <AlertSection
                 titleKey="settings.alerts.cpu.title"
                 defaultTitle="CPU usage alert"
@@ -404,6 +417,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 }
               />
               <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />
+              <GatewaySettingsForm active={tab === 'backend'} />
               <BackendsPanel active={tab === 'backend'} />
             </>
           )}

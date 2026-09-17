@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { getSettings } from '../services/settings.ts';
 
 export interface ToastItem {
   id: string;
@@ -135,6 +136,8 @@ export function useToasts() {
     content: { title: string; stage: string; lines: string[] },
     dedupeKey?: string,
   ) => {
+    // Read at call time so turning toasts off in Settings takes effect immediately.
+    if (!getSettings().notifications.toasts) return;
     // Deduplicate: skip if same agent+type fired within 3 seconds
     if (dedupeKey) {
       const lastTime = recentRef.current.get(dedupeKey);

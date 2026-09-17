@@ -99,9 +99,11 @@ interface CompactCardProps {
    * dashboard. Double-click the card name to edit.
    */
   onProjectNameChange?: (cwd: string, name: string | null) => void;
+  /** Pixel avatar beside the name. Off outside the animation view, where only the state dot shows. */
+  showAvatar?: boolean;
 }
 
-function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, isExternal: isExternalProp, onProjectNameChange }: CompactCardProps) {
+function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, isExternal: isExternalProp, onProjectNameChange, showAvatar = true }: CompactCardProps) {
   const { t } = useTranslation();
   const now = useNow();
   const timeSince = formatTimeSince(now, agent.lastEventTime, t);
@@ -146,7 +148,10 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
     onAgentClick?.(agent.sessionId);
   };
   const displayLabel = agent.displayName || agent.projectName || t('agents.generalAgent');
-  const spriteUrl = useMemo(() => getSpriteThumbnail(character, agent.sessionId), [character?.paletteIndex, agent.sessionId]);
+  const spriteUrl = useMemo(
+    () => (showAvatar ? getSpriteThumbnail(character, agent.sessionId) : null),
+    [showAvatar, character?.paletteIndex, agent.sessionId],
+  );
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -166,15 +171,16 @@ function CompactAgentCard({ agent, character, onAgentClick, isSelected = false, 
       title={isExternal ? t('agents.resumeExternalHint') : undefined}
     >
       <div className="flex items-center gap-4">
-        {/* Sprite thumbnail — 44px */}
+        {/* Sprite thumbnail — 44px; without an avatar only the state dot remains */}
         <div
           className="shrink-0 relative"
+          data-testid={showAvatar ? 'agent-avatar' : 'agent-state-dot'}
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 14,
-            overflow: 'hidden',
-            background: 'var(--surface-2)',
+            width: showAvatar ? 44 : 12,
+            height: showAvatar ? 44 : 12,
+            borderRadius: showAvatar ? 14 : '50%',
+            overflow: showAvatar ? 'hidden' : 'visible',
+            background: showAvatar ? 'var(--surface-2)' : 'transparent',
             transition: 'transform 0.2s ease',
             transform: hovered ? 'scale(1.06)' : 'scale(1)',
           }}
@@ -317,6 +323,7 @@ interface SidebarProjectGroupProps {
   /** Set of sessionIds (root + their subagents) considered "internal". When null,
    *  CompactAgentCard falls back to `agent.source === 'external'`. */
   internalSessionIds: Set<string> | null;
+  showAvatars: boolean;
 }
 
 function SidebarProjectGroup({
@@ -328,6 +335,7 @@ function SidebarProjectGroup({
   onProjectNameChange,
   selectedSessionId,
   internalSessionIds,
+  showAvatars,
 }: SidebarProjectGroupProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
@@ -492,6 +500,7 @@ function SidebarProjectGroup({
                   : agent.source === 'external'
               }
               onProjectNameChange={onProjectNameChange}
+              showAvatar={showAvatars}
             />
           ))}
         </div>
@@ -686,6 +695,8 @@ interface ProjectSidebarProps {
    * so the badge still works during the brief window before the chat layer reports in.
    */
   chatClaudeSessionIds?: Set<string>;
+  /** Pixel character avatars on session cards — shown in the animation view only. */
+  showAvatars?: boolean;
 }
 
 export function ProjectSidebar({
@@ -698,6 +709,7 @@ export function ProjectSidebar({
   onProjectNameChange,
   selectedSessionId,
   chatClaudeSessionIds,
+  showAvatars = true,
 }: ProjectSidebarProps) {
   const { t } = useTranslation();
   const projectGroups = useMemo(() => groupByProject(agents), [agents]);
@@ -844,6 +856,7 @@ export function ProjectSidebar({
               onProjectNameChange={onProjectNameChange}
               selectedSessionId={selectedSessionId}
               internalSessionIds={internalSessionIds}
+              showAvatars={showAvatars}
             />
           ))
         )}
