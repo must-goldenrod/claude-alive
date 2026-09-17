@@ -557,12 +557,15 @@ export default function App() {
 
   // The sidebar states what "open" should surface; routing it needs the shell,
   // because each kind's surface lives in a different view.
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
   useEffect(() => {
     const handler = (event: Event) => {
       const intent = (event as CustomEvent).detail as OpenRunIntent | undefined;
       if (!intent) return;
       if (intent.kind === 'ticket') {
-        handleViewModeChange('tickets');
+        // The board renders the focused ticket run itself; leaving it made the board unusable.
+        if (viewModeRef.current !== 'board') handleViewModeChange('tickets');
         return;
       }
       const detail = intent.kind === 'terminal'
@@ -672,6 +675,7 @@ export default function App() {
             <Suspense fallback={null}>
               <TicketsView
                 active={viewMode === 'tickets'}
+                boardActive={viewMode === 'board'}
                 subscribeRaw={subscribeRaw}
                 selection={selection}
                 runs={runTree.runs}

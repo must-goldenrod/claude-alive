@@ -269,17 +269,23 @@ export interface FontPreset {
   id: string;
   label: string;
   family: string;
+  /** Shipped with the app (see services/terminalFonts.ts); otherwise it depends on the OS. */
+  bundled: boolean;
 }
 
+// Mirrors MONO_FALLBACK in services/terminalFonts.ts (kept literal here so this
+// module stays free of the font CSS imports).
+const MONO_FALLBACK = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+
 export const FONT_PRESETS: FontPreset[] = [
-  { id: 'sf-mono', label: 'SF Mono (system)', family: 'SF Mono, Monaco, Menlo, monospace' },
-  { id: 'jetbrains-mono', label: 'JetBrains Mono', family: '"JetBrains Mono", monospace' },
-  { id: 'fira-code', label: 'Fira Code', family: '"Fira Code", monospace' },
-  { id: 'cascadia-code', label: 'Cascadia Code', family: '"Cascadia Code", monospace' },
-  { id: 'source-code-pro', label: 'Source Code Pro', family: '"Source Code Pro", monospace' },
-  { id: 'ibm-plex-mono', label: 'IBM Plex Mono', family: '"IBM Plex Mono", monospace' },
-  { id: 'menlo', label: 'Menlo', family: 'Menlo, monospace' },
-  { id: 'monaco', label: 'Monaco', family: 'Monaco, monospace' },
+  { id: 'sf-mono', label: 'SF Mono (system)', family: `"SF Mono", ${MONO_FALLBACK}`, bundled: false },
+  { id: 'jetbrains-mono', label: 'JetBrains Mono', family: `"JetBrains Mono", ${MONO_FALLBACK}`, bundled: true },
+  { id: 'fira-code', label: 'Fira Code', family: `"Fira Code", ${MONO_FALLBACK}`, bundled: true },
+  { id: 'cascadia-code', label: 'Cascadia Code', family: `"Cascadia Code", ${MONO_FALLBACK}`, bundled: true },
+  { id: 'source-code-pro', label: 'Source Code Pro', family: `"Source Code Pro", ${MONO_FALLBACK}`, bundled: true },
+  { id: 'ibm-plex-mono', label: 'IBM Plex Mono', family: `"IBM Plex Mono", ${MONO_FALLBACK}`, bundled: true },
+  { id: 'menlo', label: 'Menlo (system)', family: `Menlo, ${MONO_FALLBACK}`, bundled: false },
+  { id: 'monaco', label: 'Monaco (system)', family: `Monaco, ${MONO_FALLBACK}`, bundled: false },
 ];
 
 export function getFontFamily(id: string): string {
@@ -322,6 +328,10 @@ export interface AppSettings {
     memory: { enabled: boolean; thresholdPct: number; soundEnabled: boolean };
     sustainSeconds: number; // 1..30 — must stay above threshold for this long before firing
   };
+  notifications: {
+    /** In-app toast popups (agent finished / needs input / error). Browser notifications are separate. */
+    toasts: boolean;
+  };
   backend: {
     /** Run a connectivity check against configured backends when the app loads. */
     checkOnStartup: boolean;
@@ -356,6 +366,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     memory: { enabled: true, thresholdPct: 90, soundEnabled: true },
     sustainSeconds: 3,
   },
+  notifications: {
+    toasts: true,
+  },
   backend: {
     checkOnStartup: true,
     alertOnFailure: true,
@@ -381,6 +394,7 @@ function sanitize(raw: unknown): AppSettings {
   const alertsMem = (alerts.memory ?? {}) as Partial<AppSettings['alerts']['memory']>;
   const backend = (obj.backend ?? {}) as Partial<AppSettings['backend']>;
   const appearance = (obj.appearance ?? {}) as Partial<AppSettings['appearance']>;
+  const notifications = (obj.notifications ?? {}) as Partial<AppSettings['notifications']>;
   return {
     appearance: {
       mode: APPEARANCE_MODES.includes(appearance.mode as AppearanceMode)
@@ -429,6 +443,9 @@ function sanitize(raw: unknown): AppSettings {
         soundEnabled: typeof alertsMem.soundEnabled === 'boolean' ? alertsMem.soundEnabled : DEFAULT_SETTINGS.alerts.memory.soundEnabled,
       },
       sustainSeconds: clamp(Number(alerts.sustainSeconds ?? DEFAULT_SETTINGS.alerts.sustainSeconds), 1, 30),
+    },
+    notifications: {
+      toasts: typeof notifications.toasts === 'boolean' ? notifications.toasts : DEFAULT_SETTINGS.notifications.toasts,
     },
     backend: {
       checkOnStartup: typeof backend.checkOnStartup === 'boolean' ? backend.checkOnStartup : DEFAULT_SETTINGS.backend.checkOnStartup,

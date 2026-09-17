@@ -75,7 +75,9 @@
         "brightMagenta": "밝은 자홍",
         "brightCyan": "밝은 청록",
         "brightWhite": "밝은 흰색"
-      }
+      },
+      "fontPreview": "폰트 미리보기",
+      "fontNotInstalled": "{{font}} 폰트가 이 컴퓨터에 설치되어 있지 않아 기본 고정폭 폰트로 표시됩니다."
     },
     "alerts": {
       "cpu": {
@@ -93,7 +95,38 @@
       "checkOnStartup": "시작 시 연결 점검",
       "checkOnStartupHint": "앱을 켤 때마다 저장된 백엔드 연결을 자동으로 확인합니다.",
       "alertOnFailure": "연결 실패 시 알림",
-      "checkAll": "모두 확인"
+      "checkAll": "모두 확인",
+      "gateway": {
+        "title": "LLM 게이트웨이 (선택)",
+        "hint": "LiteLLM, OpenRouter, Ollama, vLLM 등 OpenAI 호환 엔드포인트를 연결하면 서브에이전트 위임과 멀티모델 리뷰를 쓸 수 있습니다. ~/.claude-alive/.env 에 저장되고 재시작 없이 적용됩니다.",
+        "statusConnected": "연결됨",
+        "statusOff": "연결 안 됨",
+        "custom": "직접 입력",
+        "baseUrl": "기본 URL (/v1 제외)",
+        "apiKey": "API 키",
+        "apiKeyKeep": "저장된 키 {{hint}} — 비워두면 유지",
+        "apiKeyOptional": "Ollama 처럼 키가 없는 게이트웨이는 비워두세요",
+        "test": "연결 테스트",
+        "testing": "테스트 중…",
+        "testFailed": "게이트웨이가 응답하지 않습니다",
+        "modelsFound": "사용 가능한 모델 {{count}}개",
+        "defaultModel": "기본 모델",
+        "writeModels": "모델 목록을 ~/.claude-alive/models.json 에 저장",
+        "save": "저장",
+        "saving": "저장 중…",
+        "saved": "게이트웨이를 저장하고 적용했습니다",
+        "saveFailed": "게이트웨이를 저장하지 못했습니다",
+        "disconnect": "연결 해제",
+        "disconnected": "게이트웨이 연결을 해제했습니다",
+        "localOnly": "게이트웨이는 이 컴퓨터에서만 변경할 수 있습니다 (원격 기기는 읽기 전용).",
+        "unavailable": "이 서버 버전은 대시보드에서 게이트웨이를 설정할 수 없습니다. 서버를 업데이트한 뒤 재시작하세요.",
+        "savedWithoutModels": "게이트웨이는 저장했지만 모델 목록은 저장하지 못했습니다: {{error}}"
+      }
+    },
+    "notifications": {
+      "title": "알림",
+      "toasts": "토스트 알림",
+      "toastsHint": "에이전트 완료·응답 필요·오류 시 화면 안에 팝업을 띄웁니다"
     }
   },
   "alert": {
@@ -454,7 +487,8 @@
     "empty": {
       "noSession": "연결된 세션 없음",
       "noData": "데이터 없음",
-      "pickTicket": "티켓을 선택하세요"
+      "pickTicket": "티켓을 선택하세요",
+      "notEvaluatedYet": "아직 평가 기록이 없습니다 — 티켓이 끝나면 생성됩니다"
     },
     "pickRun": "사이드바에서 런을 선택하세요"
   },
@@ -546,7 +580,7 @@
     "remove": "삭제"
   },
   "tickets": {
-    "heroPrompt": "What do you want to solve?",
+    "heroPrompt": "무엇을 해결할까요?",
     "newGoalPlaceholder": "목표를 적으세요 — 에이전트가 자율로 처리합니다",
     "selectFolder": "프로젝트 폴더 선택",
     "changeFolder": "변경",
@@ -556,7 +590,7 @@
     "remotePathPlaceholder": "원격 경로, 예: /home/dev/project",
     "pickerTitle": "프로젝트 폴더 선택",
     "useThisFolder": "이 폴더로 지정",
-    "create": "Solve",
+    "create": "맡기기",
     "creating": "생성 중…",
     "empty": "없음",
     "clearClosed": "정리",

@@ -22,6 +22,7 @@ import type { PersistedTab } from './openTabsStore.ts';
 import { makeTabId, generateFallbackUuid } from './tabId.ts';
 import { useSpreadView } from './useSpreadView.ts';
 import { getSettings, resolveTerminalTheme, getFontFamily, subscribeSettings } from '../../services/settings.ts';
+import { loadTerminalFont } from '../../services/terminalFonts.ts';
 import type { AppSettings } from '../../services/settings.ts';
 
 export type TerminalEventHandler = (msg: WSServerMessage) => void;
@@ -968,13 +969,27 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   // options on the fly via `term.options.*`; container padding is plain CSS. After
   // applying we refit because font/lineHeight changes shift the cell grid.
   useEffect(() => {
+    let generation = 0;
     const apply = (s: AppSettings) => {
       const opts = buildTermOptions(s);
+      const current = ++generation;
+      // Assign the font only once its face has loaded: xterm measures the cell grid
+      // on assignment, and measuring the fallback left the new font mis-sized.
+      void loadTerminalFont(opts.fontFamily, opts.fontSize).then(() => {
+        if (current !== generation) return;
+        for (const [, entry] of termsRef.current) entry.term.options.fontFamily = opts.fontFamily;
+        const activeEntry = termsRef.current.get(activeTabId);
+        if (activeEntry && !spreadActiveRef.current) {
+          requestAnimationFrame(() => {
+            activeEntry.fit.fit();
+            onResizeRef.current?.(activeTabId, activeEntry.term.cols, activeEntry.term.rows);
+          });
+        }
+      });
       for (const [, entry] of termsRef.current) {
         // xterm v6 options are individually assignable; reassigning the whole object
         // is also supported. We assign field-by-field for clarity and to avoid losing
         // any option not surfaced in the settings UI.
-        entry.term.options.fontFamily = opts.fontFamily;
         entry.term.options.fontSize = opts.fontSize;
         entry.term.options.lineHeight = opts.lineHeight;
         entry.term.options.letterSpacing = opts.letterSpacing;

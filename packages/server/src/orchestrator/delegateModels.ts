@@ -18,9 +18,15 @@
  * parse) and `translategemma` (its upstream serves a Cloudflare Access login
  * page) — so naming them in a fallback chain would only spend an attempt.
  *
+ * `~/.claude-alive/models.json` (or `CA_DELEGATE_MODELS_FILE`) replaces this
+ * built-in table when present; the dashboard's gateway settings write it.
+ *
  * Unknown ids are NOT rejected anywhere — the gateway's catalogue rotates, so an
  * id absent from this table is passed through to the API as-is.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 /** Rough role of a model, shown in the orchestrator's menu. */
 export type DelegateModelKind = 'reasoning' | 'fast' | 'code' | 'utility';
@@ -46,7 +52,7 @@ const GLM = 'glm-5.3';
 const GLM_FLASH = 'glm-5.3-flash';
 const GLM_52 = 'glm-5.2';
 
-export const DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
+export const BUILTIN_DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
   {
     id: GEMINI_LITE,
     aliases: ['lite', 'flash-lite', 'fast'],
@@ -145,11 +151,127 @@ export const DELEGATE_MODELS: readonly DelegateModelSpec[] = Object.freeze([
  * Deliberately cross-vendor: whatever went wrong with the unknown id, these are
  * unlikely to share the cause.
  */
-export const DEFAULT_FALLBACK_TAIL: readonly string[] = Object.freeze([
+export const BUILTIN_FALLBACK_TAIL: readonly string[] = Object.freeze([
   GEMINI_FLASH,
   GLM,
   GEMINI_LITE,
 ]);
+
+// ── User catalogue (models.json) ─────────────────────────────────────────────
+
+/** Default location of the user's catalogue. */
+export const MODELS_FILE = join(homedir(), '.claude-alive', 'models.json');
+
+const KINDS: readonly DelegateModelKind[] = ['reasoning', 'fast', 'code', 'utility'];
+
+export interface DelegateCatalog {
+  readonly models: readonly DelegateModelSpec[];
+  /** Fallbacks for an id that is not in `models`. */
+  readonly fallbackTail: readonly string[];
+  /** Model used when `--model` is omitted (`CA_DELEGATE_MODEL` still wins). */
+  readonly defaultModel?: string;
+  /** Review-panel roster (`CA_PANEL_MODELS` still wins). */
+  readonly panelModels?: readonly string[];
+  /** `builtin` or the file the catalogue was read from. */
+  readonly source: string;
+}
+
+const BUILTIN_CATALOG: DelegateCatalog = Object.freeze({
+  models: BUILTIN_DELEGATE_MODELS,
+  fallbackTail: BUILTIN_FALLBACK_TAIL,
+  source: 'builtin',
+});
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && v.trim() !== '').map((v) => v.trim()) : [];
+}
+
+/**
+ * Validate a parsed models.json. Returns an error string instead of throwing so
+ * the loader can fall back to the built-in preset — a typo in the file must not
+ * stop the server from booting.
+ *
+ * Shape: `{ "models": [{ "id", "aliases"?, "kind"?, "note"?, "fallbacks"? }],
+ * "defaultModel"?, "panelModels"?, "fallbackTail"? }`.
+ */
+export function parseDelegateCatalog(raw: unknown, source: string): DelegateCatalog | { error: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { error: 'expected a JSON object' };
+  const obj = raw as Record<string, unknown>;
+  if (!Array.isArray(obj.models) || obj.models.length === 0) return { error: '"models" must be a non-empty array' };
+  const models: DelegateModelSpec[] = [];
+  for (const [i, entry] of obj.models.entries()) {
+    if (!entry || typeof entry !== 'object') return { error: `models[${i}] must be an object` };
+    const m = entry as Record<string, unknown>;
+    const id = typeof m.id === 'string' ? m.id.trim() : '';
+    if (!id) return { error: `models[${i}].id is required` };
+    const kind = KINDS.includes(m.kind as DelegateModelKind) ? (m.kind as DelegateModelKind) : 'utility';
+    models.push(Object.freeze({
+      id,
+      aliases: Object.freeze(stringList(m.aliases)),
+      kind,
+      note: typeof m.note === 'string' ? m.note : '',
+      fallbacks: Object.freeze(stringList(m.fallbacks).filter((f) => f !== id)),
+    }));
+  }
+  const ids = models.map((m) => m.id);
+  const tail = stringList(obj.fallbackTail);
+  const defaultModel = typeof obj.defaultModel === 'string' && obj.defaultModel.trim() ? obj.defaultModel.trim() : undefined;
+  const panelModels = stringList(obj.panelModels);
+  return Object.freeze({
+    models: Object.freeze(models),
+    fallbackTail: Object.freeze(tail.length > 0 ? tail : ids.slice(0, 3)),
+    ...(defaultModel ? { defaultModel } : {}),
+    ...(panelModels.length > 0 ? { panelModels: Object.freeze(panelModels) } : {}),
+    source,
+  });
+}
+
+/**
+ * Load the active catalogue. `CA_DELEGATE_MODELS_FILE=builtin` forces the
+ * built-in preset (tests use it so a developer's own models.json cannot leak in).
+ */
+export function loadDelegateCatalog(
+  env: NodeJS.ProcessEnv = process.env,
+  read: (path: string) => string = (p) => readFileSync(p, 'utf-8'),
+): DelegateCatalog {
+  const configured = env.CA_DELEGATE_MODELS_FILE?.trim();
+  if (configured === 'builtin') return BUILTIN_CATALOG;
+  const path = configured || MODELS_FILE;
+  let text: string;
+  try {
+    text = read(path);
+  } catch {
+    return BUILTIN_CATALOG; // no file: the example preset
+  }
+  try {
+    const parsed = parseDelegateCatalog(JSON.parse(text), path);
+    if ('error' in parsed) {
+      process.stderr.write(`[models] ignoring ${path}: ${parsed.error}\n`);
+      return BUILTIN_CATALOG;
+    }
+    return parsed;
+  } catch (error) {
+    process.stderr.write(`[models] ignoring ${path}: ${error instanceof Error ? error.message : String(error)}\n`);
+    return BUILTIN_CATALOG;
+  }
+}
+
+/**
+ * The catalogue this process runs with. Read at startup and re-read by
+ * {@link reloadDelegateCatalog} (the dashboard's gateway settings). These are
+ * `let` exports: ES module importers see the reassigned value (live bindings).
+ */
+export let ACTIVE_DELEGATE_CATALOG: DelegateCatalog = loadDelegateCatalog();
+export let DELEGATE_MODELS: readonly DelegateModelSpec[] = ACTIVE_DELEGATE_CATALOG.models;
+export let DEFAULT_FALLBACK_TAIL: readonly string[] = ACTIVE_DELEGATE_CATALOG.fallbackTail;
+
+/** Re-read models.json (or the override) and make it the active catalogue. */
+export function reloadDelegateCatalog(env: NodeJS.ProcessEnv = process.env): DelegateCatalog {
+  ACTIVE_DELEGATE_CATALOG = loadDelegateCatalog(env);
+  DELEGATE_MODELS = ACTIVE_DELEGATE_CATALOG.models;
+  DEFAULT_FALLBACK_TAIL = ACTIVE_DELEGATE_CATALOG.fallbackTail;
+  return ACTIVE_DELEGATE_CATALOG;
+}
 
 /** Look a model up by id or alias. Returns undefined for ids not in the table. */
 export function findDelegateModel(input: string): DelegateModelSpec | undefined {

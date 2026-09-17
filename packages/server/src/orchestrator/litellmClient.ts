@@ -8,8 +8,12 @@
  */
 import { randomUUID } from 'node:crypto';
 
+/** Used when `LITELLM_BASE_URL` is unset. */
+export const DEFAULT_LITELLM_BASE_URL = 'https://litellm.must.codes';
+
 export interface LitellmConfig {
   baseUrl: string;
+  /** Empty for keyless gateways (e.g. Ollama): no Authorization header is sent. */
   apiKey: string;
   /**
    * Session id forwarded to the gateway as `x-opencode-session` (see
@@ -93,17 +97,23 @@ function trimBase(url: string): string {
   return url.replace(/\/+$/, '');
 }
 
+/** Ceiling for the models listing: an unreachable host must not hang the check. */
+export const CHECK_CONNECTION_TIMEOUT_MS = 10_000;
+
 export function createLitellmClient(config: LitellmConfig, deps: { fetch?: FetchFn } = {}): LitellmClient {
   const doFetch = deps.fetch ?? fetch;
   const base = trimBase(config.baseUrl);
-  const authHeaders = { Authorization: `Bearer ${config.apiKey}` };
+  const authHeaders: Record<string, string> = config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {};
   const sessionId = config.sessionId?.trim() || `claude-alive-${randomUUID()}`;
   const extraHeaders = { [SESSION_HEADER]: sessionId };
 
   return {
     async checkConnection() {
       try {
-        const res = await doFetch(`${base}/v1/models`, { headers: authHeaders });
+        const res = await doFetch(`${base}/v1/models`, {
+          headers: authHeaders,
+          signal: AbortSignal.timeout(CHECK_CONNECTION_TIMEOUT_MS),
+        });
         if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
         const body = (await res.json()) as { data?: Array<{ id?: string }> };
         const models = (body.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string');

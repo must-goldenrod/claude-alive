@@ -143,6 +143,11 @@ export function WorkTab({ active, focusedRunId }: WorkTabProps) {
     return <EmptyState message={t('board.pickRun')} />;
   }
 
+  // Evaluation records are written when a ticket settles; a running ticket has none yet.
+  if (records && !selected) {
+    return <EmptyState message={t('board.empty.notEvaluatedYet')} />;
+  }
+
   return (
     <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>
       <TicketDetailTabs

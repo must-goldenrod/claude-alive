@@ -11,9 +11,9 @@ import { mkdirSync, writeFileSync, appendFileSync, existsSync, rmSync } from 'no
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { createLitellmClient } from './litellmClient.js';
+import { createLitellmClient, DEFAULT_LITELLM_BASE_URL } from './litellmClient.js';
 import { loadServerEnv } from '../serverEnv.js';
-import { buildDelegateChain, DELEGATE_MODELS } from './delegateModels.js';
+import { buildDelegateChain, DELEGATE_MODELS, ACTIVE_DELEGATE_CATALOG } from './delegateModels.js';
 import { classifyDelegateError } from './delegateErrors.js';
 import { createCooldownStore, COOLDOWN_PATH, type CooldownMap, type CooldownStore } from './modelCooldown.js';
 
@@ -27,9 +27,12 @@ export const DEFAULT_DELEGATE_MODEL = 'gemini/gemini-3.5-flash-lite';
 /** Per-attempt ceiling; a hung model must not hold the whole delegation open. */
 export const DEFAULT_DELEGATE_TIMEOUT_MS = 180_000;
 
-/** The model ca-delegate uses when the caller passes no `--model`. */
+/**
+ * The model ca-delegate uses when the caller passes no `--model`:
+ * `CA_DELEGATE_MODEL`, then models.json `defaultModel`, then the preset default.
+ */
 export function resolveDelegateModel(env: NodeJS.ProcessEnv): string {
-  return env.CA_DELEGATE_MODEL?.trim() || DEFAULT_DELEGATE_MODEL;
+  return env.CA_DELEGATE_MODEL?.trim() || ACTIVE_DELEGATE_CATALOG.defaultModel || DEFAULT_DELEGATE_MODEL;
 }
 
 /** Where ca-delegate appends one JSON line per delegation (server reads by ticketId). */
@@ -148,10 +151,11 @@ export async function runDelegateCli(
   const chat =
     deps.chat ??
     (async (m: string, p: string) => {
-      const key = env.LITELLM_KEY;
-      if (!key) throw new Error('LITELLM_KEY not set');
+      const key = env.LITELLM_KEY ?? '';
+      // A keyless gateway (Ollama, vLLM) is configured by its base URL alone.
+      if (!key && !env.LITELLM_BASE_URL) throw new Error('gateway not configured (set LITELLM_BASE_URL and/or LITELLM_KEY)');
       const client = createLitellmClient({
-        baseUrl: env.LITELLM_BASE_URL ?? 'https://litellm.must.codes',
+        baseUrl: env.LITELLM_BASE_URL || DEFAULT_LITELLM_BASE_URL,
         apiKey: key,
       });
       const timeoutMs = Number(env.CA_DELEGATE_TIMEOUT_MS) || DEFAULT_DELEGATE_TIMEOUT_MS;

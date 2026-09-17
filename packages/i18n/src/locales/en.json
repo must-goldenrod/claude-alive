@@ -75,7 +75,9 @@
         "brightMagenta": "Bright Magenta",
         "brightCyan": "Bright Cyan",
         "brightWhite": "Bright White"
-      }
+      },
+      "fontPreview": "Font preview",
+      "fontNotInstalled": "{{font}} is not installed on this computer, so the preview uses the fallback monospace font."
     },
     "alerts": {
       "cpu": {
@@ -93,7 +95,38 @@
       "checkOnStartup": "Check connections on startup",
       "checkOnStartupHint": "Automatically verify saved backend connections each time the app loads.",
       "alertOnFailure": "Alert when a connection fails",
-      "checkAll": "Check all"
+      "checkAll": "Check all",
+      "gateway": {
+        "title": "LLM gateway (optional)",
+        "hint": "Connect any OpenAI-compatible endpoint — LiteLLM, OpenRouter, Ollama, vLLM — for sub-agent delegation and multi-model review. Saved to ~/.claude-alive/.env and applied without a restart.",
+        "statusConnected": "Connected",
+        "statusOff": "Not connected",
+        "custom": "Custom",
+        "baseUrl": "Base URL (without /v1)",
+        "apiKey": "API key",
+        "apiKeyKeep": "Saved key {{hint}} — leave empty to keep it",
+        "apiKeyOptional": "Optional for keyless gateways such as Ollama",
+        "test": "Test connection",
+        "testing": "Testing…",
+        "testFailed": "The gateway did not answer",
+        "modelsFound": "{{count}} models available",
+        "defaultModel": "Default model",
+        "writeModels": "Write the model list to ~/.claude-alive/models.json",
+        "save": "Save",
+        "saving": "Saving…",
+        "saved": "Gateway saved and applied",
+        "saveFailed": "Could not save the gateway",
+        "disconnect": "Disconnect",
+        "disconnected": "Gateway disconnected",
+        "localOnly": "Only this computer can change the gateway (remote devices are read-only).",
+        "unavailable": "This server version cannot configure a gateway from the dashboard. Update and restart the server.",
+        "savedWithoutModels": "Gateway saved, but the model list was not written: {{error}}"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "toasts": "Toast popups",
+      "toastsHint": "Show in-app popups when an agent finishes, needs input, or fails"
     }
   },
   "alert": {
@@ -454,7 +487,8 @@
     "empty": {
       "noSession": "No linked session",
       "noData": "No data",
-      "pickTicket": "Select a ticket"
+      "pickTicket": "Select a ticket",
+      "notEvaluatedYet": "No evaluation yet — it is created when the ticket finishes"
     },
     "pickRun": "Pick a run in the sidebar"
   },

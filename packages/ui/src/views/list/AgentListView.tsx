@@ -34,6 +34,7 @@ export function AgentListView({
     <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
       <ProjectSidebar
         agents={agents}
+        showAvatars={false}
         collapsed={!leftPanelOpen}
         sshSessions={sshSessions}
         projectNames={projectNames}

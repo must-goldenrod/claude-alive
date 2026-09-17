@@ -93,7 +93,7 @@ cat > "$OUT/package.json" << PKGJSON
   "dependencies": {
     "ws": "^8",
     "node-pty": "1.2.0-beta.11",
-    "better-sqlite3": "^11.7.0",
+    "better-sqlite3": "^12.11.1",
     "pino": "^9.5.0",
     "fastify": "^5.2.0",
     "franc-min": "^6.2.0",

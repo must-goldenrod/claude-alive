@@ -10,6 +10,8 @@ jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
     strategy:
+      # One flaky job (a native-module crash seen on Node 24) must not cancel the rest of the matrix.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         node-version: [20, 22]
