@@ -10,6 +10,7 @@ import {
   type GatewaySettings,
 } from '../gatewaySettings.js';
 import { createHttpServer } from '../httpRouter.js';
+import { MIN_TOKEN_CHARS, type RemoteAccessConfig } from '../remoteAccess.js';
 
 const SECRET = 'sk-test-secret-abcd1234';
 
@@ -241,5 +242,78 @@ describe('gateway settings routes', () => {
     const invalid = await call('POST', '/api/settings/gateway', JSON.stringify({ baseUrl: 'ftp://x' }));
     expect(invalid.status).toBe(400);
     expect(typeof invalid.json.error).toBe('string');
+  });
+});
+
+describe('gateway settings routes in remote mode', () => {
+  const DEVICE = 'd'.repeat(MIN_TOKEN_CHARS);
+  const LOCAL = 'l'.repeat(MIN_TOKEN_CHARS);
+  const remoteAccess: RemoteAccessConfig = {
+    enabled: true,
+    host: '0.0.0.0',
+    trustLoopback: false,
+    tokens: [{ label: 'phone', value: DEVICE }],
+    ticketRoots: ['/tmp'],
+    sshHosts: [],
+    localToken: LOCAL,
+    terminalLevel: 'off',
+  };
+  let server: Server;
+  let base: string;
+
+  beforeEach(async () => {
+    server = createHttpServer({
+      onEvent: () => {},
+      getSnapshot: () => ({}),
+      renameAgent: () => false,
+      removeAgent: () => false,
+      getStats: () => ({}),
+      getCompletedArchive: () => [],
+      getProjectNames: () => ({}),
+      saveProjectName: async () => {},
+      removeProjectName: async () => {},
+      gatewaySettings: settings,
+      remoteAccess,
+    });
+    base = await new Promise<string>((resolve) => {
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        if (typeof addr === 'object' && addr) resolve(`http://127.0.0.1:${addr.port}`);
+      });
+    });
+  });
+
+  afterEach(() => {
+    server.close();
+  });
+
+  function call(method: string, path: string, token: string, body?: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const req = request(
+        `${base}${path}`,
+        { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        },
+      );
+      req.on('error', reject);
+      if (body !== undefined) req.write(body);
+      req.end();
+    });
+  }
+
+  // A device token reads tickets and status, but the gateway key is a secret
+  // written to disk: only this machine (the local full-access token) may touch it.
+  it('refuses a device token on every gateway route and leaves the env file alone', async () => {
+    const body = JSON.stringify({ baseUrl: gatewayUrl, apiKey: SECRET });
+    expect(await call('GET', '/api/settings/gateway', DEVICE)).toBe(403);
+    expect(await call('POST', '/api/settings/gateway/test', DEVICE, body)).toBe(403);
+    expect(await call('POST', '/api/settings/gateway', DEVICE, body)).toBe(403);
+    expect(settings.get().hasKey).toBe(false);
+  });
+
+  it('allows the local full-access token', async () => {
+    expect(await call('GET', '/api/settings/gateway', LOCAL)).toBe(200);
   });
 });
