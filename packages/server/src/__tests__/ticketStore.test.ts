@@ -114,3 +114,18 @@ describe('createTicketStore', () => {
     expect(store.get(c.id)).toBeDefined();
   });
 });
+
+describe('engine snapshot', () => {
+  it('stores a gateway ticket with the gateway model and the preset effort', async () => {
+    const store = makeStore();
+    const t = await store.create({ goal: 'g', cwd: '/r', preset: 'deep', engine: 'gateway', model: 'glm-5.3' });
+    expect(t).toMatchObject({ engine: 'gateway', requestedModel: 'glm-5.3', effort: 'max', preset: 'deep' });
+  });
+
+  it('keeps Claude tickets unchanged and ignores a model without the gateway engine', async () => {
+    const store = makeStore();
+    const t = await store.create({ goal: 'g', cwd: '/r', preset: 'deep', model: 'glm-5.3' });
+    expect(t.engine).toBeUndefined();
+    expect(t.requestedModel).toBe('claude-opus-5');
+  });
+});

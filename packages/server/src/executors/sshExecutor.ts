@@ -68,11 +68,43 @@ const REMOTE_PATH_PREFIX =
  * arg makes claude read the prompt from stdin (which the ssh process supplies),
  * so a multi-line goal never touches the remote shell's quoting.
  */
+/**
+ * Env vars whose values are secrets. They never appear in the remote command
+ * (visible in `ps` on both hosts): the remote shell reads each one from the first
+ * lines of stdin, and `claude -p` then reads the goal from the rest.
+ */
+const SECRET_ENV_KEYS: ReadonlySet<string> = new Set(['ANTHROPIC_AUTH_TOKEN']);
+const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
+
+export interface RemoteEnvPlan {
+  /** Shell prefix placed before `cd … && claude`. */
+  prefix: string;
+  /** Lines written to stdin ahead of the goal, one per secret, in `prefix` order. */
+  stdinLines: string[];
+}
+
+export function planRemoteEnv(env: Record<string, string> | undefined): RemoteEnvPlan {
+  const plan: RemoteEnvPlan = { prefix: '', stdinLines: [] };
+  if (!env) return plan;
+  for (const [key, value] of Object.entries(env)) {
+    if (!ENV_NAME.test(key)) throw new Error(`invalid env var name for remote run: ${key}`);
+    if (SECRET_ENV_KEYS.has(key)) {
+      if (/[\r\n]/.test(value)) throw new Error(`secret env var ${key} must be a single line`);
+      plan.prefix += `IFS= read -r ${key} && export ${key} && `;
+      plan.stdinLines.push(value);
+    } else {
+      plan.prefix += `export ${key}=${shellQuote(value)} && `;
+    }
+  }
+  return plan;
+}
+
 export function buildRemoteCommand(
   cwd: string,
   permissionMode: string,
   resumeSessionId?: string,
   run?: { model?: string; effort?: string },
+  envPrefix = '',
 ): string {
   const flags = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', permissionMode];
   if (resumeSessionId) flags.push('--resume', shellQuote(resumeSessionId));
@@ -80,7 +112,7 @@ export function buildRemoteCommand(
   // CLI advertised in --help get this far (see flagGuard).
   if (run?.model) flags.push('--model', shellQuote(run.model));
   if (run?.effort) flags.push('--effort', shellQuote(run.effort));
-  return `${REMOTE_PATH_PREFIX}cd ${shellQuote(cwd)} && claude ${flags.join(' ')}`;
+  return `${REMOTE_PATH_PREFIX}${envPrefix}cd ${shellQuote(cwd)} && claude ${flags.join(' ')}`;
 }
 
 /** Remote `claude --help`, for run-flag capability detection on the target host. */
@@ -159,9 +191,11 @@ export function createSshExecutor(
         requested: req.run ?? {},
         onResolved: req.onFlagsResolved,
         spawnWith: (flags) => {
-          const remote = buildRemoteCommand(req.cwd, req.permissionMode, req.resumeSessionId, flags);
+          const envPlan = planRemoteEnv(req.extraEnv);
+          const remote = buildRemoteCommand(req.cwd, req.permissionMode, req.resumeSessionId, flags, envPlan.prefix);
+          const stdin = envPlan.stdinLines.map((line) => `${line}\n`).join('') + req.goal;
           return consumeHeadless(
-            doSpawn([...sshBaseArgs(target), remote], req.goal),
+            doSpawn([...sshBaseArgs(target), remote], stdin),
             req.onSessionId ? sessionIdReporter(req.onSessionId) : undefined,
           );
         },

@@ -6,6 +6,7 @@ import { FolderPicker } from './FolderPicker.tsx';
 import { RemoteFolderPicker } from './RemoteFolderPicker.tsx';
 import { loadPresets, SSH_PRESETS_CHANGED } from '../chat/sshPresets.ts';
 import { DEFAULT_RUN_PRESET, RUN_PRESET_IDS, RUN_PRESET_PREVIEW, runPresetLabelKey } from './runPresets.ts';
+import { fetchGatewayModels, gatewayModelFor, useEngineSettings } from '../../services/engineSettings.ts';
 import { BranchPicker } from './BranchPicker.tsx';
 
 interface NewTicketFormProps {
@@ -97,6 +98,23 @@ export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicket
   // Which model/effort the agent runs with. `standard` reproduces the behaviour
   // tickets had before presets existed, so the default changes nothing.
   const [runPreset, setRunPreset] = useState<TicketRunPreset>(DEFAULT_RUN_PRESET);
+  // Engine chosen in Settings. On the gateway the presets keep their effort but
+  // run the mapped gateway model, and a model can be picked directly instead.
+  const engine = useEngineSettings();
+  const onGateway = engine?.settings.engine === 'gateway';
+  const [pickedModel, setPickedModel] = useState('');
+  const [gatewayModels, setGatewayModels] = useState<string[]>([]);
+  useEffect(() => {
+    if (!onGateway) {
+      setPickedModel('');
+      return;
+    }
+    let stop = false;
+    void fetchGatewayModels().then((models) => {
+      if (!stop) setGatewayModels(models);
+    });
+    return () => { stop = true; };
+  }, [onGateway]);
   // The sidebar's option exists only while the sidebar is offering one; falling
   // back to Local keeps the select from rendering a blank value after the
   // selection is cleared.
@@ -125,7 +143,7 @@ export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicket
     if (!canSubmit) return;
     setSubmitting(true);
     // Orchestrator mode delegates to sub-agents; only meaningful for local runs.
-    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote, runPreset, autoCommit, panelReview);
+    const err = await onCreate(goal.trim(), cwd, location, orchestrated && !isRemote, runPreset, autoCommit, panelReview, onGateway && pickedModel ? pickedModel : undefined);
     setSubmitting(false);
     if (err) {
       setError(err); // surface the server's specific reason (e.g. bad cwd)
@@ -333,6 +351,8 @@ export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicket
           {RUN_PRESET_IDS.map((id) => {
             const active = runPreset === id;
             const preview = RUN_PRESET_PREVIEW[id];
+            const gatewayModel = gatewayModelFor(engine, id);
+            const model = gatewayModel ?? preview.model;
             return (
               <button
                 key={id}
@@ -341,7 +361,7 @@ export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicket
                 // The model line names the version on every option rather than
                 // only the selected one, so the cost ramp is legible without
                 // clicking through. The exact `--model` id stays one hover away.
-                title={`--model ${preview.model} --effort ${preview.effort}`}
+                title={`--model ${model} --effort ${preview.effort}`}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -367,13 +387,35 @@ export function NewTicketForm({ onCreate, presetCwd, presetLocation }: NewTicket
                     opacity: active ? 0.85 : 0.6,
                   }}
                 >
-                  {preview.modelLabel} · {preview.effort}
+                  {gatewayModel ?? preview.modelLabel} · {preview.effort}
                 </span>
               </button>
             );
           })}
         </div>
       </div>
+      {onGateway && (
+        <div data-testid="ticket-gateway-model" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary, #8b949e)' }}>
+          <span
+            title={t('tickets.engineGatewayHint')}
+            style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, border: '1px solid var(--accent-blue, #58a6ff)', color: 'var(--accent-blue, #58a6ff)' }}
+          >
+            {t('tickets.engineGateway')}
+          </span>
+          <label htmlFor="ticket-model-pick">{t('tickets.modelPick')}</label>
+          <select
+            id="ticket-model-pick"
+            value={pickedModel}
+            onChange={(e) => setPickedModel(e.target.value)}
+            style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', padding: '3px 8px', borderRadius: 6, border: '1px solid var(--border-color, #30363d)', background: 'var(--bg-tertiary, #21262d)', color: 'var(--text-primary, #e6edf3)' }}
+          >
+            <option value="">{t('tickets.modelPickPreset', { model: gatewayModelFor(engine, runPreset) ?? '' })}</option>
+            {gatewayModels.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+      )}
       {!isRemote && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary, #8b949e)', cursor: 'pointer', userSelect: 'none' }}>
           <input type="checkbox" checked={orchestrated} onChange={(e) => setOrchestrated(e.target.checked)} style={{ cursor: 'pointer' }} />

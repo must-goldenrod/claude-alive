@@ -377,6 +377,7 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
   // host, or a server-side substitution still makes them differ, and that
   // difference is exactly what makes a past ticket's cost/quality interpretable.
   // Both stay raw here — the detail view is the record of what ran, not a label.
+  if (ticket.engine === 'gateway') rows.push([t('tickets.runEngine'), t('tickets.engineGateway')]);
   if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), ticket.requestedModel]);
   if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);

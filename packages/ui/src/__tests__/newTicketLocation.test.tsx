@@ -26,7 +26,7 @@ describe('NewTicketForm location', () => {
 
     expect(screen.getByTestId('ticket-remote-note')).toHaveTextContent('build@10.0.0.2');
     submit();
-    expect(onCreate).toHaveBeenCalledWith('작업', '/srv/app', REMOTE, false, expect.anything(), true, true);
+    expect(onCreate).toHaveBeenCalledWith('작업', '/srv/app', REMOTE, false, expect.anything(), true, true, undefined);
   });
 
   it('keeps a local selection local', async () => {
@@ -35,6 +35,6 @@ describe('NewTicketForm location', () => {
 
     expect(screen.queryByTestId('ticket-remote-note')).toBeNull();
     submit();
-    expect(onCreate).toHaveBeenCalledWith('작업', '/r/alive', undefined, true, expect.anything(), true, true);
+    expect(onCreate).toHaveBeenCalledWith('작업', '/r/alive', undefined, true, expect.anything(), true, true, undefined);
   });
 });

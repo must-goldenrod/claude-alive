@@ -1,6 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload, Ticket, TicketLocation } from '@claude-alive/core';
-import { isRemoteLocation, editedPathFrom } from '@claude-alive/core';
+import { isRemoteLocation, editedPathFrom, resolveGatewayModel } from '@claude-alive/core';
 import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
@@ -60,6 +60,7 @@ import { createTicketCommitter } from './ticketCommit.js';
 import { createBackendRegistry } from './orchestrator/backends.js';
 import { reloadDelegateCatalog, MODELS_FILE } from './orchestrator/delegateModels.js';
 import { createGatewaySettings } from './gatewaySettings.js';
+import { createEngineSettings, buildGatewayAgentEnv } from './engineSettings.js';
 import { ensureDelegateCli, resolveDelegateModel } from './orchestrator/delegateCli.js';
 import { readDelegations } from './orchestrator/delegationStore.js';
 import { createEvalStore } from './evalStore.js';
@@ -555,6 +556,35 @@ function rebuildGateway(): void {
 }
 rebuildGateway();
 
+// ── Agent engine (Claude login vs LLM gateway) ───────────────────────────────
+// Read at every spawn, so a save in Settings applies to the next ticket or
+// terminal without a restart. Tickets snapshot the engine at creation.
+const engineSettings = createEngineSettings({
+  file: join(dirname(SERVER_ENV_FILE), 'engine.json'),
+  gatewayConfigured: () => gateway.client !== undefined,
+  onChange: (settings) => {
+    console.log(`[engine] ${settings.engine} (standard → ${settings.presetModels.standard})`);
+    broadcaster.broadcast({ type: 'engine:update', settings });
+  },
+});
+if (engineSettings.get().engine === 'gateway') {
+  console.log(`[engine] new tickets and terminals run through the LLM gateway (standard → ${engineSettings.get().presetModels.standard})`);
+}
+/** Gateway env for a run pinned to `model`; gateway URL/key are read now, not at startup. */
+function gatewayAgentEnv(model: string): Record<string, string> {
+  return buildGatewayAgentEnv({
+    baseUrl: process.env.LITELLM_BASE_URL?.trim() || DEFAULT_LITELLM_BASE_URL,
+    apiKey: process.env.LITELLM_KEY?.trim() ?? '',
+    model,
+    fastModel: engineSettings.get().presetModels.fast,
+  });
+}
+/** A ticket runs on the engine it was created with, including retries and its gate. */
+function ticketAgentEnv(ticket: Ticket): Record<string, string> | undefined {
+  if (ticket.engine !== 'gateway') return undefined;
+  return gatewayAgentEnv(ticket.requestedModel ?? engineSettings.get().presetModels.standard);
+}
+
 // Auto-commit after a passing verdict. `CLAUDE_ALIVE_AUTO_COMMIT=0` disables it
 // server-wide; a single ticket opts out with `autoCommit: false` at creation.
 const autoCommitEnabled = process.env.CLAUDE_ALIVE_AUTO_COMMIT !== '0';
@@ -579,15 +609,17 @@ const askRemoteToCommit = (ticket: import('@claude-alive/core').Ticket) =>
 
 // The verifier runs at the SAME location as the main agent.
 const ticketVerifier = createVerifier({
-  run: ({ goal, cwd, location, orchestrated, flags }) =>
+  run: ({ goal, cwd, location, orchestrated, flags, extraEnv }) =>
     executorFor(location).spawn({
       goal,
       cwd,
       permissionMode: 'bypassPermissions',
       ...(flags && (flags.model || flags.effort) ? { run: flags } : {}),
       ...(orchestrated && delegateBinDir ? { pathPrepend: delegateBinDir } : {}),
+      ...(extraEnv ? { extraEnv } : {}),
     }).done,
   panel: panelFor,
+  agentEnv: ticketAgentEnv,
 });
 const ticketRunner = createTicketRunner({
   store: ticketStore,
@@ -641,9 +673,14 @@ const ticketRunner = createTicketRunner({
       },
       // Only the orchestrator run gets the delegate tool + a ticket tag; the
       // verifier deliberately omits CA_TICKET_ID so its re-delegations aren't logged.
-      ...(orchestrated && delegateBinDir
-        ? { pathPrepend: delegateBinDir, extraEnv: { CA_TICKET_ID: ticket.id } }
-        : {}),
+      ...(orchestrated && delegateBinDir ? { pathPrepend: delegateBinDir } : {}),
+      ...(() => {
+        const extraEnv = {
+          ...(orchestrated && delegateBinDir ? { CA_TICKET_ID: ticket.id } : {}),
+          ...ticketAgentEnv(ticket),
+        };
+        return Object.keys(extraEnv).length > 0 ? { extraEnv } : {};
+      })(),
     });
   },
   verify: (ticket, mainResult) => ticketVerifier.verify(ticket, mainResult),
@@ -798,7 +835,15 @@ const httpServer = createHttpServer({
     validateRemoteCreate: validateRemoteTicketCreate,
     list: () => ticketStore.list(),
     create: async (input) => {
-      const ticket = await ticketStore.create(input);
+      // Snapshot the engine chosen in Settings. The body's `model` is only a
+      // gateway pick; a Claude-engine ticket keeps its preset's pinned model.
+      const engine = engineSettings.get();
+      const { model: pickedModel, ...rest } = input;
+      const ticket = await ticketStore.create(
+        engine.engine === 'gateway'
+          ? { ...rest, engine: 'gateway', model: resolveGatewayModel(engine, rest.preset, pickedModel) }
+          : rest,
+      );
       ticketRunner.enqueue(ticket);
       broadcaster.broadcast({ type: 'ticket:update', ticket });
       // Mirror at creation, not first state change. A queued ticket waiting on
@@ -858,6 +903,15 @@ const httpServer = createHttpServer({
   saveProjectName,
   removeProjectName,
   efficio,
+  engineSettings: {
+    get: () => ({ settings: engineSettings.get(), gatewayConfigured: gateway.client !== undefined }),
+    save: (raw: unknown) => ({ settings: engineSettings.save(raw), gatewayConfigured: gateway.client !== undefined }),
+    models: async () => {
+      const client = gateway.client;
+      if (!client) return { ok: false, error: 'gateway not configured' };
+      return client.checkConnection();
+    },
+  },
   gatewaySettings: createGatewaySettings({
     envFile: SERVER_ENV_FILE,
     modelsFile: process.env.CA_DELEGATE_MODELS_FILE?.trim() && process.env.CA_DELEGATE_MODELS_FILE.trim() !== 'builtin'
@@ -999,6 +1053,10 @@ const broadcaster = new WSBroadcaster({
         claudeSessionId: msg.claudeSessionId,
         resumeSessionId: msg.resumeSessionId,
         displayName: resolvedDisplayName,
+        // Local Claude terminals follow the engine chosen in Settings at spawn time.
+        ...((msg.mode ?? 'claude') === 'claude' && msg.source !== 'ssh' && engineSettings.get().engine === 'gateway'
+          ? { extraEnv: gatewayAgentEnv(engineSettings.get().presetModels.standard) }
+          : {}),
       });
       // Persist Claude (non-SSH) sessions so they can be resumed after a restart.
       const effectiveClaudeId = msg.resumeSessionId ?? msg.claudeSessionId;

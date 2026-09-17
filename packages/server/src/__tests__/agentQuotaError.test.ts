@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyAgentQuotaError } from '../agentQuotaError.js';
+import { classifyAgentQuotaError, classifyGatewayError } from '../agentQuotaError.js';
 
 describe('classifyAgentQuotaError', () => {
   it.each([
@@ -31,5 +31,24 @@ describe('classifyAgentQuotaError', () => {
   it('leaves ordinary failures alone', () => {
     expect(classifyAgentQuotaError(['TypeError: x is undefined', 'at line 429'])).toBeUndefined();
     expect(classifyAgentQuotaError([null, undefined, ''])).toBeUndefined();
+  });
+});
+
+describe('classifyGatewayError', () => {
+  it.each([
+    'API Error: 401 {"error":{"message":"Authentication Error, Invalid proxy server token passed"}}',
+    'API Error: 502 Bad Gateway',
+    'API Error: Unable to connect to API (ECONNREFUSED)',
+  ])('flags %s as gateway-error', (text) => {
+    const r = classifyGatewayError([text]);
+    expect(r?.reason).toBe('gateway-error');
+    expect(r?.summary).toContain('게이트웨이');
+  });
+
+  it('leaves ordinary failures and the gateway 400 bad-model answer to the other classifiers', () => {
+    expect(classifyGatewayError(['tests failed'])).toBeUndefined();
+    const badModel = "API Error: 400 {'error': 'anthropic_messages: Invalid model name passed in model=claude-opus-5'}";
+    expect(classifyGatewayError([badModel])).toBeUndefined();
+    expect(classifyAgentQuotaError([badModel])?.reason).toBe('model-unavailable');
   });
 });

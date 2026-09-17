@@ -117,6 +117,8 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
         ...(input.autoCommit === false ? { autoCommit: false } : {}),
         ...(input.panelReview === false ? { panelReview: false } : {}),
         ...(profile ? { requestedModel: profile.model, effort: profile.effort } : {}),
+        // Gateway engine: same preset effort, the gateway model replaces the Claude id.
+        ...(input.engine === 'gateway' && input.model ? { engine: 'gateway' as const, requestedModel: input.model } : {}),
         state: 'queued',
         createdAt: now(),
       };
