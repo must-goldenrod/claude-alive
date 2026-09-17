@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../../App.tsx';
@@ -27,12 +27,14 @@ interface TicketsViewProps {
   primaryWorktreeIds: ReadonlySet<string>;
   /** Left edge of the shell's content area; the to-do dock starts past it. */
   leftInset: number;
+  /** While the board is open it owns "open ticket"; the modal must not pop up later. */
+  boardActive?: boolean;
 }
 
 const COLUMNS: DisplayStatus[] = ['active', 'decision', 'complete', 'closed', 'failed'];
 
 export function TicketsView({
-  active, subscribeRaw, selection, runs, worktrees, repositories, primaryWorktreeIds, leftInset,
+  active, subscribeRaw, selection, runs, worktrees, repositories, primaryWorktreeIds, leftInset, boardActive = false,
 }: TicketsViewProps) {
   const { t } = useTranslation();
   const { tickets, evaluations, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } = useTickets(active, subscribeRaw);
@@ -55,10 +57,12 @@ export function TicketsView({
 
   // "Open" on a ticket run means this view's detail modal. The shell switches
   // to this view and we pick the ticket up here, where the modal already lives.
+  const boardActiveRef = useRef(boardActive);
+  boardActiveRef.current = boardActive;
   useEffect(() => {
     const handler = (event: Event) => {
       const intent = (event as CustomEvent).detail as OpenRunIntent | undefined;
-      if (intent?.kind === 'ticket') setSelectedId(intent.ticketId);
+      if (intent?.kind === 'ticket' && !boardActiveRef.current) setSelectedId(intent.ticketId);
     };
     window.addEventListener(OPEN_RUN_EVENT, handler);
     return () => window.removeEventListener(OPEN_RUN_EVENT, handler);

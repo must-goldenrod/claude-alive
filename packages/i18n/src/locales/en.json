@@ -454,7 +454,8 @@
     "empty": {
       "noSession": "No linked session",
       "noData": "No data",
-      "pickTicket": "Select a ticket"
+      "pickTicket": "Select a ticket",
+      "notEvaluatedYet": "No evaluation yet — it is created when the ticket finishes"
     },
     "pickRun": "Pick a run in the sidebar"
   },

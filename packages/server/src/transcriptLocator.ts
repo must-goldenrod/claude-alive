@@ -11,7 +11,7 @@
  * fall back to hook data, never crash the conversation endpoint.
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parseTranscriptToConversation, type ConversationItem } from '@claude-alive/core';
@@ -53,8 +53,10 @@ export interface TranscriptConversation {
 export function readTranscriptConversation(
   sessionId: string,
   projectsRoot = defaultProjectsRoot(),
+  /** Path the hook reported (`transcript_path`); covers custom CLAUDE_CONFIG_DIR locations. */
+  knownPath?: string | null,
 ): TranscriptConversation | null {
-  const path = findTranscriptFile(sessionId, projectsRoot);
+  const path = knownPath && existsSync(knownPath) ? knownPath : findTranscriptFile(sessionId, projectsRoot);
   if (!path) return null;
   try {
     const lines = readFileSync(path, 'utf8').split('\n');

@@ -56,3 +56,23 @@ describe('readTranscriptConversation', () => {
     expect(readTranscriptConversation('sess-3', root)).toBeNull();
   });
 });
+
+describe('readTranscriptConversation with a hook-reported path', () => {
+  test('prefers the path the hook reported over the projects-root scan', () => {
+    const custom = mkdtempSync(join(tmpdir(), 'alive-custom-config-'));
+    try {
+      const path = join(custom, 'sess-9.jsonl');
+      writeFileSync(path, JSON.stringify({ type: 'user', message: { content: 'from custom dir' } }));
+      const result = readTranscriptConversation('sess-9', root, path);
+      expect(result?.transcriptPath).toBe(path);
+    } finally {
+      rmSync(custom, { recursive: true, force: true });
+    }
+  });
+
+  test('falls back to the scan when the reported path no longer exists', () => {
+    writeTranscript('-Users-x-repo-a', 'sess-10', [{ type: 'user', message: { content: 'hi' } }]);
+    const result = readTranscriptConversation('sess-10', root, join(root, 'gone.jsonl'));
+    expect(result?.transcriptPath).toContain('sess-10.jsonl');
+  });
+});
