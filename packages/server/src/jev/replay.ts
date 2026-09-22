@@ -19,6 +19,7 @@
  */
 import type { JevClient, JevQuestion, JevState } from './client.js';
 import { JevError, noulQuestion, scoreQuestion } from './client.js';
+import { isUnderRoot } from '../panel/panelPolicy.js';
 
 /** Lowest level first; the API returns a weighted mean over these indices. */
 export const COVERAGE_LEVELS = [
@@ -35,6 +36,8 @@ const MAX_GOAL_CHARS = 4_000;
 /** The subset of a stored `TicketEvaluation` this replay needs. */
 export interface ReplayRecord {
   ticketId: string;
+  /** The ticket's working directory, as `evalStore` records it. */
+  route?: string | undefined;
   goal?: string | undefined;
   /** The agent's own report. Absent on runs that never reported. */
   result?: string | undefined;
@@ -77,6 +80,42 @@ export function isReplayable(record: ReplayRecord): boolean {
   if (!record.goal || !record.result) return false;
   if (record.verdictPassed !== undefined) return true;
   return record.failureReason === 'verification-inconclusive';
+}
+
+/**
+ * The replay obeys the same boundary the live panels do.
+ *
+ * `panelPolicy` exists because a ticket's goal and report leave the machine when
+ * a panel reviews it, and some of them may not. This sends the same two fields
+ * to a fifth vendor, so it answers to the same policy — a replay is not a
+ * loophole because it runs offline.
+ *
+ * A record with no route is dropped as soon as ANY root is excluded: without a
+ * cwd there is no way to prove it is outside the boundary, and the policy in
+ * `panelPolicy.ts` is fail-closed on exactly that question.
+ */
+export function selectReplayable(
+  records: readonly ReplayRecord[],
+  excludedRoots: readonly string[],
+): ReplayRecord[] {
+  return records.filter((record) => {
+    if (!isReplayable(record)) return false;
+    if (excludedRoots.length === 0) return true;
+    if (!record.route) return false;
+    return !isUnderRoot(record.route, excludedRoots);
+  });
+}
+
+/**
+ * Whether this record's state was cut to fit the caps.
+ *
+ * Counted per run rather than assumed away: a clipped report is judged on its
+ * first 12,000 characters, and "did it cover the goal" is exactly the question a
+ * missing tail can flip. If the count is ever more than a handful, the cap is
+ * the finding, not the verdict.
+ */
+export function wasClipped(record: ReplayRecord): boolean {
+  return (record.goal ?? '').length > MAX_GOAL_CHARS || (record.result ?? '').length > MAX_REPORT_CHARS;
 }
 
 export function gateOutcomeOf(record: ReplayRecord): GateOutcome {
@@ -231,6 +270,8 @@ export interface ReplayAllResult {
   rows: ReplayRow[];
   errors: { ticketId: string; error: string }[];
   inputTokens: number;
+  /** How many records had their goal or report cut to fit the caps. */
+  clipped: number;
 }
 
 /**
@@ -248,6 +289,7 @@ export async function replayAll(
   const rows: ReplayRow[] = [];
   const errors: { ticketId: string; error: string }[] = [];
   let inputTokens = 0;
+  let clipped = 0;
   let next = 0;
   let done = 0;
 
@@ -256,6 +298,7 @@ export async function replayAll(
       const index = next++;
       const record = records[index];
       if (!record) return;
+      if (wasClipped(record)) clipped += 1;
       const result = await replayOne(client, record);
       if (result.row) rows.push(result.row);
       if (result.error) errors.push({ ticketId: record.ticketId, error: result.error });
@@ -267,5 +310,5 @@ export async function replayAll(
 
   await Promise.all(Array.from({ length: Math.min(concurrency, records.length) }, worker));
   rows.sort((a, b) => a.ticketId.localeCompare(b.ticketId));
-  return { rows, errors, inputTokens };
+  return { rows, errors, inputTokens, clipped };
 }

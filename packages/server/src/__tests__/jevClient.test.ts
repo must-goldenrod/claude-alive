@@ -245,3 +245,70 @@ describe('jevClientFromEnv', () => {
     expect(JSON.parse(fetchMock.mock.calls[0]![1]!.body as string).model).toBe('jev-preview');
   });
 });
+
+describe('createJevClient — retry', () => {
+  /** Immediate sleep so the retry path is exercised without a real delay. */
+  const noSleep = async (): Promise<void> => {};
+
+  it('retries once on 429 and returns the retried answer', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('rate limited', { status: 429 }))
+      .mockResolvedValueOnce(jsonResponse(OK_BODY));
+    const client = createJevClient({ apiKey: 'k', fetch: fetchMock as unknown as typeof fetch, sleep: noSleep });
+
+    const result = await client.decide('s', { met: noulQuestion('Met?', 'y', 'n') });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.answers.met).toEqual({ type: 'noul', noul: 0.06 });
+  });
+
+  it('retries once on a 5xx', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('upstream', { status: 503 }))
+      .mockResolvedValueOnce(jsonResponse(OK_BODY));
+    const client = createJevClient({ apiKey: 'k', fetch: fetchMock as unknown as typeof fetch, sleep: noSleep });
+
+    await client.decide('s', { met: noulQuestion('Met?', 'y', 'n') });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a 400 — a malformed request is malformed twice', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('bad', { status: 400 }));
+    const client = createJevClient({ apiKey: 'k', fetch: fetchMock as unknown as typeof fetch, sleep: noSleep });
+
+    await expect(client.decide('s', { met: noulQuestion('Met?', 'y', 'n') })).rejects.toThrow(JevError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after the single retry rather than looping', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('rate limited', { status: 429 }));
+    const client = createJevClient({ apiKey: 'k', fetch: fetchMock as unknown as typeof fetch, sleep: noSleep });
+
+    const error = await client.decide('s', { met: noulQuestion('Met?', 'y', 'n') }).catch((e: unknown) => e);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((error as JevError).status).toBe(429);
+  });
+
+  it('honours Retry-After when the server sends one', async () => {
+    const waits: number[] = [];
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('slow down', { status: 429, headers: { 'retry-after': '2' } }))
+      .mockResolvedValueOnce(jsonResponse(OK_BODY));
+    const client = createJevClient({
+      apiKey: 'k',
+      fetch: fetchMock as unknown as typeof fetch,
+      sleep: async (ms: number) => {
+        waits.push(ms);
+      },
+    });
+
+    await client.decide('s', { met: noulQuestion('Met?', 'y', 'n') });
+
+    expect(waits).toEqual([2000]);
+  });
+})

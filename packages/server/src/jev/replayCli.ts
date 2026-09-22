@@ -13,16 +13,27 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { loadServerEnv } from '../serverEnv.js';
+import { parsePanelExcludedRoots } from '../panel/panelPolicy.js';
 import { jevClientFromEnv } from './client.js';
 import {
   DEFAULT_THRESHOLDS,
-  isReplayable,
   replayAll,
+  selectReplayable,
   sweepThresholds,
   tallyAt,
   type ReplayRecord,
   type ReplayRow,
 } from './replay.js';
+
+/**
+ * Pinned, not `jev-latest`.
+ *
+ * A measurement compared against a floating alias is not a measurement: an
+ * upstream version bump would move the numbers with nothing in the repo
+ * changing. The live path may float; this one states which model produced the
+ * table. `JEV_MODEL` still overrides for a deliberate re-measurement.
+ */
+const MEASUREMENT_JEV_MODEL = 'jev-1.13.0';
 
 const EVALUATIONS_FILE = process.env.CA_EVAL_FILE ?? join(homedir(), '.claude-alive', 'evaluations.json');
 const OUTPUT_FILE = process.env.CA_JEV_REPLAY_OUT ?? join(homedir(), '.claude-alive', 'jev-replay.json');
@@ -75,22 +86,29 @@ function disagreements(rows: readonly ReplayRow[], threshold: number): string[] 
 
 async function main(): Promise<void> {
   loadServerEnv();
-  const client = jevClientFromEnv(process.env);
+  const client = jevClientFromEnv({ JEV_MODEL: MEASUREMENT_JEV_MODEL, ...process.env });
   if (!client) {
     console.error('TYPESAFE_API_KEY is not set (looked in the process env and ~/.claude-alive/.env).');
     process.exit(1);
   }
 
   const all = readRecords(EVALUATIONS_FILE);
+  const excludedRoots = parsePanelExcludedRoots(process.env);
   const limit = Number(process.env.CA_JEV_REPLAY_LIMIT ?? '0');
-  let records = all.filter(isReplayable);
+  let records = selectReplayable(all, excludedRoots);
+  const withheld = all.filter((r) => !records.includes(r)).length;
   if (limit > 0) records = records.slice(-limit);
 
   console.log(`records: ${all.length} total, ${records.length} replayable${limit > 0 ? ` (limited to ${limit})` : ''}`);
+  console.log(
+    excludedRoots.length > 0
+      ? `panel policy: ${excludedRoots.length} excluded root(s), ${withheld} record(s) withheld from the API`
+      : 'panel policy: no excluded roots configured (CLAUDE_ALIVE_PANEL_EXCLUDE)',
+  );
   console.log(`model: ${client.model}`);
 
   const started = Date.now();
-  const { rows, errors, inputTokens } = await replayAll(client, records, {
+  const { rows, errors, inputTokens, clipped } = await replayAll(client, records, {
     concurrency: Number(process.env.CA_JEV_REPLAY_CONCURRENCY ?? '4'),
     onProgress: ({ done, total }) => {
       if (done % 25 === 0 || done === total) console.log(`  ${done}/${total}`);
@@ -101,6 +119,7 @@ async function main(): Promise<void> {
   console.log('');
   console.log(`rows: ${rows.length}, errors: ${errors.length}, ${elapsed.toFixed(1)}s`);
   console.log(`input tokens: ${inputTokens} → $${((inputTokens / 1_000_000) * 0.042).toFixed(4)} (output is free)`);
+  console.log(`clipped to fit the caps: ${clipped}`);
   console.log('');
   for (const line of gateBaseline(rows)) console.log(line);
   console.log('');
@@ -123,7 +142,16 @@ async function main(): Promise<void> {
   writeFileSync(
     OUTPUT_FILE,
     JSON.stringify(
-      { generatedAt: new Date().toISOString(), model: client.model, inputTokens, rows, errors, tally: tallyAt(rows, best.threshold) },
+      {
+        generatedAt: new Date().toISOString(),
+        model: client.model,
+        inputTokens,
+        clipped,
+        excludedRoots,
+        rows,
+        errors,
+        tally: tallyAt(rows, best.threshold),
+      },
       null,
       2,
     ),

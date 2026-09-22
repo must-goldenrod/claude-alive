@@ -36,6 +36,33 @@ export const DEFAULT_JEV_MODEL = 'jev-latest';
 /** Default ceiling for one decision. The API answers in 70-500ms when healthy. */
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/**
+ * One retry, not a loop.
+ *
+ * A 429 or a 5xx is the gateway saying "not now", and the same request a moment
+ * later usually works — the completion gate learned the same lesson and retries
+ * once for the same reason. More than one retry is how a rate limit turns into a
+ * stampede, and a ticket that waits on a chain of backoffs has stopped being a
+ * fast decision, which is the only reason this model is here.
+ */
+const MAX_ATTEMPTS = 2;
+
+/** Used when the server does not name a wait of its own. */
+const RETRY_BACKOFF_MS = 500;
+
+/** Retry only what a second attempt can fix: never a 4xx we authored. */
+function isRetryable(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/** `Retry-After: 2` (seconds) → 2000ms. Ignored when absent or unparseable. */
+function retryAfterMs(response: Response): number | null {
+  const header = response.headers.get('retry-after');
+  if (!header) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
+}
+
 /** Every failure this module raises, so callers can catch one type and degrade. */
 export class JevError extends Error {
   /** HTTP status when the failure came from the API, undefined for local ones. */
@@ -132,6 +159,8 @@ export interface JevClientConfig {
   baseUrl?: string;
   model?: string;
   fetch?: typeof fetch;
+  /** Injectable so the retry path is testable without a real delay. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface JevClient {
@@ -265,6 +294,7 @@ export function createJevClient(config: JevClientConfig): JevClient {
   const baseUrl = (config.baseUrl ?? DEFAULT_JEV_BASE_URL).replace(/\/+$/, '');
   const model = config.model ?? DEFAULT_JEV_MODEL;
   const doFetch = config.fetch ?? fetch;
+  const sleep = config.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const url = `${baseUrl}/v1/systemone`;
 
   async function decide(
@@ -276,42 +306,54 @@ export function createJevClient(config: JevClientConfig): JevClient {
       throw new JevError('at least one question is required');
     }
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const body = JSON.stringify({ model, state, questions });
+    let text = '';
+    let status = 0;
 
-    let response: Response;
-    try {
-      response = await doFetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model, state, questions }),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      // Network failures and aborts both land here. The cause is named but the
-      // request — which carries the key in a header — is never included.
-      throw new JevError(`Jev request failed: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      clearTimeout(timer);
-    }
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
-    const text = await response.text().catch(() => '');
-    if (!response.ok) {
-      throw new JevError(`Jev returned HTTP ${response.status}: ${text.slice(0, 300)}`, response.status);
+      let response: Response;
+      try {
+        response = await doFetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        // Network failures and aborts both land here. The cause is named but the
+        // request — which carries the key in a header — is never included. Not
+        // retried: an abort means the caller's deadline is already spent.
+        throw new JevError(`Jev request failed: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        clearTimeout(timer);
+      }
+
+      text = await response.text().catch(() => '');
+      status = response.status;
+      if (response.ok) break;
+
+      if (attempt < MAX_ATTEMPTS && isRetryable(status)) {
+        await sleep(retryAfterMs(response) ?? RETRY_BACKOFF_MS);
+        continue;
+      }
+      throw new JevError(`Jev returned HTTP ${status}: ${text.slice(0, 300)}`, status);
     }
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
     } catch {
-      throw new JevError(`Jev returned a non-JSON body: ${text.slice(0, 120)}`, response.status);
+      throw new JevError(`Jev returned a non-JSON body: ${text.slice(0, 120)}`, status);
     }
 
-    const body = asRecord(parsed);
-    const rawAnswers = body ? asRecord(body.answers) : null;
+    const payload = asRecord(parsed);
+    const rawAnswers = payload ? asRecord(payload.answers) : null;
     if (!rawAnswers) throw new JevError('Jev response carried no answers');
 
     const answers: Record<string, JevAnswer> = {};
@@ -319,10 +361,10 @@ export function createJevClient(config: JevClientConfig): JevClient {
       answers[key] = parseAnswer(key, question, rawAnswers[key]);
     }
 
-    const usage = parseUsage(body?.usage);
-    const quota = parseQuota(body?.quota);
+    const usage = parseUsage(payload?.usage);
+    const quota = parseQuota(payload?.quota);
     return {
-      model: typeof body?.model === 'string' ? body.model : model,
+      model: typeof payload?.model === 'string' ? payload.model : model,
       answers,
       ...(usage ? { usage } : {}),
       ...(quota ? { quota } : {}),

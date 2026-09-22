@@ -4,6 +4,8 @@ import {
   buildVerificationQuestions,
   buildVerificationState,
   isReplayable,
+  selectReplayable,
+  wasClipped,
   sweepThresholds,
   tallyAt,
   type ReplayRow,
@@ -99,5 +101,43 @@ describe('sweepThresholds', () => {
     // d: gate passed, Jev fails, human says bad → gate miss Jev catches.
     expect(tally.gateFalseAlarmsJevAvoided).toBe(1);
     expect(tally.gateMissesJevCaught).toBe(1);
+  });
+});
+
+describe('selectReplayable — the panel policy applies to the replay too', () => {
+  const base = { ...record, route: '/repo/open' };
+
+  it('keeps records whose route is not excluded', () => {
+    expect(selectReplayable([base], ['/repo/secret']).map((r) => r.ticketId)).toEqual(['t-1']);
+  });
+
+  it('drops a record whose route sits under an excluded root', () => {
+    const secret = { ...base, ticketId: 't-2', route: '/repo/secret/nested' };
+    expect(selectReplayable([base, secret], ['/repo/secret']).map((r) => r.ticketId)).toEqual(['t-1']);
+  });
+
+  it('drops a record with no route at all when any root is excluded — fail closed', () => {
+    const unknown = { ...base, ticketId: 't-3', route: undefined };
+    expect(selectReplayable([unknown], ['/repo/secret'])).toEqual([]);
+  });
+
+  it('keeps a record with no route when nothing is excluded', () => {
+    const unknown = { ...base, ticketId: 't-3', route: undefined };
+    expect(selectReplayable([unknown], []).map((r) => r.ticketId)).toEqual(['t-3']);
+  });
+
+  it('still applies the replayability filter', () => {
+    const cancelled = { ...base, ticketId: 't-4', verdictPassed: undefined, failureReason: 'cancelled' };
+    expect(selectReplayable([cancelled], [])).toEqual([]);
+  });
+});
+
+describe('buildVerificationState — clipping is observable', () => {
+  it('reports that nothing was clipped for a short record', () => {
+    expect(wasClipped(record)).toBe(false);
+  });
+
+  it('reports a clipped record so the run can count them', () => {
+    expect(wasClipped({ ...record, result: 'x'.repeat(40_000) })).toBe(true);
   });
 });
