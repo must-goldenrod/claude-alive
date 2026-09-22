@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   extractVerdict,
   buildVerificationPrompt,
@@ -340,5 +340,110 @@ describe('createVerifier — Jev fallback for an inconclusive gate', () => {
     await v.verify(ticket, 'the report');
 
     expect(seen[0]).toEqual({ goal: 'g', report: 'the report' });
+  });
+});
+
+describe('createVerifier — deterministic page check', () => {
+  const outcome = (result: string | null): HeadlessOutcome => ({
+    exitCode: 0,
+    result: result === null ? null : { result, isError: false, sessionId: null, subtype: 'success', model: null },
+    sessionId: null,
+    stderr: '',
+  });
+  const passing = async () => outcome('{"passed": true, "reason": "ok"}');
+  const base = { goal: 'g', cwd: '/r', id: '1', state: 'verifying' as const, createdAt: 0 };
+
+  const okPage = {
+    url: 'http://localhost:3000/',
+    summary: { total: 2, pass: 2, fail: 0, error: 0, skip: 0, ok: true },
+    failed: [],
+    title: 'App',
+  };
+  const brokenPage = {
+    url: 'http://localhost:3000/',
+    summary: { total: 2, pass: 1, fail: 1, error: 0, skip: 0, ok: false },
+    failed: ['selector #root'],
+    title: '',
+  };
+
+  it('does not run when the ticket names no url', async () => {
+    const check = vi.fn();
+    const v = createVerifier({ run: passing, browserCheck: check, log: () => {} });
+
+    const verdict = await v.verify(base, 'r');
+
+    expect(check).not.toHaveBeenCalled();
+    expect(verdict.browser).toBeUndefined();
+  });
+
+  it('records the page result on the verdict', async () => {
+    const v = createVerifier({ run: passing, browserCheck: async () => okPage, log: () => {} });
+
+    const verdict = await v.verify({ ...base, verifyUrl: 'http://localhost:3000/' }, 'r');
+
+    expect(verdict.browser).toEqual(okPage);
+    expect(verdict.passed).toBe(true);
+    expect(verdict.flagged).toBeUndefined();
+  });
+
+  it('flags — but does not overturn — a verdict whose page is broken', async () => {
+    const v = createVerifier({ run: passing, browserCheck: async () => brokenPage, log: () => {} });
+
+    const verdict = await v.verify({ ...base, verifyUrl: 'http://localhost:3000/' }, 'r');
+
+    // The gate said PASS and still says PASS: a new signal does not get a veto
+    // before it has been measured against human labels.
+    expect(verdict.passed).toBe(true);
+    expect(verdict.flagged).toBe(true);
+    expect(verdict.reason).toContain('selector #root');
+  });
+
+  it('leaves a FAIL verdict failing, and still records the page', async () => {
+    const v = createVerifier({
+      run: async () => outcome('{"passed": false, "reason": "tests fail"}'),
+      browserCheck: async () => okPage,
+      log: () => {},
+    });
+
+    const verdict = await v.verify({ ...base, verifyUrl: 'http://localhost:3000/' }, 'r');
+
+    expect(verdict.passed).toBe(false);
+    expect(verdict.browser).toEqual(okPage);
+  });
+
+  it('never breaks completion when the browser itself fails', async () => {
+    const v = createVerifier({
+      run: passing,
+      browserCheck: async () => {
+        throw new Error('chrome not installed');
+      },
+      log: () => {},
+    });
+
+    const verdict = await v.verify({ ...base, verifyUrl: 'http://localhost:3000/' }, 'r');
+
+    expect(verdict.passed).toBe(true);
+    expect(verdict.browser).toBeUndefined();
+  });
+
+  it('also runs for a verdict that came from the Jev fallback', async () => {
+    const jev: JevClient = {
+      model: 'jev-1.13.0',
+      decide: async () => ({
+        model: 'jev-1.13.0',
+        answers: { met: { type: 'noul', noul: 0.9 }, coverage: { type: 'score', score: 3, confidence: 0.9 } },
+      }),
+    };
+    const v = createVerifier({
+      run: async () => outcome('not a verdict'),
+      jev,
+      browserCheck: async () => brokenPage,
+      log: () => {},
+    });
+
+    const verdict = await v.verify({ ...base, verifyUrl: 'http://localhost:3000/' }, 'r');
+
+    expect(verdict.browser).toEqual(brokenPage);
+    expect(verdict.flagged).toBe(true);
   });
 });

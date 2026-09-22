@@ -27,7 +27,7 @@ mkdir -p "$OUT/dist" "$OUT/scripts" "$OUT/ui"
 # the server bundle suddenly pulled in pino/fastify/better-sqlite3/franc-min — none
 # of which survive esbuild ESM bundling. Externalizing keeps the bundle small and
 # defers loading to install-time `node_modules`.
-EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --external:pino --external:pino-* --external:thread-stream --external:sonic-boom --external:on-exit-leak-free --external:real-require --external:atomic-sleep --external:safe-stable-stringify --external:fast-redact --external:quick-format-unescaped --external:process-warning --external:fastify --external:@fastify/* --external:franc-min --external:trigram-utils --external:n-gram --external:collapse-white-space --external:commander --external:picocolors --external:zod"
+EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --external:pino --external:pino-* --external:thread-stream --external:sonic-boom --external:on-exit-leak-free --external:real-require --external:atomic-sleep --external:safe-stable-stringify --external:fast-redact --external:quick-format-unescaped --external:process-warning --external:fastify --external:@fastify/* --external:@browserbasehq/* --external:@anthropic-ai/sdk --external:franc-min --external:trigram-utils --external:n-gram --external:collapse-white-space --external:commander --external:picocolors --external:zod"
 
 # Bundle the SAME CLI source the workspace uses (packages/cli/src/index.ts).
 # The CLI auto-detects whether the server entry lives at the workspace path
@@ -37,13 +37,13 @@ EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --ex
 echo "[3/6] Bundling CLI..."
 npx esbuild "$ROOT/packages/cli/src/index.ts" \
   --bundle --platform=node --format=esm \
-  --target=node20 --outfile="$OUT/dist/cli.js" \
+  --target=node22 --outfile="$OUT/dist/cli.js" \
   $EXTERNAL_FLAGS
 
 echo "[4/6] Bundling server..."
 npx esbuild "$ROOT/npm/server-entry.ts" \
   --bundle --platform=node --format=esm \
-  --target=node20 --outfile="$OUT/dist/server.js" \
+  --target=node22 --outfile="$OUT/dist/server.js" \
   $EXTERNAL_FLAGS
 
 # The orchestrator's sub-agent tool. `ensureDelegateCli()` writes a
@@ -53,7 +53,7 @@ npx esbuild "$ROOT/npm/server-entry.ts" \
 echo "[5/6] Bundling ca-delegate CLI..."
 npx esbuild "$ROOT/packages/server/src/orchestrator/delegateCli.ts" \
   --bundle --platform=node --format=esm \
-  --target=node20 --outfile="$OUT/dist/delegateCli.js" \
+  --target=node22 --outfile="$OUT/dist/delegateCli.js" \
   $EXTERNAL_FLAGS
 
 echo "[6/6] Copying assets..."
@@ -99,10 +99,12 @@ cat > "$OUT/package.json" << PKGJSON
     "franc-min": "^6.2.0",
     "commander": "^12.1.0",
     "picocolors": "^1.1.1",
-    "zod": "^4.3.6"
+    "zod": "~4.4.3",
+    "@browserbasehq/stagehand": "^4.1.0",
+    "@anthropic-ai/sdk": "^0.127.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18.0"
   },
   "repository": {
     "type": "git",

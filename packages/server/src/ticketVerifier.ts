@@ -23,7 +23,7 @@
  * first is the same lever that moved the LiteLLM panel from 0 vetoes to 2-of-7
  * on exactly those records.
  */
-import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/core';
+import type { BrowserVerification, Ticket, TicketVerification, TicketLocation } from '@claude-alive/core';
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
 import { reviewWithPanel } from './panel/verificationPanel.js';
 import { extractJsonObject, type Panel } from './panel/litellmPanel.js';
@@ -69,6 +69,16 @@ export interface VerifierOptions {
    * decides this too.
    */
   jev?: JevClient | ((ticket: Ticket) => JevClient | undefined);
+  /**
+   * Opens the ticket's `verifyUrl` and runs deterministic page checks.
+   *
+   * The gate and both panels judge the work from text the agent wrote about
+   * itself — which is the same material a confidently wrong report is made of.
+   * This is the one input that is not: a page either renders the elements or it
+   * does not, the answer is the same on every run, and it costs no tokens.
+   * Omitted = nothing changes.
+   */
+  browserCheck?: (ticket: Ticket) => Promise<BrowserVerification | null>;
   /** Extra agent env for a ticket's gate run (the gateway engine's env). */
   agentEnv?: (ticket: Ticket) => Record<string, string> | undefined;
   now?: () => number;
@@ -207,7 +217,7 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
           continue;
         }
         const verdict = extractVerdict(outcome.result?.result ?? null);
-        if (verdict) return await withPanel(ticket, mainResult, verdict);
+        if (verdict) return await withPage(ticket, await withPanel(ticket, mainResult, verdict));
         cause = describeGateFailure(outcome);
         log(`[verify] ticket #${ticket.seq} attempt ${attempt}/${GATE_ATTEMPTS}: ${cause}`);
       }
@@ -226,7 +236,7 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
         );
         if (fallback) {
           log(`[verify] ticket #${ticket.seq}: gate inconclusive, Jev verdict ${fallback.passed ? 'PASS' : 'FAIL'} (flagged)`);
-          return fallback;
+          return await withPage(ticket, fallback);
         }
         log(`[verify] ticket #${ticket.seq}: Jev fallback produced no verdict either`);
       }
@@ -234,6 +244,51 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
       throw new Error(cause || '검증기가 판정을 내지 못했습니다');
     },
   };
+
+  /**
+   * Attach what a browser actually saw, when the ticket asked for it.
+   *
+   * Deliberately additive. A failed page check sets `flagged` and names the
+   * failing checks in the reason, but never flips `passed`: the dev server may
+   * simply not be running, and a signal that has not been measured against
+   * human labels does not get to overturn one that has. Flagging first is the
+   * same path the verification panel took before it was allowed to dissent.
+   *
+   * Any failure of the browser itself is swallowed. Completion must not depend
+   * on Chrome being installed.
+   */
+  async function withPage(ticket: Ticket, verdict: TicketVerification): Promise<TicketVerification> {
+    if (!ticket.verifyUrl || !options.browserCheck) return verdict;
+
+    let browser: BrowserVerification | null;
+    try {
+      browser = await options.browserCheck(ticket);
+    } catch (error) {
+      log(
+        `[verify] ticket #${ticket.seq}: page check on ${ticket.verifyUrl} could not run: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+      return verdict;
+    }
+    if (!browser) return verdict;
+
+    if (browser.summary.ok) {
+      log(`[verify] ticket #${ticket.seq}: page check on ${browser.url} passed ${browser.summary.pass}/${browser.summary.total}`);
+      return { ...verdict, browser };
+    }
+
+    const failed = browser.failed.join(', ');
+    log(`[verify] ticket #${ticket.seq}: page check on ${browser.url} FAILED (${failed}) — flagged, verdict unchanged`);
+    return {
+      ...verdict,
+      browser,
+      flagged: true,
+      reason:
+        `${verdict.reason} ` +
+        `[페이지 점검] ${browser.url} 에서 ${browser.summary.fail + browser.summary.error}건 실패: ${failed}. ` +
+        '판정은 바꾸지 않았으니 사람이 확인해야 합니다.',
+    };
+  }
 
   async function withPanel(
     ticket: Ticket,
