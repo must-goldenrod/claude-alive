@@ -48,6 +48,7 @@ import { createBranch, deleteBranch, listBranches, switchBranch } from './gitBra
 import { ticketToUpsert, ticketRunOutcome, orphanTicketRunIds } from './runAdapters/ticketRuns.js';
 import { runIdForSession } from './runAttribution.js';
 import { createTicketRunner } from './ticketRunner.js';
+import { jevClientFromEnv } from './jev/client.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
 import { createFlagSupportCache } from './agentFlags.js';
@@ -602,6 +603,23 @@ const panelFor = (ticket: import('@claude-alive/core').Ticket) =>
   gateway.panel && panelAllowedFor(ticket, panelExcludedRoots) ? gateway.panel : undefined;
 
 /**
+ * Typed last seat on the completion gate (TYPESAFE_API_KEY).
+ *
+ * Reached only when the Claude gate produced no parseable verdict, which is a
+ * formatting failure currently recorded as a failed ticket. It answers to the
+ * same boundary as the panel — it sends the same goal and report to the same
+ * kind of third party — so an excluded ticket keeps failing closed.
+ */
+const jevClient = jevClientFromEnv(process.env);
+console.log(
+  jevClient
+    ? `[verify] Jev fallback armed (${jevClient.model}) — used only when the gate returns no verdict`
+    : '[verify] no TYPESAFE_API_KEY — a gate that returns no verdict still fails the ticket',
+);
+const jevFor = (ticket: import('@claude-alive/core').Ticket) =>
+  jevClient && panelAllowedFor(ticket, panelExcludedRoots) ? jevClient : undefined;
+
+/**
  * A remote ticket's changes land on the SSH host, where the server cannot run
  * git — so those tickets carry the commit instruction in their prompt instead.
  */
@@ -620,6 +638,7 @@ const ticketVerifier = createVerifier({
       ...(extraEnv ? { extraEnv } : {}),
     }).done,
   panel: panelFor,
+  jev: jevFor,
   agentEnv: ticketAgentEnv,
 });
 const ticketRunner = createTicketRunner({

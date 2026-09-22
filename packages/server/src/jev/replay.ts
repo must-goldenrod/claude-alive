@@ -17,21 +17,19 @@
  * kept per row and the boundary is swept afterwards, so the cutoff is read off
  * measured data instead of being guessed before the data exists.
  */
-import type { JevClient, JevQuestion, JevState } from './client.js';
-import { JevError, noulQuestion, scoreQuestion } from './client.js';
+import type { JevClient, JevState } from './client.js';
+import { JevError } from './client.js';
 import { isUnderRoot } from '../panel/panelPolicy.js';
+import {
+  MAX_GOAL_CHARS,
+  MAX_REPORT_CHARS,
+  buildVerificationQuestions,
+  buildVerificationState as buildState,
+} from './verificationQuestions.js';
 
-/** Lowest level first; the API returns a weighted mean over these indices. */
-export const COVERAGE_LEVELS = [
-  'none of the goal is addressed',
-  'one part of several is addressed',
-  'most of the goal is addressed',
-  'every part of the goal is addressed',
-] as const;
-
-/** Keep one pathological report from dominating the bill and the context. */
-const MAX_REPORT_CHARS = 12_000;
-const MAX_GOAL_CHARS = 4_000;
+// Re-exported so the replay's callers and tests keep one import site, while the
+// wording itself lives with the live fallback that must ask the same thing.
+export { COVERAGE_LEVELS, buildVerificationQuestions } from './verificationQuestions.js';
 
 /** The subset of a stored `TicketEvaluation` this replay needs. */
 export interface ReplayRecord {
@@ -60,10 +58,6 @@ export interface ReplayRow {
   gate: GateOutcome;
   /** The human's label, or null when they never judged this ticket. */
   human: 'good' | 'bad' | null;
-}
-
-function clip(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, max)}\n…(truncated)`;
 }
 
 /**
@@ -130,40 +124,9 @@ export function humanLabelOf(record: ReplayRecord): 'good' | 'bad' | null {
   return record.label === 'good' || record.label === 'bad' ? record.label : null;
 }
 
-/**
- * Goal and report travel as separate fields rather than one concatenated
- * string: the question is whether the second satisfies the first, and the API
- * takes structured state, so the boundary between them should not be something
- * the model has to infer from formatting.
- */
+/** The state for one stored record, built exactly as the live fallback builds it. */
 export function buildVerificationState(record: ReplayRecord): Record<string, unknown> {
-  return {
-    goal: clip(record.goal ?? '', MAX_GOAL_CHARS),
-    report: clip(record.result ?? '', MAX_REPORT_CHARS),
-  };
-}
-
-/**
- * The two questions.
- *
- * `met` is the gate's own question, worded from the gate's measured lesson: the
- * failure mode that survived 96.8% PASS precision was reports that were accurate
- * about the *wrong work*, so the criteria name that case explicitly rather than
- * asking about correctness.
- *
- * `coverage` exists because a goal with several parts is the other measured
- * failure. A rubric separates "solved one of three" from "solved none", which a
- * yes/no collapses.
- */
-export function buildVerificationQuestions(): Record<string, JevQuestion> {
-  return {
-    met: noulQuestion(
-      'Did the agent actually achieve the goal it was given, judging only from its own report?',
-      'the report covers every part of the goal it was given',
-      'the report is coherent but solves a different or smaller problem than the goal, or is too thin to judge',
-    ),
-    coverage: scoreQuestion('How much of the goal does the report account for?', COVERAGE_LEVELS),
-  };
+  return buildState(record.goal ?? '', record.result ?? '');
 }
 
 export interface ReplayTally {
