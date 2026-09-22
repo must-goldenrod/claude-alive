@@ -1239,7 +1239,8 @@
     "sessionFilterWaiting": "Waiting",
     "sessionFilterDone": "Ended",
     "sessionNoProject": "No folder",
-    "sessionNoActivity": "No activity yet"
+    "sessionNoActivity": "No activity yet",
+    "browseGitBadge": "git"
   },
   "appearance": {
     "toggle": "Theme: {{current}} (click for {{next}})",

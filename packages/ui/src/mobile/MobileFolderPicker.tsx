@@ -127,7 +127,7 @@ export function MobileFolderPicker({ projects, onPick, selected }: MobileFolderP
               onClick={() => void go(entry.path)}
             >
               <span style={{ ...clamp1, flex: 1 }}>{entry.name}</span>
-              {entry.isGit && <span style={{ ...TYPE.badge, color: COLORS.accent }}>git</span>}
+              {entry.isGit && <span style={{ ...TYPE.badge, color: COLORS.accent }}>{t('mobile.browseGitBadge')}</span>}
               <span aria-hidden="true" style={{ color: COLORS.muted }}>›</span>
             </button>
             <button

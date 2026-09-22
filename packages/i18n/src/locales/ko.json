@@ -1238,7 +1238,8 @@
     "sessionFilterWaiting": "대기",
     "sessionFilterDone": "종료",
     "sessionNoProject": "폴더 없음",
-    "sessionNoActivity": "기록 없음"
+    "sessionNoActivity": "기록 없음",
+    "browseGitBadge": "git"
   },
   "appearance": {
     "toggle": "화면 모드: {{current}} (클릭 시 {{next}})",
