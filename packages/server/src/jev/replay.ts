@@ -179,6 +179,15 @@ export interface ReplayTally {
   /** Gate said PASS, Jev says fail, human says bad. */
   gateMissesJevCaught: number;
   agreementWithHuman: number;
+  /**
+   * Mean of the per-class hit rates.
+   *
+   * Plain agreement is useless here: the labelled records run 341 good to 8 bad,
+   * so "pass everything" scores 97.7% while separating nothing. Balanced
+   * accuracy scores both classes equally, and 0.5 is the coin flip whatever the
+   * imbalance.
+   */
+  balancedAccuracy: number;
 }
 
 /** Confusion counts at one boundary. `noul >= threshold` is a Jev pass. */
@@ -204,6 +213,12 @@ export function tallyAt(rows: readonly ReplayRow[], threshold: number): ReplayTa
   }
 
   const correct = truePass + trueFail;
+  const goodTotal = truePass + falseFail;
+  const badTotal = trueFail + falsePass;
+  // With only one class present there is nothing to balance; 0 keeps such a
+  // tally from ever winning a comparison.
+  const balancedAccuracy =
+    goodTotal === 0 || badTotal === 0 ? 0 : (truePass / goodTotal + trueFail / badTotal) / 2;
   return {
     threshold,
     judged: judged.length,
@@ -214,11 +229,30 @@ export function tallyAt(rows: readonly ReplayRow[], threshold: number): ReplayTa
     gateFalseAlarmsJevAvoided,
     gateMissesJevCaught,
     agreementWithHuman: judged.length === 0 ? 0 : correct / judged.length,
+    balancedAccuracy,
   };
 }
 
 /** Default sweep: fine near the ends, where a usable cutoff is most likely to sit. */
 export const DEFAULT_THRESHOLDS = [0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.98] as const;
+
+/**
+ * The cut worth reporting, or null when the data cannot name one.
+ *
+ * Chosen by balanced accuracy, never by plain agreement: on this dataset the
+ * highest-agreement threshold is whichever one passes every record, and printing
+ * that as "best" invites reading a degenerate cut as a working one. Null when
+ * the human labelled only one class, because then no threshold separates
+ * anything and any answer would be an artefact.
+ */
+export function bestThreshold(
+  rows: readonly ReplayRow[],
+  thresholds: readonly number[] = DEFAULT_THRESHOLDS,
+): ReplayTally | null {
+  const tallies = sweepThresholds(rows, thresholds).filter((t) => t.balancedAccuracy > 0);
+  if (tallies.length === 0) return null;
+  return tallies.reduce((a, b) => (b.balancedAccuracy > a.balancedAccuracy ? b : a));
+}
 
 export function sweepThresholds(
   rows: readonly ReplayRow[],

@@ -37,3 +37,17 @@ describe('panelAllowedFor', () => {
     expect(panelAllowedFor({ cwd: '/secret/repo', panelReview: true }, ['/secret'])).toBe(false);
   });
 });
+
+describe('isUnderRoot — case folding on a case-insensitive filesystem', () => {
+  it('matches a route whose case differs from the configured root', () => {
+    // macOS and Windows resolve /Users/x and /users/x to the SAME directory, and
+    // evaluation records carry both spellings. A boundary that misses one of them
+    // lets excluded content out.
+    expect(isUnderRoot('/users/dev/repo', ['/Users/dev'])).toBe(true);
+    expect(isUnderRoot('/Users/dev/repo', ['/users/dev'])).toBe(true);
+  });
+
+  it('still refuses a sibling that merely shares a prefix, whatever the case', () => {
+    expect(isUnderRoot('/users/development', ['/Users/dev'])).toBe(false);
+  });
+});
