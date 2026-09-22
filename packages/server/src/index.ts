@@ -49,6 +49,7 @@ import { ticketToUpsert, ticketRunOutcome, orphanTicketRunIds } from './runAdapt
 import { runIdForSession } from './runAttribution.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { jevClientFromEnv } from './jev/client.js';
+import { guardJevClient, jevEnabled } from './jev/guard.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
 import { createFlagSupportCache } from './agentFlags.js';
@@ -610,14 +611,21 @@ const panelFor = (ticket: import('@claude-alive/core').Ticket) =>
  * same boundary as the panel — it sends the same goal and report to the same
  * kind of third party — so an excluded ticket keeps failing closed.
  */
-const jevClient = jevClientFromEnv(process.env);
+// Access to Jev is free for this account *today*. `guardJevClient` is what makes
+// that a condition rather than an assumption: the first billing or revocation
+// signal shuts the seat off for the life of the process, and `CA_JEV_FALLBACK=off`
+// shuts it off without touching the key file.
+const jevClient = jevEnabled(process.env) ? guardJevClient(jevClientFromEnv(process.env)!) : undefined;
 console.log(
   jevClient
-    ? `[verify] Jev fallback armed (${jevClient.model}) — used only when the gate returns no verdict`
-    : '[verify] no TYPESAFE_API_KEY — a gate that returns no verdict still fails the ticket',
+    ? `[verify] Jev fallback armed (${jevClient.model}) — only when the gate returns no verdict; ` +
+        'disarms itself on HTTP 401/402/403 or an exhausted quota (CA_JEV_FALLBACK=off to disable)'
+    : '[verify] Jev fallback off — a gate that returns no verdict still fails the ticket',
 );
 const jevFor = (ticket: import('@claude-alive/core').Ticket) =>
-  jevClient && panelAllowedFor(ticket, panelExcludedRoots) ? jevClient : undefined;
+  jevClient && jevClient.disarmedReason === null && panelAllowedFor(ticket, panelExcludedRoots)
+    ? jevClient
+    : undefined;
 
 /**
  * A remote ticket's changes land on the SSH host, where the server cannot run
