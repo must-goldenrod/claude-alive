@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WSClientMessage, WSServerMessage } from '@claude-alive/core';
 import type { RawMessageSubscribe } from '../App.tsx';
 import { MobileSessionList, type MobileSession } from './MobileSessionList.tsx';
 import { MobileTerminal } from './MobileTerminal.tsx';
-import { MobileSpawnPicker } from './MobileSpawnPicker.tsx';
+import { MobileSpawnPicker, type MobileSpawnOptions } from './MobileSpawnPicker.tsx';
 import { createTermFeed, type TermFeed } from './termFeed.ts';
 import { projectName } from '../views/tickets/ticketDisplay.ts';
+import { makeTabId } from '../views/chat/tabId.ts';
+import { mergeSessions, type TerminalRow } from './mobileSessionMerge.ts';
+import { rememberProject } from './recentProjects.ts';
+import { autoStartCommand } from './terminalPresets.ts';
 import type { MobileProject } from './types.ts';
 import type { RemoteTerminalLevel } from './capabilities.ts';
 import { primaryButton, actionBar } from './styles.ts';
@@ -22,10 +26,13 @@ export interface MobileSessionsProps {
   terminalLevel: RemoteTerminalLevel;
   /** Where a phone-started shell may run; only used at the `shell` level. */
   projects: MobileProject[];
+  /** Live socket state. A false→true edge means every attach has to be redone. */
+  connected: boolean;
 }
 
 interface TreeSession {
   sessionId: string;
+  providerSessionId?: string;
   title?: string;
   state?: string;
   pendingApprovals?: number;
@@ -50,6 +57,7 @@ export function flattenTree(tree: Tree): MobileSession[] {
       for (const session of workspace.sessions ?? []) {
         out.push({
           sessionId: session.sessionId,
+          ...(session.providerSessionId ? { providerSessionId: session.providerSessionId } : {}),
           displayName: session.title ?? '',
           state: session.state ?? 'unknown',
           cwd,
@@ -66,12 +74,17 @@ export function flattenTree(tree: Tree): MobileSession[] {
  * The sessions half of the phone app: what is running on this machine, and its
  * terminal.
  *
- * Tapping a session opens the pty directly. The structured conversation was in
- * between for a while, but it is a second copy of what the terminal already
- * shows and a phone has room for one of them — and only the terminal can be
- * answered.
+ * The ptys were always owned by the server, but the *list* of them lived only
+ * in the browser that opened them — so a phone could not see a desktop's
+ * terminals and opened a parallel set of its own, with ids in a different
+ * namespace. The server now publishes its terminal index and the phone mints
+ * the same kind of tab id, so both devices are looking at one set.
+ *
+ * A pty has one grid shared by every viewer, so the phone fits the grid to its
+ * screen only for terminals it started itself (`origin: 'mobile'`). Fitting a
+ * desktop's terminal would reflow the desktop's window.
  */
-export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: MobileSessionsProps) {
+export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, connected }: MobileSessionsProps) {
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<MobileSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,12 +99,22 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
   }, []);
   const [exited, setExited] = useState(false);
   const [picking, setPicking] = useState(false);
+  /** Set once per spawn; typed as soon as the shell produces a prompt. */
+  const autoStartRef = useRef<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v2/workspace-tree`);
-      if (!res.ok) return;
-      setSessions(flattenTree((await res.json()) as Tree));
+      const [treeRes, termRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v2/workspace-tree`).catch(() => null),
+        // Older servers have no terminal index; the catalog alone still works.
+        fetch(`${API_BASE}/api/terminals`).catch(() => null),
+      ]);
+      const catalog = treeRes?.ok ? flattenTree((await treeRes.json()) as Tree) : [];
+      const terminals = termRes?.ok
+        ? (((await termRes.json()) as { terminals?: TerminalRow[] }).terminals ?? [])
+        : [];
+      if (!treeRes?.ok && !termRes?.ok) return;
+      setSessions(mergeSessions(catalog, terminals));
     } catch {
       /* offline; the next tick retries */
     } finally {
@@ -114,11 +137,20 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
       if (msg.type === 'terminal:output' && msg.tabId === attachedTab) {
         feed.push({ kind: 'data', data: msg.data });
         setHasOutput(true);
+        // The shell is up and talking: type the preset the user asked for.
+        const command = autoStartRef.current;
+        if (command) {
+          autoStartRef.current = null;
+          send({ type: 'terminal:input', tabId: attachedTab, data: `${command}\r` });
+        }
       } else if (msg.type === 'terminal:restore' && msg.tabId === attachedTab) {
-        // A replay is the whole scrollback: start from a clean screen.
+        // A replay is the whole scrollback: start from a clean screen. It also
+        // proves the pty is alive, which is the only way out of `exited` after
+        // a dropped socket reported it missing.
         feed.push({ kind: 'reset' });
         feed.push({ kind: 'data', data: msg.data });
         if (msg.data) setHasOutput(true);
+        setExited(false);
       } else if (msg.type === 'terminal:size' && msg.tabId === attachedTab) {
         feed.push({ kind: 'size', cols: msg.cols, rows: msg.rows });
       } else if (msg.type === 'terminal:exited' && msg.tabId === attachedTab) {
@@ -127,20 +159,63 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
         setExited(true);
       }
     });
-  }, [attachedTab, subscribeRaw, feed]);
+  }, [attachedTab, subscribeRaw, feed, send]);
 
-  /** Open a session straight into its pty; a session Alive never spawned has none. */
+  /**
+   * Re-attach after the socket comes back, and after the app returns to the
+   * foreground.
+   *
+   * Backgrounding a phone browser closes the WebSocket within seconds. The pty
+   * keeps running — the server owns it — but this client is no longer a
+   * subscriber, so nothing arrives and the last thing it heard was "missing".
+   * That is the whole of "this terminal has ended": a live session behind a
+   * stale subscription. Re-attaching is the fix; the server replies with the
+   * scrollback and the handler above clears `exited`.
+   */
+  const reattach = useCallback(() => {
+    if (!attachedTab) return;
+    clearOutput();
+    send({ type: 'terminal:attach', tabId: attachedTab });
+    void reload();
+  }, [attachedTab, send, clearOutput, reload]);
+
+  const wasConnected = useRef(connected);
+  useEffect(() => {
+    if (connected && !wasConnected.current) reattach();
+    wasConnected.current = connected;
+  }, [connected, reattach]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') reattach();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [reattach]);
+
+  /** Open a session straight into its pty. */
   const openSession = useCallback(async (session: MobileSession) => {
     setOpen(session);
     clearOutput();
     setExited(false);
     setAttachedTab(null);
+    autoStartRef.current = null;
+
+    // The merged list already knows the tab for most rows; only a catalog-only
+    // row still needs the lookup.
+    if (session.tabId) {
+      setAttachedTab(session.tabId);
+      send({ type: 'terminal:attach', tabId: session.tabId });
+      if (session.terminalLive === false) setExited(true);
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/v2/sessions/${encodeURIComponent(session.sessionId)}/terminal`);
       const data = res.ok ? ((await res.json()) as { live?: boolean; tabId?: string }) : null;
-      if (data?.live && data.tabId) {
+      if (data?.tabId) {
         setAttachedTab(data.tabId);
         send({ type: 'terminal:attach', tabId: data.tabId });
+        if (!data.live) setExited(true);
       } else {
         setExited(true);
       }
@@ -150,36 +225,51 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects }: 
   }, [send, clearOutput]);
 
   /**
-   * Start a shell from the phone. Sized 60x24 rather than inherited: the pty
-   * wraps to the columns it is told about, and a phone reading 80-column output
-   * is a wall of broken lines.
+   * Start a shell from the phone.
+   *
+   * The tab id comes from the same generator the desktop uses, so the terminal
+   * appears in the desktop's index too rather than in a `phone-*` namespace of
+   * its own. `origin: 'mobile'` records that this device may size the grid;
+   * the size itself is reported by the pane once it has measured.
    */
-  const spawn = useCallback((cwd: string) => {
-    const tabId = `phone-${Date.now().toString(36)}`;
+  const spawn = useCallback((cwd: string, options: MobileSpawnOptions) => {
+    const tabId = makeTabId();
     setPicking(false);
     clearOutput();
     setExited(false);
-    setOpen({ sessionId: tabId, displayName: projectName(cwd), state: 'running', cwd, lastActivityAt: Date.now(), needsApproval: false });
+    rememberProject({ path: cwd, name: projectName(cwd) });
+    autoStartRef.current = options.autoStart ? autoStartCommand() : null;
+    setOpen({
+      sessionId: tabId, displayName: projectName(cwd), state: 'running', cwd,
+      lastActivityAt: Date.now(), needsApproval: false, tabId, origin: 'mobile', terminalLive: true,
+    });
     setAttachedTab(tabId);
-    send({ type: 'terminal:spawn', tabId, cwd, mode: 'shell', source: 'local' });
-    send({ type: 'terminal:resize', tabId, cols: 60, rows: 24 });
+    send({ type: 'terminal:spawn', tabId, cwd, mode: 'shell', source: 'local', origin: 'mobile' });
   }, [send, clearOutput]);
 
   const close = () => { setOpen(null); setAttachedTab(null); clearOutput(); };
 
+  const canType = attachedTab !== null && (terminalLevel === 'input' || terminalLevel === 'shell');
+
   if (open) {
     return (
       <MobileTerminal
-        title={open.displayName || open.sessionId.slice(0, 12)}
-        subtitle={projectName(open.cwd)}
+        title={projectName(open.cwd) || open.displayName || open.sessionId.slice(0, 12)}
+        subtitle={open.displayName}
         feed={feed}
         hasOutput={hasOutput}
-        canType={attachedTab !== null && (terminalLevel === 'input' || terminalLevel === 'shell')}
+        canType={canType}
         exited={exited}
+        // Only our own pty may be reshaped; a desktop's grid is not ours to change.
+        owned={open.origin === 'mobile'}
+        lastActivityAt={open.lastActivityAt}
         onBack={close}
         onSend={(data) => attachedTab && send({ type: 'terminal:input', tabId: attachedTab, data })}
         onKey={(sequence) => attachedTab && send({ type: 'terminal:input', tabId: attachedTab, data: sequence })}
-        onRefresh={attachedTab ? () => { clearOutput(); send({ type: 'terminal:attach', tabId: attachedTab }); } : undefined}
+        {...(open.origin === 'mobile' && canType
+          ? { onFit: (cols: number, rows: number) => attachedTab && send({ type: 'terminal:resize', tabId: attachedTab, cols, rows }) }
+          : {})}
+        onRefresh={attachedTab ? reattach : undefined}
       />
     );
   }

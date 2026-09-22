@@ -5,6 +5,8 @@ import { loadPresets, SSH_PRESETS_CHANGED } from '../views/chat/sshPresets.ts';
 import { RUN_PRESET_IDS, DEFAULT_RUN_PRESET } from '../views/tickets/runPresets.ts';
 import { COLORS, screen, topBar, body, primaryButton, secondaryButton, actionBar, input, label } from './styles.ts';
 import { Panel, Badge } from './parts.tsx';
+import { MobileFolderPicker } from './MobileFolderPicker.tsx';
+import { rememberProject } from './recentProjects.ts';
 import type { MobileProject, MobileCreateFn } from './types.ts';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
@@ -101,6 +103,8 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
   const [panelReview, setPanelReview] = useState(true);
   const [branches, setBranches] = useState<{ current?: string; branches: string[] }>({ branches: [] });
   const [sheet, setSheet] = useState<'folder' | 'host' | 'branch' | null>(null);
+  // A browsed folder is not in `projects`, so its name has to be carried along.
+  const [pickedName, setPickedName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,10 +149,15 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
     });
     setBusy(false);
     if (message) setError(message);
-    else onCancel();
+    else {
+      // Only a folder that actually started a ticket is worth offering next
+      // time; remembering every tap would fill the list with mis-taps.
+      if (!isRemote && cwd) rememberProject({ path: cwd, name: folderName || cwd });
+      onCancel();
+    }
   };
 
-  const folderName = cwd ? projects.find((p) => p.path === cwd)?.name ?? cwd : '';
+  const folderName = cwd ? (projects.find((p) => p.path === cwd)?.name ?? pickedName ?? '') || cwd : '';
 
   return (
     <div style={screen}>
@@ -272,25 +281,11 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
 
       {sheet === 'folder' && (
         <Sheet title={t('mobile.pickFolder')} onClose={() => setSheet(null)}>
-          {projects.length === 0 ? (
-            <Panel>{t('mobile.noProjects')}</Panel>
-          ) : (
-            projects.map((project) => (
-              <button
-                key={project.path}
-                aria-label={project.name}
-                onClick={() => { setCwd(project.path); setSheet(null); }}
-                style={{
-                  display: 'block', width: '100%', minHeight: 48, padding: '0 14px', marginBottom: 6,
-                  borderRadius: 10, textAlign: 'left', cursor: 'pointer', fontSize: 15,
-                  border: `1px solid ${cwd === project.path ? COLORS.accent : COLORS.border}`,
-                  background: COLORS.surface, color: COLORS.text,
-                }}
-              >
-                {project.name}
-              </button>
-            ))
-          )}
+          <MobileFolderPicker
+            projects={projects}
+            selected={cwd}
+            onPick={(project) => { setCwd(project.path); setPickedName(project.name); setSheet(null); }}
+          />
         </Sheet>
       )}
 

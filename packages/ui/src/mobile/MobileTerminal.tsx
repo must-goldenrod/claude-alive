@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { COLORS, screen, topBar, secondaryButton, input, TYPE, clamp1 } from './styles.ts';
-import { PullToRefresh } from './PullToRefresh.tsx';
 import { MobileXterm } from './MobileXterm.tsx';
+import { loadPresets } from './terminalPresets.ts';
+import { formatStamp } from './time.ts';
 import type { TermFeed } from './termFeed.ts';
 
 export interface MobileTerminalProps {
@@ -16,9 +17,15 @@ export interface MobileTerminalProps {
   /** False at the `watch` level: the pane renders, the keyboard does not. */
   canType: boolean;
   exited: boolean;
+  /** This device started the pty, so the grid may be fitted to the phone. */
+  owned?: boolean;
+  /** Wall-clock ms of the last traffic, shown in the header. */
+  lastActivityAt?: number;
   onBack: () => void;
   onSend: (data: string) => void;
   onKey: (sequence: string) => void;
+  /** The grid this phone wants. Only called for a terminal this device owns. */
+  onFit?: (cols: number, rows: number) => void;
   /** Re-attach and replay the scrollback — the only refresh a live pty has. */
   onRefresh?: () => void | Promise<void>;
 }
@@ -43,10 +50,19 @@ const KEYS: ReadonlyArray<{ label: string; sequence: string }> = [
  * Claude session keeps its layout. Input still goes a line at a time: typing
  * into a character-level emulator with a soft keyboard is worse than useless —
  * "read what it said, answer the prompt, press Ctrl-C" is what a phone is for.
+ *
+ * The output pane is deliberately NOT wrapped in `PullToRefresh`. It was, and
+ * that made the most common gesture in a terminal — drag down to read what
+ * scrolled past — fire a refetch instead of scrolling, so the scrollback was
+ * unreachable. Refresh is a button here; the drag belongs to the emulator.
  */
-export function MobileTerminal({ title, subtitle, feed, hasOutput, canType, exited, onBack, onSend, onKey, onRefresh }: MobileTerminalProps) {
+export function MobileTerminal({
+  title, subtitle, feed, hasOutput, canType, exited, owned = false, lastActivityAt,
+  onBack, onSend, onKey, onFit, onRefresh,
+}: MobileTerminalProps) {
   const { t } = useTranslation();
   const [line, setLine] = useState('');
+  const presets = useMemo(() => loadPresets(), []);
 
   const send = () => {
     const text = line.trim();
@@ -57,7 +73,7 @@ export function MobileTerminal({ title, subtitle, feed, hasOutput, canType, exit
 
   return (
     <div style={screen}>
-      <div style={{ ...topBar, alignItems: 'flex-start' }}>
+      <div style={{ ...topBar, alignItems: 'flex-start', padding: '10px 12px' }}>
         <button
           onClick={onBack}
           aria-label={t('mobile.back')}
@@ -65,24 +81,52 @@ export function MobileTerminal({ title, subtitle, feed, hasOutput, canType, exit
         >
           ‹
         </button>
-        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
           <span style={{ ...TYPE.title, ...clamp1 }}>{title}</span>
-          {subtitle && <span style={{ ...TYPE.meta, ...clamp1, color: COLORS.muted }}>{subtitle}</span>}
+          <span style={{ ...TYPE.meta, ...clamp1, color: COLORS.muted }}>
+            {[subtitle, formatStamp(lastActivityAt)].filter(Boolean).join(' · ')}
+          </span>
         </span>
+        {onRefresh && (
+          <button
+            onClick={() => void onRefresh()}
+            aria-label={t('mobile.terminalReattach')}
+            style={{ ...secondaryButton, minHeight: 36, padding: '0 10px', flexShrink: 0 }}
+          >
+            ↻
+          </button>
+        )}
       </div>
 
-      <PullToRefresh onRefresh={onRefresh} style={{ padding: '8px 4px' }}>
-        {!hasOutput && (
-          <p style={{ ...TYPE.meta, color: COLORS.muted, margin: '0 8px 8px' }}>{t('mobile.terminalAttaching')}</p>
-        )}
-        <MobileXterm feed={feed} />
-        {exited && (
-          <p style={{ ...TYPE.meta, color: 'var(--accent-red)', margin: '12px 8px 0' }}>{t('mobile.terminalGone')}</p>
-        )}
-      </PullToRefresh>
+      {!hasOutput && (
+        <p style={{ ...TYPE.meta, color: COLORS.muted, margin: '8px 12px 0' }}>{t('mobile.terminalAttaching')}</p>
+      )}
+
+      <MobileXterm feed={feed} owned={owned} {...(onFit ? { onFit } : {})} />
+
+      {exited && (
+        <p style={{ ...TYPE.meta, color: 'var(--accent-red)', margin: '8px 12px' }}>{t('mobile.terminalGone')}</p>
+      )}
 
       {canType ? (
         <div style={{ borderTop: `1px solid ${COLORS.border}`, padding: '8px 12px calc(8px + env(safe-area-inset-bottom))', flexShrink: 0 }}>
+          {presets.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
+              {presets.map((preset) => (
+                <button
+                  key={preset.id}
+                  title={preset.command}
+                  onClick={() => onSend(`${preset.command}\r`)}
+                  style={{
+                    ...secondaryButton, ...TYPE.button, minHeight: 36, padding: '0 12px', whiteSpace: 'nowrap',
+                    borderColor: COLORS.accent, color: COLORS.accent,
+                  }}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8 }}>
             {KEYS.map((key) => (
               <button

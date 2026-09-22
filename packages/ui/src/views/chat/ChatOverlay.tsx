@@ -673,6 +673,52 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
     setActiveTabId(persisted[persisted.length - 1]!.tabId);
   }, [restoreTab]);
 
+  /**
+   * Adopt terminals a phone started, so both devices see one set of tabs.
+   *
+   * A pty is server-owned, but the tab *list* used to live only in the browser
+   * that opened it. A session started from the phone therefore existed and ran
+   * and was simply invisible here. The server now publishes its index; this
+   * picks up the phone's live terminals and leaves the desktop's own alone
+   * (they are already here, or restored from localStorage above).
+   *
+   * Additive only: a tab closed here stays closed, and is re-adopted only if
+   * the page is reloaded. Removing tabs from under the user would be worse
+   * than a stale one.
+   */
+  const adoptedRef = useRef(new Set<string>());
+  useEffect(() => {
+    let stop = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/terminals`);
+        if (!res.ok) return;
+        const payload = (await res.json()) as {
+          terminals?: Array<{ tabId: string; origin?: string; live?: boolean; cwd?: string; displayName?: string; claudeSessionId?: string; mode?: string }>;
+        };
+        if (stop) return;
+        for (const term of payload.terminals ?? []) {
+          if (term.origin !== 'mobile' || !term.live) continue;
+          if (adoptedRef.current.has(term.tabId)) continue;
+          if (tabsRef.current.some((tab) => tab.id === term.tabId)) continue;
+          adoptedRef.current.add(term.tabId);
+          restoreTab({
+            tabId: term.tabId,
+            cwd: term.cwd,
+            label: term.displayName || term.cwd?.split('/').pop() || term.tabId.slice(0, 8),
+            mode: term.mode === 'shell' ? ('shell' as const) : ('claude' as const),
+            claudeSessionId: term.claudeSessionId,
+          });
+        }
+      } catch {
+        /* the desktop's own tabs are unaffected by a failed poll */
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 5000);
+    return () => { stop = true; clearInterval(timer); };
+  }, [restoreTab]);
+
   // Persist the set of open Claude tabs whenever it changes, so a reload can
   // restore them. SSH/shell tabs and exited tabs are excluded — only resumable
   // Claude sessions are worth restoring.

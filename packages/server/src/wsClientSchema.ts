@@ -29,6 +29,7 @@ const schema: z.ZodType<WSClientMessage> = z.discriminatedUnion('type', [
     claudeSessionId: z.string().optional(),
     resumeSessionId: z.string().optional(),
     displayName: z.string().optional(),
+    origin: z.enum(['desktop', 'mobile']).optional(),
   }),
   z.object({ type: z.literal('terminal:input'), tabId: z.string().min(1), data: z.string() }),
   z.object({

@@ -241,6 +241,19 @@ export interface HttpRouterOptions {
   /** Branches of one allowlisted project, for the same reason as remoteProjects. */
   remoteBranches?: (cwd: string) => Promise<unknown>;
 
+  /**
+   * Directory listing fenced by the ticket-root allowlist. `remoteProjects`
+   * answers "which checkouts exist"; this answers "what is inside this one",
+   * which is what a phone needs to reach a checkout three levels down.
+   */
+  remoteBrowse?: (path: string | null) => Promise<unknown>;
+
+  /**
+   * Every terminal the server owns. The ptys were always server-side; the tab
+   * list was not, so a phone could not see a desktop's terminals.
+   */
+  listTerminals?: () => unknown;
+
   /** Remote directory listing over SSH, for the ticket's remote folder picker. */
   sshBrowse?: (
     target: { host: string; user?: string; port?: number; identityFile?: string },
@@ -426,6 +439,8 @@ export function createHttpServer(options: HttpRouterOptions) {
     sshBrowse,
     remoteAccess,
     remoteProjects,
+    remoteBrowse,
+    listTerminals,
     remoteBranches,
   } = options;
   const serveStatic = createStaticHandler(uiDistPath);
@@ -1051,6 +1066,35 @@ export function createHttpServer(options: HttpRouterOptions) {
         return;
       }
       sendJson(res, 200, { projects: await remoteProjects() }, req);
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/remote/browse') {
+      if (!remoteBrowse) {
+        sendJson(res, 503, { error: 'Remote directory browsing is not configured' }, req);
+        return;
+      }
+      try {
+        sendJson(res, 200, await remoteBrowse(url.searchParams.get('path')), req);
+      } catch (error) {
+        const status = (error as { status?: number }).status;
+        const valid = status === 400 || status === 403 || status === 404 || status === 503;
+        sendJson(
+          res,
+          valid ? (status as 400 | 403 | 404 | 503) : 400,
+          { error: error instanceof Error ? error.message : 'browse failed' },
+          req,
+        );
+      }
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/terminals') {
+      if (!listTerminals) {
+        sendJson(res, 503, { error: 'Terminal listing is not configured' }, req);
+        return;
+      }
+      sendJson(res, 200, { terminals: listTerminals() }, req);
       return;
     }
 

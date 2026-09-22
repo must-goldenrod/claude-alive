@@ -114,6 +114,13 @@ export type WSClientMessage =
       resumeSessionId?: string;
       /** Initial display name passed via `claude -n`. Appears in /resume picker and prompt. */
       displayName?: string;
+      /**
+       * Which kind of client is opening this pty. A pty has one grid shared by
+       * every viewer, so only the device that owns a terminal resizes it — a
+       * phone fitting a desktop's terminal to its width would reflow the
+       * desktop's window too. Defaults to 'desktop'.
+       */
+      origin?: 'desktop' | 'mobile';
     }
   | { type: 'terminal:input'; tabId: string; data: string }
   | { type: 'terminal:resize'; tabId: string; cols: number; rows: number }

@@ -61,6 +61,9 @@ const WATCH_ROUTES: readonly RouteRule[] = [
   { method: 'GET', pattern: /^\/api\/v2\/sessions\/[^/]+\/conversation$/ },
   { method: 'GET', pattern: /^\/api\/v2\/sessions\/[^/]+\/terminal$/ },
   { method: 'GET', pattern: /^\/api\/claude\/sessions$/ },
+  // The server's own terminal index. Without it a device cannot see the
+  // terminals another client opened, and opens a parallel set instead.
+  { method: 'GET', pattern: /^\/api\/terminals$/ },
 ];
 
 export function remoteWatchRoutes(level: RemoteTerminalLevel): readonly RouteRule[] {

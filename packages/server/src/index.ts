@@ -70,6 +70,7 @@ import { loadServerEnv, SERVER_ENV_FILE } from './serverEnv.js';
 import { loadRemoteAccessConfig } from './remoteAccess.js';
 import { ensureLocalToken } from './localToken.js';
 import { authorizeUpgrade } from './wsAuth.js';
+import { browseRemoteDirs } from './remoteBrowse.js';
 import { isCwdAllowed } from './ticketRunner.js';
 import { watch, existsSync, mkdirSync, statSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
@@ -812,6 +813,8 @@ const httpServer = createHttpServer({
   remoteAccess,
   remoteProjects: listRemoteProjects,
   remoteBranches: listRemoteBranches,
+  remoteBrowse: (path) => browseRemoteDirs(path, remoteAccess.ticketRoots),
+  listTerminals: () => terminalManager.list(),
   tickets: {
     // Reject a bad cwd up front with a clear message. Without this, a
     // nonexistent/relative cwd fails deep in spawn as a cryptic ENOENT
@@ -1048,6 +1051,7 @@ const broadcaster = new WSBroadcaster({
         mode: msg.mode ?? 'claude',
         source: msg.source ?? 'local',
         claudeVariant: msg.claudeVariant ?? 'claude',
+        origin: msg.origin ?? 'desktop',
         skipPermissions: msg.skipPermissions,
         initialCommand: msg.initialCommand,
         claudeSessionId: msg.claudeSessionId,
