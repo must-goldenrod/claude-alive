@@ -182,6 +182,9 @@ const REMOTE_ROUTES: ReadonlyArray<{ method: string; pattern: RegExp }> = [
   { method: 'GET', pattern: /^\/api\/settings\/engine\/models$/ },
   { method: 'GET', pattern: /^\/api\/remote\/projects$/ },
   { method: 'GET', pattern: /^\/api\/remote\/branches$/ },
+  // Directory listing inside the ticket roots. Fenced by the same allowlist a
+  // remote ticket's cwd must clear, so it grants no reach the token lacked.
+  { method: 'GET', pattern: /^\/api\/remote\/browse$/ },
   // What this server will let the device do. Without it the app cannot tell a
   // refused message from a broken connection — both are silence on the socket.
   { method: 'GET', pattern: /^\/api\/remote\/capabilities$/ },

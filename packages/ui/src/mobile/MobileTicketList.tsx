@@ -4,6 +4,7 @@ import type { Ticket, TicketEvaluation } from '@claude-alive/core';
 import { displayStatus, STATUS_COLOR, projectName, ticketLastActivityAt } from '../views/tickets/ticketDisplay.ts';
 import { COLORS, screen, body, card, chip, primaryButton, actionBar, TYPE, clamp1, clamp2 } from './styles.ts';
 import { PullToRefresh } from './PullToRefresh.tsx';
+import { formatStamp } from './time.ts';
 
 export interface MobileTicketListProps {
   tickets: Ticket[];
@@ -102,6 +103,12 @@ export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connecte
                 {ticket.headline && (
                   <div style={{ ...TYPE.body, ...clamp1, color: COLORS.muted, marginTop: 6 }}>{ticket.headline}</div>
                 )}
+                {/* When this ticket last moved. A relative age answers "is it
+                    fresh"; the question on a phone is which run was last night
+                    and which was Tuesday, and only the clock answers that. */}
+                <div style={{ ...TYPE.meta, color: COLORS.muted, marginTop: 6 }}>
+                  {formatStamp(ticketLastActivityAt(ticket))}
+                </div>
               </button>
             );
           })

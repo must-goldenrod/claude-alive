@@ -18,8 +18,18 @@ const SCROLLBACK_MAX_BYTES = 256 * 1024;
 // exited entries are evicted first.
 const MAX_EXITED_RETAINED = 50;
 
+/**
+ * Which kind of client created this pty.
+ *
+ * It decides who may resize it. A pty has one grid, shared by every viewer, so
+ * a phone fitting the columns to its own width reflows the desktop's window
+ * too. A phone therefore resizes only the terminals it started itself.
+ */
+export type TerminalOrigin = 'desktop' | 'mobile';
+
 export interface ManagedTerminalMeta {
   tabId: string;
+  origin: TerminalOrigin;
   claudeSessionId?: string;
   cwd?: string;
   displayName?: string;
@@ -34,6 +44,7 @@ export interface CreateTerminalOptions {
   mode?: TerminalMode;
   source?: TerminalSource;
   claudeVariant?: 'claude' | 'agents';
+  origin?: TerminalOrigin;
   skipPermissions?: boolean;
   initialCommand?: string;
   claudeSessionId?: string;
@@ -52,6 +63,25 @@ interface ManagedTerminal {
   /** Wall-clock ms when the pty exited (or spawn failed). Undefined while live. */
   exitedAt?: number;
   /** Last known pty size — used to force a redraw on reattach. */
+  cols: number;
+  rows: number;
+  /** Wall-clock ms of the last byte in either direction; drives "last active". */
+  lastActivityAt: number;
+}
+
+/** One row of `TerminalManager.list()`. */
+export interface TerminalSummary {
+  tabId: string;
+  origin: TerminalOrigin;
+  /** The provider session this pty runs, when it runs one. Lets a client
+   *  match a terminal to the session row the catalog already shows. */
+  claudeSessionId?: string;
+  cwd?: string;
+  displayName?: string;
+  mode: TerminalMode;
+  source: TerminalSource;
+  live: boolean;
+  lastActivityAt: number;
   cols: number;
   rows: number;
 }
@@ -107,6 +137,31 @@ export class TerminalManager {
   }
 
   /**
+   * Every terminal this server owns, live ones first, most recently active
+   * first within each group.
+   *
+   * The tab *list* used to exist only in the browser that opened the tabs, so a
+   * phone could not see a desktop's terminals at all and opened its own parallel
+   * set. The ptys were always server-owned; only the index was missing.
+   */
+  list(): TerminalSummary[] {
+    const rows = [...this.terminals.values()].map((m) => ({
+      tabId: m.meta.tabId,
+      origin: m.meta.origin,
+      ...(m.meta.claudeSessionId ? { claudeSessionId: m.meta.claudeSessionId } : {}),
+      ...(m.meta.cwd ? { cwd: m.meta.cwd } : {}),
+      ...(m.meta.displayName ? { displayName: m.meta.displayName } : {}),
+      mode: m.meta.mode,
+      source: m.meta.source,
+      live: !m.exited,
+      lastActivityAt: m.lastActivityAt,
+      cols: m.cols,
+      rows: m.rows,
+    }));
+    return rows.sort((a, b) => Number(b.live) - Number(a.live) || b.lastActivityAt - a.lastActivityAt);
+  }
+
+  /**
    * Spawn a new terminal and subscribe `ws` to it. If a terminal with this
    * tabId already exists, treat the call as an attach (idempotent spawn).
    */
@@ -125,8 +180,10 @@ export class TerminalManager {
       exited: false,
       cols: 80,
       rows: 24,
+      lastActivityAt: Date.now(),
       meta: {
         tabId: opts.tabId,
+        origin: opts.origin ?? 'desktop',
         claudeSessionId: opts.resumeSessionId ?? opts.claudeSessionId,
         cwd: opts.cwd,
         displayName: opts.displayName,
@@ -218,7 +275,10 @@ export class TerminalManager {
   }
 
   input(tabId: string, data: string): void {
-    this.terminals.get(tabId)?.term.write(data);
+    const managed = this.terminals.get(tabId);
+    if (!managed) return;
+    managed.lastActivityAt = Date.now();
+    managed.term.write(data);
   }
 
   resize(tabId: string, cols: number, rows: number): void {
@@ -282,6 +342,7 @@ export class TerminalManager {
   }
 
   private appendScrollback(managed: ManagedTerminal, data: string): void {
+    managed.lastActivityAt = Date.now();
     managed.scrollback += data;
     if (managed.scrollback.length > SCROLLBACK_MAX_BYTES) {
       managed.scrollback = managed.scrollback.slice(-SCROLLBACK_MAX_BYTES);

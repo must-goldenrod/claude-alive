@@ -16,7 +16,15 @@ describe('MobileSpawnPicker', () => {
     const onSpawn = vi.fn();
     render(<MobileSpawnPicker projects={projects} onCancel={() => {}} onSpawn={onSpawn} />);
     fireEvent.click(screen.getByRole('button', { name: 'site' }));
-    expect(onSpawn).toHaveBeenCalledWith('/Users/me/work/site');
+    expect(onSpawn).toHaveBeenCalledWith('/Users/me/work/site', { autoStart: true });
+  });
+
+  it('can be told not to type the preset for you', () => {
+    const onSpawn = vi.fn();
+    render(<MobileSpawnPicker projects={projects} onCancel={() => {}} onSpawn={onSpawn} />);
+    fireEvent.click(screen.getByRole('switch'));
+    fireEvent.click(screen.getByRole('button', { name: 'site' }));
+    expect(onSpawn).toHaveBeenCalledWith('/Users/me/work/site', { autoStart: false });
   });
 
   it('cancels back', () => {
