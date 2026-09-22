@@ -23,11 +23,24 @@ export function parsePanelExcludedRoots(env: NodeJS.ProcessEnv): string[] {
     .map((p) => resolve(p));
 }
 
-/** True when `cwd` is one of the roots or sits inside one. */
+/**
+ * True when `cwd` is one of the roots or sits inside one.
+ *
+ * Compared case-insensitively. macOS and Windows resolve `/Users/dev` and
+ * `/users/dev` to the same directory, and the stored records carry both
+ * spellings — a case-sensitive prefix test would let an excluded tree out
+ * through whichever spelling the operator did not type. Erring toward matching
+ * is the right direction for a boundary whose job is to withhold: on a
+ * case-sensitive filesystem the cost is a ticket that stays local when it did
+ * not have to, which is the failure this policy already prefers.
+ */
 export function isUnderRoot(cwd: string, roots: readonly string[]): boolean {
   if (roots.length === 0) return false;
-  const target = resolve(cwd);
-  return roots.some((root) => target === root || target.startsWith(root.endsWith(sep) ? root : root + sep));
+  const target = resolve(cwd).toLowerCase();
+  return roots.some((rawRoot) => {
+    const root = rawRoot.toLowerCase();
+    return target === root || target.startsWith(root.endsWith(sep) ? root : root + sep);
+  });
 }
 
 /**

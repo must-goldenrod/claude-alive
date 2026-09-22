@@ -17,6 +17,7 @@ import { parsePanelExcludedRoots } from '../panel/panelPolicy.js';
 import { jevClientFromEnv } from './client.js';
 import {
   DEFAULT_THRESHOLDS,
+  bestThreshold,
   replayAll,
   selectReplayable,
   sweepThresholds,
@@ -63,12 +64,14 @@ function gateBaseline(rows: readonly ReplayRow[]): string[] {
 }
 
 function sweepTable(rows: readonly ReplayRow[]): string {
-  const header = '| thr | judged | ✓pass | ✗pass | ✓fail | ✗fail | agree | gate오경보회피 | gate누락포착 |';
-  const divider = '|---|---|---|---|---|---|---|---|---|';
+  const header =
+    '| thr | judged | ✓pass | ✗pass | ✓fail | ✗fail | agree | balanced | gate오경보회피 | gate누락포착 |';
+  const divider = '|---|---|---|---|---|---|---|---|---|---|';
   const lines = sweepThresholds(rows, [...DEFAULT_THRESHOLDS]).map(
     (t) =>
       `| ${t.threshold} | ${t.judged} | ${t.truePass} | ${t.falsePass} | ${t.trueFail} | ${t.falseFail} | ` +
-      `${(t.agreementWithHuman * 100).toFixed(1)}% | ${t.gateFalseAlarmsJevAvoided} | ${t.gateMissesJevCaught} |`,
+      `${(t.agreementWithHuman * 100).toFixed(1)}% | ${(t.balancedAccuracy * 100).toFixed(1)}% | ` +
+      `${t.gateFalseAlarmsJevAvoided} | ${t.gateMissesJevCaught} |`,
   );
   return [header, divider, ...lines].join('\n');
 }
@@ -125,13 +128,19 @@ async function main(): Promise<void> {
   console.log('');
   console.log(sweepTable(rows));
 
-  const best = sweepThresholds(rows, [...DEFAULT_THRESHOLDS]).reduce((a, b) =>
-    b.agreementWithHuman > a.agreementWithHuman ? b : a,
-  );
+  // Balanced accuracy, not agreement: see bestThreshold(). 50% is the coin flip.
+  const best = bestThreshold(rows, [...DEFAULT_THRESHOLDS]);
   console.log('');
-  console.log(`highest agreement at thr=${best.threshold}: ${(best.agreementWithHuman * 100).toFixed(1)}%`);
-  console.log(`disagreements with the gate at thr=${best.threshold}:`);
-  for (const line of disagreements(rows, best.threshold).slice(0, 40)) console.log(line);
+  if (best === null) {
+    console.log('no usable threshold: the human labelled only one class, so nothing here separates anything.');
+  } else {
+    console.log(
+      `best balanced accuracy at thr=${best.threshold}: ${(best.balancedAccuracy * 100).toFixed(1)}% ` +
+        `(50% = coin flip; agreement at that cut ${(best.agreementWithHuman * 100).toFixed(1)}%)`,
+    );
+    console.log(`disagreements with the gate at thr=${best.threshold}:`);
+    for (const line of disagreements(rows, best.threshold).slice(0, 40)) console.log(line);
+  }
 
   if (errors.length > 0) {
     console.log('');
@@ -150,7 +159,7 @@ async function main(): Promise<void> {
         excludedRoots,
         rows,
         errors,
-        tally: tallyAt(rows, best.threshold),
+        tally: best === null ? null : tallyAt(rows, best.threshold),
       },
       null,
       2,

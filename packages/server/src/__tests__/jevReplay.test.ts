@@ -7,6 +7,7 @@ import {
   selectReplayable,
   wasClipped,
   sweepThresholds,
+  bestThreshold,
   tallyAt,
   type ReplayRow,
 } from '../jev/replay.js';
@@ -139,5 +140,49 @@ describe('buildVerificationState — clipping is observable', () => {
 
   it('reports a clipped record so the run can count them', () => {
     expect(wasClipped({ ...record, result: 'x'.repeat(40_000) })).toBe(true);
+  });
+});
+
+describe('bestThreshold — a degenerate cut must not win on imbalanced data', () => {
+  /**
+   * 9 good, 1 bad, and the only cut that catches the bad one also loses two
+   * good ones. Plain accuracy therefore prefers passing everything (9/10) over
+   * separating the classes (8/10) — the same shape as the real 341:8 dataset.
+   */
+  const imbalanced: ReplayRow[] = [
+    ...Array.from({ length: 7 }, (_, i) => ({
+      ticketId: `g${i}`,
+      noul: 0.9,
+      coverage: 3,
+      gate: 'pass' as const,
+      human: 'good' as const,
+    })),
+    { ticketId: 'g7', noul: 0.3, coverage: 2, gate: 'pass', human: 'good' },
+    { ticketId: 'g8', noul: 0.3, coverage: 2, gate: 'pass', human: 'good' },
+    { ticketId: 'b0', noul: 0.2, coverage: 0, gate: 'pass', human: 'bad' },
+  ];
+
+  it('plain agreement does pick the trivial pass-everything cut', () => {
+    const byAgreement = sweepThresholds(imbalanced, [0.1, 0.35]).reduce((a, b) =>
+      b.agreementWithHuman > a.agreementWithHuman ? b : a,
+    );
+    expect(byAgreement.threshold).toBe(0.1);
+    expect(byAgreement.trueFail).toBe(0);
+  });
+
+  it('bestThreshold picks the cut that actually separates the classes', () => {
+    expect(bestThreshold(imbalanced, [0.1, 0.35])!.threshold).toBe(0.35);
+  });
+
+  it('scores a cut by how well it does on BOTH classes', () => {
+    // Pass-everything: every good right, every bad wrong → exactly the coin flip.
+    expect(tallyAt(imbalanced, 0.1).balancedAccuracy).toBeCloseTo(0.5);
+    // The separating cut: 7 of 9 good, 1 of 1 bad.
+    expect(tallyAt(imbalanced, 0.35).balancedAccuracy).toBeCloseTo((7 / 9 + 1) / 2);
+  });
+
+  it('returns null when the human labelled only one class — nothing to separate', () => {
+    const allGood = imbalanced.filter((r) => r.human === 'good');
+    expect(bestThreshold(allGood, [0.1, 0.35])).toBeNull();
   });
 });

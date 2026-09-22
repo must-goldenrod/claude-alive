@@ -312,3 +312,20 @@ describe('createJevClient — retry', () => {
     expect(waits).toEqual([2000]);
   });
 })
+
+describe('createJevClient — choice validation', () => {
+  it('refuses an inherited property name as a choice', async () => {
+    const client = createJevClient({
+      apiKey: 'k',
+      fetch: async () =>
+        jsonResponse({
+          model: 'jev-1.13.0',
+          answers: { route: { type: 'choice', choice: 'toString', confidence: 1, probabilities: {} } },
+        }),
+    });
+
+    await expect(
+      client.decide('s', { route: choiceQuestion('Team?', { billing: 'b', technical: 't' }) }),
+    ).rejects.toThrow(/not an option/);
+  });
+});

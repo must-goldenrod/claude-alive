@@ -245,7 +245,8 @@ function parseAnswer(key: string, question: JevQuestion, raw: unknown): JevAnswe
 
   if (question.type === 'choice') {
     const choice = record.choice;
-    if (typeof choice !== 'string' || !(choice in question.criteria)) {
+    // `in` would accept an inherited name such as "toString" as a valid option.
+    if (typeof choice !== 'string' || !Object.hasOwn(question.criteria, choice)) {
       throw new JevError(`answer "${key}" chose "${String(choice)}", which was not an option`);
     }
     return {
