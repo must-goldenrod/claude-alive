@@ -27,6 +27,8 @@ import type { Ticket, TicketVerification, TicketLocation } from '@claude-alive/c
 import { runHeadlessClaude, type HeadlessOutcome } from './headlessClaude.js';
 import { reviewWithPanel } from './panel/verificationPanel.js';
 import { extractJsonObject, type Panel } from './panel/litellmPanel.js';
+import type { JevClient } from './jev/client.js';
+import { verdictFromJev } from './jev/gateFallback.js';
 import { VERDICT_LANGUAGE_RULE } from './verdictLanguage.js';
 
 export interface Verifier {
@@ -57,6 +59,16 @@ export interface VerifierOptions {
    * leave the machine gets the gate alone while everything else gets the panel.
    */
   panel?: Panel | ((ticket: Ticket) => Panel | undefined);
+  /**
+   * Typed last seat, consulted ONLY when the gate produced no parseable verdict
+   * after every attempt. Omitted (no `TYPESAFE_API_KEY`) = the pre-Jev
+   * behaviour exactly: the ticket fails inconclusive.
+   *
+   * A function form is resolved per ticket, exactly like `panel`, so the same
+   * policy that decides whether a ticket's content may leave the machine
+   * decides this too.
+   */
+  jev?: JevClient | ((ticket: Ticket) => JevClient | undefined);
   /** Extra agent env for a ticket's gate run (the gateway engine's env). */
   agentEnv?: (ticket: Ticket) => Record<string, string> | undefined;
   now?: () => number;
@@ -199,6 +211,26 @@ export function createVerifier(options: VerifierOptions = {}): Verifier {
         cause = describeGateFailure(outcome);
         log(`[verify] ticket #${ticket.seq} attempt ${attempt}/${GATE_ATTEMPTS}: ${cause}`);
       }
+
+      // Every attempt produced something unparseable. Before the ticket is
+      // failed for a formatting problem, ask the one reviewer that cannot have
+      // one. It does not run the panel: the panel's wording was measured against
+      // a gate verdict, and this is not that.
+      const jev = typeof options.jev === 'function' ? options.jev(ticket) : options.jev;
+      if (jev) {
+        const fallback = await verdictFromJev(
+          jev,
+          ticket.goal,
+          mainResult,
+          options.now ?? Date.now,
+        );
+        if (fallback) {
+          log(`[verify] ticket #${ticket.seq}: gate inconclusive, Jev verdict ${fallback.passed ? 'PASS' : 'FAIL'} (flagged)`);
+          return fallback;
+        }
+        log(`[verify] ticket #${ticket.seq}: Jev fallback produced no verdict either`);
+      }
+
       throw new Error(cause || '검증기가 판정을 내지 못했습니다');
     },
   };

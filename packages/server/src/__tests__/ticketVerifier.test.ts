@@ -7,6 +7,7 @@ import {
   GATE_ATTEMPTS,
 } from '../ticketVerifier.js';
 import type { HeadlessOutcome } from '../headlessClaude.js';
+import type { JevClient } from '../jev/client.js';
 
 describe('extractVerdict', () => {
   it('parses a bare verdict object', () => {
@@ -228,5 +229,116 @@ describe('createVerifier with a review panel', () => {
   it('keeps the gate verdict untouched when no panel is configured', async () => {
     const v = createVerifier({ run: async () => outcome2('{"passed": true, "reason": "ok"}') });
     await expect(v.verify(ticket, 'r')).resolves.toEqual({ passed: true, reason: 'ok' });
+  });
+});
+
+describe('createVerifier — Jev fallback for an inconclusive gate', () => {
+  const outcome = (result: string | null): HeadlessOutcome => ({
+    exitCode: 0,
+    result: result === null ? null : { result, isError: false, sessionId: null, subtype: 'success', model: null },
+    sessionId: null,
+    stderr: '',
+  });
+
+  const ticket = { goal: 'g', cwd: '/r', id: '1', state: 'verifying' as const, createdAt: 0 };
+
+  /** A Jev stand-in that answers with a fixed probability. */
+  const jevSaying = (noul: number, coverage = 2.5): JevClient => ({
+    model: 'jev-1.13.0',
+    decide: async () => ({
+      model: 'jev-1.13.0',
+      answers: {
+        met: { type: 'noul', noul },
+        coverage: { type: 'score', score: coverage, confidence: 0.8 },
+      },
+    }),
+  });
+
+  it('still fails closed when no Jev is configured', async () => {
+    const v = createVerifier({ run: async () => outcome('not a verdict'), log: () => {} });
+    await expect(v.verify(ticket, 'r')).rejects.toThrow();
+  });
+
+  it('is never consulted when the gate produced a verdict', async () => {
+    let called = 0;
+    const jev: JevClient = {
+      model: 'jev-1.13.0',
+      decide: async () => {
+        called += 1;
+        throw new Error('should not be called');
+      },
+    };
+    const v = createVerifier({ run: async () => outcome('{"passed": true, "reason": "ok"}'), jev, log: () => {} });
+
+    await expect(v.verify(ticket, 'r')).resolves.toMatchObject({ passed: true });
+    expect(called).toBe(0);
+  });
+
+  it('produces a verdict when the gate could not, rather than failing the ticket', async () => {
+    const v = createVerifier({ run: async () => outcome('not a verdict'), jev: jevSaying(0.82), log: () => {} });
+
+    const verdict = await v.verify(ticket, 'r');
+
+    expect(verdict.passed).toBe(true);
+    // Always worth a human glance: this verdict saw no working directory.
+    expect(verdict.flagged).toBe(true);
+    // The reason has to say what decided it and with what number.
+    expect(verdict.reason).toContain('0.82');
+    expect(verdict.reason).toMatch(/jev/i);
+  });
+
+  it('fails the ticket when Jev puts the goal below the midpoint', async () => {
+    const v = createVerifier({ run: async () => outcome('not a verdict'), jev: jevSaying(0.18), log: () => {} });
+
+    const verdict = await v.verify(ticket, 'r');
+
+    expect(verdict.passed).toBe(false);
+    expect(verdict.flagged).toBe(true);
+  });
+
+  it('does not claim the Claude gate said anything — `gate` stays absent', async () => {
+    const v = createVerifier({ run: async () => outcome('not a verdict'), jev: jevSaying(0.9), log: () => {} });
+    expect((await v.verify(ticket, 'r')).gate).toBeUndefined();
+  });
+
+  it('keeps failing closed when Jev itself errors', async () => {
+    const jev: JevClient = {
+      model: 'jev-1.13.0',
+      decide: async () => {
+        throw new Error('429');
+      },
+    };
+    const v = createVerifier({ run: async () => outcome('not a verdict'), jev, log: () => {} });
+
+    await expect(v.verify(ticket, 'r')).rejects.toThrow();
+  });
+
+  it('honours a per-ticket resolver that withholds Jev from this ticket', async () => {
+    const v = createVerifier({
+      run: async () => outcome('not a verdict'),
+      jev: () => undefined,
+      log: () => {},
+    });
+
+    await expect(v.verify(ticket, 'r')).rejects.toThrow();
+  });
+
+  it('sends the goal and the report, and nothing else', async () => {
+    const seen: unknown[] = [];
+    const jev: JevClient = {
+      model: 'jev-1.13.0',
+      decide: async (state) => {
+        seen.push(state);
+        return {
+          model: 'jev-1.13.0',
+          answers: { met: { type: 'noul', noul: 0.7 }, coverage: { type: 'score', score: 2, confidence: 0.5 } },
+        };
+      },
+    };
+    const v = createVerifier({ run: async () => outcome('not a verdict'), jev, log: () => {} });
+
+    await v.verify(ticket, 'the report');
+
+    expect(seen[0]).toEqual({ goal: 'g', report: 'the report' });
   });
 });
