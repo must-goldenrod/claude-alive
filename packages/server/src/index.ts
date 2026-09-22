@@ -50,6 +50,7 @@ import { runIdForSession } from './runAttribution.js';
 import { createTicketRunner } from './ticketRunner.js';
 import { jevClientFromEnv } from './jev/client.js';
 import { guardJevClient, jevEnabled } from './jev/guard.js';
+import { verifyPage } from './browser/verifyPage.js';
 import { createVerifier } from './ticketVerifier.js';
 import { resolveExecutor } from './executors/resolve.js';
 import { createFlagSupportCache } from './agentFlags.js';
@@ -647,6 +648,10 @@ const ticketVerifier = createVerifier({
     }).done,
   panel: panelFor,
   jev: jevFor,
+  // Runs only for a ticket that named a `verifyUrl`, costs no tokens, and can
+  // flag but never fail a ticket. A machine without Chrome degrades to the
+  // behaviour it had before this existed.
+  browserCheck: (ticket) => verifyPage(ticket),
   agentEnv: ticketAgentEnv,
 });
 const ticketRunner = createTicketRunner({

@@ -33,7 +33,7 @@ export {
 } from './tickets/engine.js';
 export type { TicketEngine, EngineSettings, GatewayPresetModels } from './tickets/engine.js';
 export type {
-  Ticket, TicketState, TicketFailureReason, TicketVerification, TicketCreateInput, TicketUsage,
+  Ticket, TicketState, TicketFailureReason, TicketVerification, BrowserVerification, TicketCreateInput, TicketUsage,
   TicketAgentExit, TicketAgentExitCause,
   TicketTurn, TicketTurnRole, TicketTurnKind,
   VerificationOpinion, PanelConsensus, TicketCommit,

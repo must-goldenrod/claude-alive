@@ -116,6 +116,7 @@ export function createTicketStore(options: TicketStoreOptions = {}): TicketStore
         // absent on every ticket that keeps the default.
         ...(input.autoCommit === false ? { autoCommit: false } : {}),
         ...(input.panelReview === false ? { panelReview: false } : {}),
+        ...(input.verifyUrl ? { verifyUrl: input.verifyUrl } : {}),
         ...(profile ? { requestedModel: profile.model, effort: profile.effort } : {}),
         // Gateway engine: same preset effort, the gateway model replaces the Claude id.
         ...(input.engine === 'gateway' && input.model ? { engine: 'gateway' as const, requestedModel: input.model } : {}),

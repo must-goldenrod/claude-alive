@@ -36,7 +36,8 @@
       "vitest": ">=4.1.0",
       "picomatch": ">=4.0.4",
       "@babel/core": ">=7.29.6",
-      "turbo": ">=2.9.14"
+      "turbo": ">=2.9.14",
+      "zod@>=4": "4.4.3"
     },
     "auditConfig": {
       "ignoreGhsas": [

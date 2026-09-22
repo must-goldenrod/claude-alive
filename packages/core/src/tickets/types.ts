@@ -142,6 +142,23 @@ export interface PanelConsensus {
  * is the only reviewer with filesystem access — and a majority of the panel can
  * veto a gate PASS, so a green verdict means both agreed.
  */
+/**
+ * What a browser saw at the ticket's `verifyUrl`, recorded beside the verdict.
+ *
+ * Every check behind these counts is deterministic — selectors, HTTP status,
+ * page facts — so this is evidence a reader can re-run, not an opinion. It is
+ * recorded and can flag, but it never overturns the verdict: a new signal earns
+ * a veto by being measured against human labels first, which is the rule the
+ * verification panel already follows.
+ */
+export interface BrowserVerification {
+  url: string;
+  summary: { total: number; pass: number; fail: number; error: number; skip: number; ok: boolean };
+  /** Names of the checks that did not pass, for the reader. */
+  failed: string[];
+  title?: string;
+}
+
 export interface TicketVerification {
   passed: boolean;
   reason: string;
@@ -160,6 +177,8 @@ export interface TicketVerification {
    */
   flagged?: boolean;
   consensus?: PanelConsensus;
+  /** Present only when the ticket named a `verifyUrl` and the page was reached. */
+  browser?: BrowserVerification;
   at?: number;
 }
 
@@ -304,6 +323,13 @@ export interface Ticket {
    * Undefined = enabled.
    */
   panelReview?: boolean;
+  /**
+   * A page the completion gate should open and check deterministically once the
+   * agent reports done. Opt-in per ticket: the gate otherwise judges the work
+   * only from text the agent wrote about itself, which is exactly the evidence
+   * a wrong report is made of. `http`/`https` only.
+   */
+  verifyUrl?: string;
   failureReason?: TicketFailureReason;
   /**
    * What the agent process's exit actually was, when the ticket failed on the
@@ -356,6 +382,8 @@ export interface TicketCreateInput {
   preset?: TicketRunPreset;
   /** Opt out of the post-verification auto-commit. Omitted = enabled. */
   autoCommit?: boolean;
+  /** Page for the gate to open and check after the agent reports done. */
+  verifyUrl?: string;
   /** Opt out of the external review panels (nothing leaves the machine). Omitted = enabled. */
   panelReview?: boolean;
   /**

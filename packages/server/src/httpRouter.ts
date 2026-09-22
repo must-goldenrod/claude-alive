@@ -156,6 +156,7 @@ export interface HttpRouterOptions {
       orchestrated?: boolean;
       autoCommit?: boolean;
       panelReview?: boolean;
+      verifyUrl?: string;
       preset?: (typeof TICKET_RUN_PRESET_IDS)[number];
       model?: string;
     }) => Promise<unknown>;
@@ -312,6 +313,21 @@ const TicketCreateBodySchema = z.object({
   autoCommit: z.boolean().optional(),
   // Opt out of the external review panels. Omitted = on.
   panelReview: z.boolean().optional(),
+  // A page the completion gate opens after the agent reports done. Validated
+  // here rather than downstream: the value reaches a browser, so http(s)-only
+  // is a boundary rule, not a formatting preference.
+  verifyUrl: z
+    .string()
+    .max(2048)
+    .refine((value) => {
+      try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }, 'verifyUrl must be an http(s) URL')
+    .optional(),
   // Closed enum, never free-form model/effort strings: the values become CLI
   // argv, so the allowlist lives at the boundary rather than downstream.
   preset: z.enum(TICKET_RUN_PRESET_IDS).optional(),
