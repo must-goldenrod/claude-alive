@@ -40,7 +40,7 @@ describe('run preset mirror', () => {
     for (const id of TICKET_RUN_PRESET_IDS) {
       const preview = RUN_PRESET_PREVIEW[id];
       expect(preview.modelLabel).toBe(modelDisplayName(preview.model));
-      // A label that fell back to the raw id would put 'claude-opus-5' on the
+      // A label that fell back to the raw id would put 'claude-opus-5-5' on the
       // button — readable, but not what the picker promises.
       expect(preview.modelLabel).not.toBe(preview.model);
     }
@@ -53,7 +53,7 @@ describe('run preset mirror', () => {
 
 describe('modelLabel', () => {
   it('renders pinned ids as their marketing name', () => {
-    expect(modelLabel('claude-opus-5')).toBe('Opus 5');
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
     expect(modelLabel('claude-sonnet-5')).toBe('Sonnet 5');
   });
 

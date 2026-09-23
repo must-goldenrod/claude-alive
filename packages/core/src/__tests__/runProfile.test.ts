@@ -13,9 +13,9 @@ import {
 describe('resolveRunProfile', () => {
   it('resolves each preset to concrete flags', () => {
     expect(resolveRunProfile('fast')).toEqual({ model: 'claude-sonnet-5', effort: 'low' });
-    expect(resolveRunProfile('medium')).toEqual({ model: 'claude-opus-5', effort: 'medium' });
-    expect(resolveRunProfile('standard')).toEqual({ model: 'claude-opus-5', effort: 'high' });
-    expect(resolveRunProfile('deep')).toEqual({ model: 'claude-opus-5', effort: 'max' });
+    expect(resolveRunProfile('medium')).toEqual({ model: 'claude-opus-5-5', effort: 'medium' });
+    expect(resolveRunProfile('standard')).toEqual({ model: 'claude-opus-5-5', effort: 'high' });
+    expect(resolveRunProfile('deep')).toEqual({ model: 'claude-opus-5-5', effort: 'max' });
     expect(resolveRunProfile('expert')).toEqual({ model: 'claude-fable-5-1', effort: 'medium' });
     expect(resolveRunProfile('ultimate')).toEqual({ model: 'claude-fable-5-1', effort: 'high' });
   });
@@ -63,7 +63,7 @@ describe('guards', () => {
 
 describe('modelDisplayName', () => {
   it('renders pinned ids as their marketing name', () => {
-    expect(modelDisplayName('claude-opus-5')).toBe('Opus 5');
+    expect(modelDisplayName('claude-opus-5-5')).toBe('Opus 5.5');
     expect(modelDisplayName('claude-sonnet-5')).toBe('Sonnet 5');
   });
 

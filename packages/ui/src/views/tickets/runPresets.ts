@@ -25,7 +25,7 @@ export interface RunPresetPreview {
   effort: string;
 }
 
-const OPUS = 'claude-opus-5';
+const OPUS = 'claude-opus-5-5';
 const SONNET = 'claude-sonnet-5';
 const FABLE = 'claude-fable-5-1';
 
@@ -43,7 +43,7 @@ export function modelLabel(model: string | undefined): string | undefined {
 }
 
 /**
- * Name plus exact id (`Opus 5 (claude-opus-5)`) for record views, where the id
+ * Name plus exact id (`Opus 5.5 (claude-opus-5-5)`) for record views, where the id
  * that ran must stay visible. Non-Claude ids have no separate name and show once.
  */
 export function modelLabelWithId(model: string): string {

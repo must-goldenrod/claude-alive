@@ -84,7 +84,7 @@ describe('NewTicketForm on the gateway engine', () => {
     stubFetch({ 'GET /api/settings/engine': { body: { settings: CLAUDE, gatewayConfigured: true } } });
     const onCreate = vi.fn(async () => null);
     render(<NewTicketForm onCreate={onCreate} presetCwd="/r/alive" />);
-    await waitFor(() => expect(screen.getAllByText(/Opus 5 · high/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Opus 5.5 · high/).length).toBeGreaterThan(0));
     expect(screen.queryByTestId('ticket-gateway-model')).toBeNull();
     submit();
     expect(onCreate).toHaveBeenCalledWith('작업', '/r/alive', undefined, true, 'standard', true, true, undefined);
@@ -93,7 +93,7 @@ describe('NewTicketForm on the gateway engine', () => {
   it('keeps the Claude presets when the engine API answers something unexpected', async () => {
     stubFetch({ 'GET /api/settings/engine': { body: {} } });
     render(<NewTicketForm onCreate={vi.fn(async () => null)} presetCwd="/r/alive" />);
-    await waitFor(() => expect(screen.getAllByText(/Opus 5 · high/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Opus 5.5 · high/).length).toBeGreaterThan(0));
     act(() => applyEngineUpdate({} as EngineSettings));
     expect(screen.queryByTestId('ticket-gateway-model')).toBeNull();
   });
@@ -105,7 +105,7 @@ describe('NewTicketForm on the gateway engine', () => {
     });
     const onCreate = vi.fn(async () => null);
     render(<NewTicketForm onCreate={onCreate} presetCwd="/r/alive" />);
-    await waitFor(() => expect(screen.getAllByText(/Opus 5 · high/).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/Opus 5.5 · high/).length).toBeGreaterThan(0));
 
     // Another dashboard saved the gateway engine: the open form re-labels itself.
     act(() => applyEngineUpdate(GATEWAY));

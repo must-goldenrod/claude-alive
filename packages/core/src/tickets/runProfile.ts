@@ -30,7 +30,7 @@ export type TicketRunPreset = (typeof TICKET_RUN_PRESET_IDS)[number];
  * new generation ships; every preset then moves together and old tickets keep
  * their snapshotted ids.
  */
-export const TICKET_MODEL_OPUS = 'claude-opus-5';
+export const TICKET_MODEL_OPUS = 'claude-opus-5-5';
 export const TICKET_MODEL_SONNET = 'claude-sonnet-5';
 export const TICKET_MODEL_FABLE = 'claude-fable-5-1';
 
