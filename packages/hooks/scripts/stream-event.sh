@@ -24,9 +24,17 @@ if [ -r "$ENV_FILE" ]; then
   fi
 fi
 
+# A terminal spawned by claude-alive exports its tab id; forwarding it lets the
+# server follow the tab when /clear or /resume switches the session id.
+TAB=()
+if [ -n "${CLAUDE_ALIVE_TAB_ID:-}" ]; then
+  TAB=(-H "X-Claude-Alive-Tab: ${CLAUDE_ALIVE_TAB_ID}")
+fi
+
 curl -s -X POST "http://localhost:${CLAUDE_ALIVE_PORT:-3141}/api/event" \
   -H "Content-Type: application/json" \
   "${AUTH[@]}" \
+  "${TAB[@]}" \
   -m 2 \
   --data-binary @- > /dev/null 2>&1
 

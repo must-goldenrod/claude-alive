@@ -26,6 +26,8 @@ export interface Tab {
   displayName?: string;
   /** True when the server has no live pty for this tab (post-restart); awaiting resume. */
   dormant?: boolean;
+  /** The pty was killed by a signal (reboot, kill) rather than left by the user; still resumable. */
+  interrupted?: boolean;
 }
 
 interface TerminalTabBarProps {

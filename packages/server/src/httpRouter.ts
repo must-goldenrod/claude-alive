@@ -84,8 +84,24 @@ function normalizePayload(raw: Record<string, unknown>): HookEventPayload {
   };
 }
 
+/** Tab ids the UI mints (`tab-<uuid>`); anything else in the header is ignored. */
+const TAB_ID_HEADER = 'x-claude-alive-tab';
+const TAB_ID_PATTERN = /^tab-[0-9a-f-]{8,64}$/i;
+
+/** The tab a hook event came from, when the hook forwarded a valid one. */
+export function hookTabId(header: string | string[] | undefined): string | null {
+  const value = Array.isArray(header) ? header[0] : header;
+  return value && TAB_ID_PATTERN.test(value) ? value : null;
+}
+
 export interface HttpRouterOptions {
   onEvent: (payload: HookEventPayload) => void;
+  /**
+   * A SessionStart arrived from a terminal this server spawned (the hook
+   * forwards CLAUDE_ALIVE_TAB_ID). Lets the server follow `/clear` and in-TUI
+   * `/resume`, which switch the session id without the server seeing it.
+   */
+  onTabSession?: (tabId: string, sessionId: string) => void;
   getSnapshot: () => object;
   renameAgent: (sessionId: string, name: string | null) => boolean;
   removeAgent: (sessionId: string) => boolean;
@@ -430,6 +446,7 @@ function sendJson(res: ServerResponse, status: number, data: unknown, req?: Inco
 export function createHttpServer(options: HttpRouterOptions) {
   const {
     onEvent,
+    onTabSession,
     getSnapshot,
     renameAgent,
     removeAgent,
@@ -521,6 +538,10 @@ export function createHttpServer(options: HttpRouterOptions) {
         const raw = JSON.parse(body) as Record<string, unknown>;
         const payload = normalizePayload(raw);
         onEvent(payload);
+        const tabId = hookTabId(req.headers[TAB_ID_HEADER]);
+        if (tabId && payload.event === 'SessionStart' && payload.session_id) {
+          onTabSession?.(tabId, payload.session_id);
+        }
         sendJson(res, 200, { ok: true }, req);
       } catch {
         sendJson(res, 400, { error: 'Invalid payload' }, req);

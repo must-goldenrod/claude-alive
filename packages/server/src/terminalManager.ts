@@ -19,6 +19,16 @@ const SCROLLBACK_MAX_BYTES = 256 * 1024;
 const MAX_EXITED_RETAINED = 50;
 
 /**
+ * True when a pty ended because something killed it, not because the user left
+ * Claude. Measured under node-pty with `zsh -l -c claude` (zsh execs claude):
+ * SIGTERM → exitCode 143, SIGHUP → 129, SIGKILL → signal 9; `/exit` and Ctrl+C
+ * → exitCode 1. A macOS shutdown sends SIGTERM, so a reboot lands here.
+ */
+export function isInterruptedExit(exitCode: number, signal: number): boolean {
+  return signal > 0 || exitCode >= 128;
+}
+
+/**
  * Which kind of client created this pty.
  *
  * It decides who may resize it. A pty has one grid, shared by every viewer, so
@@ -62,6 +72,9 @@ interface ManagedTerminal {
   exited: boolean;
   /** Wall-clock ms when the pty exited (or spawn failed). Undefined while live. */
   exitedAt?: number;
+  exitCode?: number;
+  /** Set when the exit came from a signal — see isInterruptedExit. */
+  interrupted?: boolean;
   /** Last known pty size — used to force a redraw on reattach. */
   cols: number;
   rows: number;
@@ -137,6 +150,17 @@ export class TerminalManager {
   }
 
   /**
+   * Point a tab at the Claude session now running in it (`/clear` or an in-TUI
+   * `/resume` starts a new one). Returns true when the id actually changed.
+   */
+  setClaudeSessionId(tabId: string, claudeSessionId: string): boolean {
+    const managed = this.terminals.get(tabId);
+    if (!managed || managed.meta.claudeSessionId === claudeSessionId) return false;
+    managed.meta = { ...managed.meta, claudeSessionId };
+    return true;
+  }
+
+  /**
    * Every terminal this server owns, live ones first, most recently active
    * first within each group.
    *
@@ -202,9 +226,16 @@ export class TerminalManager {
         },
         cols: 80,
         rows: 24,
-        onExit: (exitCode) => {
+        onExit: (exitCode, signal) => {
+          managed.exitCode = exitCode;
+          managed.interrupted = isInterruptedExit(exitCode, signal);
           this.markExited(managed);
-          this.fanout(managed, { type: 'terminal:exited', tabId: opts.tabId, exitCode });
+          this.fanout(managed, {
+            type: 'terminal:exited',
+            tabId: opts.tabId,
+            exitCode,
+            ...(managed.interrupted ? { interrupted: true } : {}),
+          });
         },
         onSshError: isSsh
           ? (err) => {
@@ -226,6 +257,7 @@ export class TerminalManager {
         resumeSessionId: opts.resumeSessionId,
         displayName: opts.displayName,
         ...(opts.extraEnv ? { extraEnv: opts.extraEnv } : {}),
+        tabId: opts.tabId,
       });
     } catch (err) {
       // pty.spawn can throw synchronously (e.g. cwd no longer exists for a
@@ -267,9 +299,13 @@ export class TerminalManager {
    * Reattach a browser to a live terminal. Returns 'restored' (subscribed and
    * scrollback replayed) or 'missing' (no such live terminal — likely dormant).
    */
-  attach(tabId: string, ws: WebSocket): 'restored' | 'missing' {
+  attach(tabId: string, ws: WebSocket): 'restored' | 'missing' | 'interrupted' {
     const managed = this.terminals.get(tabId);
     if (!managed) return 'missing';
+    // A killed pty has nothing to show but its last frame. Report it so the
+    // caller answers `terminal:dormant` and the client resumes it, instead of
+    // replaying a dead screen forever.
+    if (managed.exited && managed.interrupted) return 'interrupted';
     this.subscribe(managed, ws);
     return 'restored';
   }
@@ -313,7 +349,12 @@ export class TerminalManager {
     this.send(ws, { type: 'terminal:size', tabId: managed.meta.tabId, cols: managed.cols, rows: managed.rows });
     this.send(ws, { type: 'terminal:restore', tabId: managed.meta.tabId, data: managed.scrollback });
     if (managed.exited) {
-      this.send(ws, { type: 'terminal:exited', tabId: managed.meta.tabId, exitCode: 0 });
+      this.send(ws, {
+        type: 'terminal:exited',
+        tabId: managed.meta.tabId,
+        exitCode: managed.exitCode ?? 0,
+        ...(managed.interrupted ? { interrupted: true } : {}),
+      });
       return;
     }
     // Replaying raw scrollback does NOT reconstruct a full-screen TUI (e.g. Claude

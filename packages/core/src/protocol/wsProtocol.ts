@@ -54,7 +54,13 @@ export type WSServerMessage =
   | { type: 'system:metrics'; cpu: number; memUsed: number; memTotal: number; timestamp: number }
   | { type: 'system:usage'; usage: UsageLimitsSnapshot }
   | { type: 'terminal:output'; tabId: string; data: string }
-  | { type: 'terminal:exited'; tabId: string; exitCode: number }
+  // `interrupted`: the pty died from a signal (SIGTERM/SIGHUP at shutdown, a
+  // kill) rather than the user leaving Claude. Clients keep such tabs so they
+  // come back resumable after a reboot instead of vanishing.
+  | { type: 'terminal:exited'; tabId: string; exitCode: number; interrupted?: boolean }
+  // The Claude session running in a tab changed (`/clear`, `/resume` inside the
+  // TUI). Clients update the id they persist so a later resume opens the right one.
+  | { type: 'terminal:session'; tabId: string; claudeSessionId: string }
   | { type: 'terminal:ssh-error'; tabId: string; kind: SSHErrorKind; line: string }
   // Sent in response to `terminal:attach` when the pty is still alive: replays
   // the scrollback ring buffer so the reattaching browser restores its screen.

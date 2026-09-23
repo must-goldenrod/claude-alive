@@ -38,6 +38,27 @@ export function loadOpenTabs(): PersistedTab[] {
   }
 }
 
+/**
+ * Which tabs a reload should bring back: live Claude tabs, plus ones whose pty
+ * was killed (a reboot sends SIGTERM before the browser closes, so the tab was
+ * already marked exited — dropping it lost the session). Tabs the user left
+ * with /exit stay dropped.
+ */
+export function isRestorableTab(tab: {
+  exited: boolean;
+  interrupted?: boolean;
+  source: string;
+  mode?: TerminalMode;
+  claudeSessionId?: string;
+}): boolean {
+  return (
+    (!tab.exited || tab.interrupted === true) &&
+    tab.source === 'local' &&
+    (tab.mode ?? 'claude') === 'claude' &&
+    !!tab.claudeSessionId
+  );
+}
+
 export function saveOpenTabs(tabs: PersistedTab[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs.slice(0, MAX_TABS)));

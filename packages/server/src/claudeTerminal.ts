@@ -40,7 +40,8 @@ export interface SpawnOptions {
   handler: (data: string) => void;
   cols?: number;
   rows?: number;
-  onExit?: (exitCode: number) => void;
+  /** `signal` is non-zero when the pty was killed by a signal node-pty saw directly. */
+  onExit?: (exitCode: number, signal: number) => void;
   onSshError?: (err: { kind: SSHErrorKind; line: string }) => void;
   cwd?: string;
   mode?: 'claude' | 'shell';
@@ -57,6 +58,8 @@ export interface SpawnOptions {
   displayName?: string;
   /** Extra env merged over the cleaned process env (e.g. the gateway engine). */
   extraEnv?: Record<string, string>;
+  /** Exported as CLAUDE_ALIVE_TAB_ID so hooks can tell the server which tab a session runs in. */
+  tabId?: string;
 }
 
 /**
@@ -145,6 +148,7 @@ export class ClaudeTerminal {
       resumeSessionId,
       displayName,
       extraEnv,
+      tabId,
     } = opts;
 
     this.onData = handler;
@@ -154,7 +158,7 @@ export class ClaudeTerminal {
     this.reportedErrors.clear();
 
     const shell = userShell();
-    const env = { ...cleanEnv(), ...extraEnv };
+    const env = { ...cleanEnv(), ...extraEnv, ...(tabId ? { CLAUDE_ALIVE_TAB_ID: tabId } : {}) };
     const cwdResolved = cwd || homedir();
 
     if (mode === 'claude') {
@@ -190,9 +194,9 @@ export class ClaudeTerminal {
       }
     });
 
-    this.ptyProc.onExit(({ exitCode }) => {
+    this.ptyProc.onExit(({ exitCode, signal }) => {
       this.ptyProc = null;
-      onExit?.(exitCode);
+      onExit?.(exitCode, signal ?? 0);
     });
 
     if (initialCommand && initialCommand.trim().length > 0) {

@@ -83,4 +83,15 @@ describe('managedSessionStore', () => {
     await s.touchManagedSession('T1', 500);
     expect(s.getManagedSession('T1')?.lastActive).toBe(500);
   });
+
+  it('prunes only the records the predicate selects, and persists that', async () => {
+    const s = await freshStore(dir);
+    await s.saveManagedSession(record('keep', 100));
+    await s.saveManagedSession(record('drop', 50));
+    expect(await s.pruneManagedSessions((r) => r.tabId === 'drop')).toBe(1);
+    expect(await s.pruneManagedSessions(() => false)).toBe(0);
+    const reloaded = await freshStore(dir);
+    await reloaded.loadManagedSessions();
+    expect(reloaded.getManagedSessions().map((r) => r.tabId)).toEqual(['keep']);
+  });
 });

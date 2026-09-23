@@ -1197,6 +1197,7 @@
     "terminalNew": "새 터미널",
     "terminalAttaching": "연결 중…",
     "terminalGone": "이 터미널은 종료되었습니다",
+    "terminalResume": "이 대화 이어서 재개",
     "terminalReadOnly": "읽기 전용 — 입력이 허용되지 않았습니다",
     "roleUser": "나",
     "roleAssistant": "에이전트",

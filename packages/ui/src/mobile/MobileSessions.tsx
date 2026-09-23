@@ -8,6 +8,7 @@ import { createTermFeed, type TermFeed } from './termFeed.ts';
 import { projectName } from '../views/tickets/ticketDisplay.ts';
 import { makeTabId } from '../views/chat/tabId.ts';
 import { mergeSessions, type TerminalRow } from './mobileSessionMerge.ts';
+import { resumeTarget } from './mobileResume.ts';
 import { rememberProject } from './recentProjects.ts';
 import { autoStartCommand } from './terminalPresets.ts';
 import type { MobileProject } from './types.ts';
@@ -117,6 +118,8 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
     setHasOutput(false);
   }, []);
   const [exited, setExited] = useState(false);
+  /** Session id the server reported for a dormant tab — what a resume reopens. */
+  const [dormantId, setDormantId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   /** Set once per spawn; typed as soon as the shell produces a prompt. */
   const autoStartRef = useRef<string | null>(null);
@@ -175,7 +178,10 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
         feed.push({ kind: 'size', cols: msg.cols, rows: msg.rows });
       } else if (msg.type === 'terminal:exited' && msg.tabId === attachedTab) {
         setExited(true);
-      } else if ((msg.type === 'terminal:dormant' || msg.type === 'terminal:missing') && msg.tabId === attachedTab) {
+      } else if (msg.type === 'terminal:dormant' && msg.tabId === attachedTab) {
+        setDormantId(msg.claudeSessionId);
+        setExited(true);
+      } else if (msg.type === 'terminal:missing' && msg.tabId === attachedTab) {
         setExited(true);
       }
     });
@@ -219,6 +225,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
     writeView(OPEN_SESSION_KEY, session.sessionId);
     clearOutput();
     setExited(false);
+    setDormantId(null);
     setAttachedTab(null);
     autoStartRef.current = null;
 
@@ -272,6 +279,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
   const close = () => {
     setOpen(null);
     setAttachedTab(null);
+    setDormantId(null);
     clearOutput();
     writeView(OPEN_SESSION_KEY, null);
   };
@@ -294,6 +302,30 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
     }
   }, [fetched, sessions, open, openSession]);
 
+  /** Reopen an exited Claude session with `claude --resume`, in its own tab when it has one. */
+  const resume = useCallback(() => {
+    if (!open) return;
+    const target = resumeTarget(open, attachedTab, dormantId, makeTabId);
+    if (!target) return;
+    clearOutput();
+    setExited(false);
+    setDormantId(null);
+    setOpen({ ...open, tabId: target.tabId, origin: target.origin, terminalLive: true });
+    setAttachedTab(target.tabId);
+    send({
+      type: 'terminal:spawn',
+      tabId: target.tabId,
+      cwd: target.cwd,
+      mode: 'claude',
+      source: 'local',
+      origin: target.origin,
+      resumeSessionId: target.claudeSessionId,
+    });
+  }, [open, attachedTab, dormantId, send, clearOutput]);
+
+  // Spawning needs the `shell` level (the server enforces it too).
+  const canResume = terminalLevel === 'shell' && open !== null && resumeTarget(open, attachedTab, dormantId, () => '') !== null;
+
   const canType = attachedTab !== null && (terminalLevel === 'input' || terminalLevel === 'shell');
 
   if (open) {
@@ -315,6 +347,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
           ? { onFit: (cols: number, rows: number) => attachedTab && send({ type: 'terminal:resize', tabId: attachedTab, cols, rows }) }
           : {})}
         onRefresh={attachedTab ? reattach : undefined}
+        {...(canResume ? { onResume: resume } : {})}
       />
     );
   }
