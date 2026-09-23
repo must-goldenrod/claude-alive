@@ -64,7 +64,7 @@ Claude Code OAuth 토큰으로 `POST /v1/messages`를 직접 부르는 것은 **
 인증은 통과하지만(`GET /v1/models` → 200) 추론 요청은 HTTP 429로 거부된다.
 그래서 구독 자격증명을 쓰는 길은 CLI 경유뿐이다.
 
-모델 기본값은 API 경로 `claude-opus-5`, CLI 경로 `claude-haiku-4-5`.
+모델 기본값은 API 경로 `claude-opus-5-5`, CLI 경로 `claude-haiku-4-5`.
 `BrowserSessionOptions.model`로 바꾼다.
 
 ```ts

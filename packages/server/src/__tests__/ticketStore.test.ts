@@ -41,16 +41,16 @@ describe('createTicketStore', () => {
   it('snapshots the run preset into concrete model/effort at creation', async () => {
     const store = makeStore();
     const t = await store.create({ goal: 'do X', cwd: '/repo', preset: 'deep' });
-    expect(t).toMatchObject({ preset: 'deep', requestedModel: 'claude-opus-5', effort: 'max' });
+    expect(t).toMatchObject({ preset: 'deep', requestedModel: 'claude-opus-5-5', effort: 'max' });
 
     const onDisk = JSON.parse(await readFile(filePath, 'utf-8'));
-    expect(onDisk[0]).toMatchObject({ preset: 'deep', requestedModel: 'claude-opus-5', effort: 'max' });
+    expect(onDisk[0]).toMatchObject({ preset: 'deep', requestedModel: 'claude-opus-5-5', effort: 'max' });
   });
 
   it('snapshots the medium preset as the same model as standard, one effort step down', async () => {
     const store = makeStore();
     const t = await store.create({ goal: 'do X', cwd: '/repo', preset: 'medium' });
-    expect(t).toMatchObject({ preset: 'medium', requestedModel: 'claude-opus-5', effort: 'medium' });
+    expect(t).toMatchObject({ preset: 'medium', requestedModel: 'claude-opus-5-5', effort: 'medium' });
   });
 
   it('leaves the run profile unset when no preset is given (CLI defaults)', async () => {
@@ -126,6 +126,6 @@ describe('engine snapshot', () => {
     const store = makeStore();
     const t = await store.create({ goal: 'g', cwd: '/r', preset: 'deep', model: 'glm-5.3' });
     expect(t.engine).toBeUndefined();
-    expect(t.requestedModel).toBe('claude-opus-5');
+    expect(t.requestedModel).toBe('claude-opus-5-5');
   });
 });

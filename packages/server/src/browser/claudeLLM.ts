@@ -11,7 +11,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ClientLLM } from '@browserbasehq/stagehand';
 
 /** The model used for `observe`/`extract`/`act` unless a caller overrides it. */
-export const DEFAULT_BROWSER_MODEL = 'claude-opus-5';
+export const DEFAULT_BROWSER_MODEL = 'claude-opus-5-5';
 
 /** Output ceiling for one inference call. Stagehand replies are small. */
 export const DEFAULT_MAX_TOKENS = 8192;
