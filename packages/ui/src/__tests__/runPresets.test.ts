@@ -57,8 +57,10 @@ describe('modelLabel', () => {
     expect(modelLabel('claude-sonnet-5')).toBe('Sonnet 5');
   });
 
-  it('passes unknown ids and empty input through', () => {
-    expect(modelLabel('claude-opus-4-8')).toBe('claude-opus-4-8');
+  it('matches core for any model id a run can report', () => {
+    for (const id of ['claude-opus-5-5', 'claude-haiku-4-5-20251001', 'claude-opus-5-5[1m]', 'glm-5.3', 'claude-3-5-sonnet-20241022']) {
+      expect(modelLabel(id)).toBe(modelDisplayName(id));
+    }
     expect(modelLabel(undefined)).toBeUndefined();
     expect(modelLabel('')).toBeUndefined();
   });

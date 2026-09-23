@@ -67,11 +67,21 @@ describe('modelDisplayName', () => {
     expect(modelDisplayName('claude-sonnet-5')).toBe('Sonnet 5');
   });
 
-  it('passes unknown ids through untouched', () => {
-    // A run can report a model we have no label for (a remote host on a
-    // different build). Showing the raw id beats inventing a name.
-    expect(modelDisplayName('claude-opus-4-8')).toBe('claude-opus-4-8');
+  it('derives the family and exact version from any Claude id', () => {
+    expect(modelDisplayName('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelDisplayName('claude-fable-5-1')).toBe('Fable 5.1');
+    expect(modelDisplayName('claude-opus-4-8')).toBe('Opus 4.8');
+    // Snapshot date and context-window suffix are not part of the version.
+    expect(modelDisplayName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelDisplayName('claude-opus-5-5[1m]')).toBe('Opus 5.5');
+  });
+
+  it('passes non-Claude ids and empty input through untouched', () => {
+    // A gateway run reports its own model id; inventing a name for it would lie.
+    expect(modelDisplayName('glm-5.3')).toBe('glm-5.3');
+    expect(modelDisplayName('claude-3-5-sonnet-20241022')).toBe('claude-3-5-sonnet-20241022');
     expect(modelDisplayName(undefined)).toBeUndefined();
+    expect(modelDisplayName('')).toBeUndefined();
   });
 
   it('has a label for every model a preset can request', () => {

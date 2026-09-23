@@ -6,6 +6,7 @@ import {
   formatStarted, formatTokens, formatCost, formatDuration, reviewPhase,
 } from '../views/tickets/ticketDisplay.ts';
 import { failureLine } from '../views/tickets/failureLine.ts';
+import { modelLabelWithId } from '../views/tickets/runPresets.ts';
 import { AgentExitReport } from '../views/tickets/AgentExitReport.tsx';
 import { Markdown } from '../views/tickets/Markdown.tsx';
 import { legacyAgentExit } from '../views/tickets/legacyAgentExit.ts';
@@ -60,8 +61,8 @@ function runRows(ticket: Ticket, t: (k: string) => string): Array<[string, strin
   if (ticket.rounds && ticket.rounds > 1) rows.push([t('tickets.runRounds'), String(ticket.rounds)]);
   if (ticket.preset) rows.push([t('tickets.runPreset'), t(`tickets.preset.${ticket.preset}`)]);
   if (ticket.engine === 'gateway') rows.push([t('tickets.runEngine'), t('tickets.engineGateway')]);
-  if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), ticket.requestedModel]);
-  if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
+  if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), modelLabelWithId(ticket.requestedModel)]);
+  if (ticket.model) rows.push([t('tickets.runModel'), modelLabelWithId(ticket.model)]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
   if (ticket.thinking) rows.push([t('tickets.runThinking'), 'on']);
   if (ticket.unsupportedFlags?.length) rows.push([t('tickets.runFlagsDropped'), ticket.unsupportedFlags.join(', ')]);

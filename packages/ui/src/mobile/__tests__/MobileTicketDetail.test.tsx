@@ -59,7 +59,7 @@ describe('MobileTicketDetail — desktop parity', () => {
 
   it('shows the run information the desktop modal shows', () => {
     render(<MobileTicketDetail {...props(base({ model: 'claude-opus-5', effort: 'high', preset: 'deep' } as never))} />);
-    expect(screen.getByText('claude-opus-5')).toBeInTheDocument();
+    expect(screen.getByText('Opus 5 (claude-opus-5)')).toBeInTheDocument();
     expect(screen.getByText('high')).toBeInTheDocument();
   });
 
