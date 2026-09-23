@@ -29,6 +29,31 @@ describe('parseStreamJsonLine', () => {
     expect(e).toMatchObject({ kind: 'result', result: { model: 'claude-opus-4-8' } });
   });
 
+  it('reports the model that did the work, not a background call listed first', () => {
+    // The CLI runs cheap background calls (titles, summaries) on Haiku; they can
+    // be the first modelUsage key even though Opus served the turn.
+    const e = parseStreamJsonLine(
+      JSON.stringify({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        result: 'ok',
+        modelUsage: {
+          'claude-haiku-4-5-20251001': { inputTokens: 300, outputTokens: 20, costUSD: 0.0004 },
+          'claude-opus-5[1m]': { inputTokens: 50, outputTokens: 900, costUSD: 0.12 },
+        },
+      }),
+    );
+    expect(e).toMatchObject({ kind: 'result', result: { model: 'claude-opus-5' } });
+  });
+
+  it('falls back to output tokens when modelUsage carries no cost', () => {
+    const e = parseStreamJsonLine(
+      '{"type":"result","modelUsage":{"claude-haiku-4-5":{"outputTokens":5},"claude-opus-5":{"outputTokens":80}}}',
+    );
+    expect(e).toMatchObject({ kind: 'result', result: { model: 'claude-opus-5' } });
+  });
+
   it('extracts token/cost/turn usage from the result event', () => {
     const e = parseStreamJsonLine(
       JSON.stringify({

@@ -35,21 +35,32 @@ export const TICKET_MODEL_SONNET = 'claude-sonnet-5';
 export const TICKET_MODEL_FABLE = 'claude-fable-5-1';
 
 /**
- * Human-facing names for the pinned ids. Only ids we pin are listed — a run can
- * report a model from a remote host on a different build, and showing that raw
- * id is more honest than inventing a name for it.
+ * Current-generation Claude id: `claude-<family>-<major>[-<minor>][-<yyyymmdd>][[…]]`.
+ * The optional minor is 1–2 digits so an 8-digit snapshot date is never read as
+ * a version. Legacy ids (`claude-3-5-sonnet-…`) put the family last and fall
+ * through to the raw id.
  */
-export const TICKET_MODEL_LABELS: Readonly<Record<string, string>> = {
-  [TICKET_MODEL_OPUS]: 'Opus 5',
-  [TICKET_MODEL_SONNET]: 'Sonnet 5',
-  [TICKET_MODEL_FABLE]: 'Fable 5.1',
-};
+const CLAUDE_MODEL_ID = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(?:\[.*\])?$/;
 
-/** Marketing name for a model id, or the id itself when we have no label. */
+/**
+ * Marketing name for a model id (`claude-opus-5-5` → `Opus 5.5`), or the id
+ * itself when it is not a Claude id. Derived from the id rather than looked up,
+ * so the version shown is always the version that ran — a hand-kept table goes
+ * stale on the next release and labels a run with a number it never had.
+ */
 export function modelDisplayName(model: string | undefined): string | undefined {
   if (!model) return undefined;
-  return TICKET_MODEL_LABELS[model] ?? model;
+  const m = CLAUDE_MODEL_ID.exec(model);
+  if (!m) return model;
+  const [, family, major, minor] = m;
+  const name = family!.charAt(0).toUpperCase() + family!.slice(1);
+  return minor ? `${name} ${major}.${minor}` : `${name} ${major}`;
 }
+
+/** Labels for the pinned ids, derived from the ids themselves. */
+export const TICKET_MODEL_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  [TICKET_MODEL_OPUS, TICKET_MODEL_SONNET, TICKET_MODEL_FABLE].map((id) => [id, modelDisplayName(id)!]),
+);
 
 /** A preset resolved to the concrete flags handed to the agent CLI. */
 export interface TicketRunProfile {

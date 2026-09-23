@@ -1,4 +1,5 @@
 import type { Ticket, TicketState, TicketEvaluation } from '@claude-alive/core';
+import { modelLabel } from './runPresets.ts';
 
 /** Legacy 3-way grouping (still used where only active/terminal matters). */
 export type StatusGroup = 'active' | 'done' | 'failed';
@@ -199,7 +200,7 @@ export function formatDuration(ms?: number): string | null {
 export function runMetaShort(ticket: Ticket): string {
   const parts: string[] = [];
   if (ticket.rounds && ticket.rounds > 1) parts.push(`↻${ticket.rounds}`);
-  if (ticket.model) parts.push(ticket.model);
+  if (ticket.model) parts.push(modelLabel(ticket.model)!);
   const tok = formatTokens(ticket.usage?.totalTokens);
   if (tok) parts.push(`${tok} tok`);
   const cost = formatCost(ticket.usage?.costUsd);

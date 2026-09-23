@@ -29,26 +29,40 @@ const OPUS = 'claude-opus-5';
 const SONNET = 'claude-sonnet-5';
 const FABLE = 'claude-fable-5-1';
 
-/** Model id → marketing name, mirroring core's `TICKET_MODEL_LABELS`. */
-export const MODEL_LABELS: Readonly<Record<string, string>> = {
-  [OPUS]: 'Opus 5',
-  [SONNET]: 'Sonnet 5',
-  [FABLE]: 'Fable 5.1',
-};
+/** Mirror of core's `CLAUDE_MODEL_ID` — see `modelDisplayName` there. */
+const CLAUDE_MODEL_ID = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(?:\[.*\])?$/;
 
-/** Marketing name for a model id, or the id itself when we have no label. */
+/** Marketing name for a model id (`claude-opus-5-5` → `Opus 5.5`), or the id itself. */
 export function modelLabel(model: string | undefined): string | undefined {
   if (!model) return undefined;
-  return MODEL_LABELS[model] ?? model;
+  const m = CLAUDE_MODEL_ID.exec(model);
+  if (!m) return model;
+  const [, family, major, minor] = m;
+  const name = family!.charAt(0).toUpperCase() + family!.slice(1);
+  return minor ? `${name} ${major}.${minor}` : `${name} ${major}`;
 }
 
+/**
+ * Name plus exact id (`Opus 5 (claude-opus-5)`) for record views, where the id
+ * that ran must stay visible. Non-Claude ids have no separate name and show once.
+ */
+export function modelLabelWithId(model: string): string {
+  const label = modelLabel(model);
+  return label && label !== model ? `${label} (${model})` : model;
+}
+
+/** Model id → marketing name, mirroring core's `TICKET_MODEL_LABELS`. */
+export const MODEL_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  [OPUS, SONNET, FABLE].map((id) => [id, modelLabel(id)!]),
+);
+
 export const RUN_PRESET_PREVIEW: Record<TicketRunPreset, RunPresetPreview> = {
-  fast: { model: SONNET, modelLabel: MODEL_LABELS[SONNET], effort: 'low' },
-  medium: { model: OPUS, modelLabel: MODEL_LABELS[OPUS], effort: 'medium' },
-  standard: { model: OPUS, modelLabel: MODEL_LABELS[OPUS], effort: 'high' },
-  deep: { model: OPUS, modelLabel: MODEL_LABELS[OPUS], effort: 'max' },
-  expert: { model: FABLE, modelLabel: MODEL_LABELS[FABLE], effort: 'medium' },
-  ultimate: { model: FABLE, modelLabel: MODEL_LABELS[FABLE], effort: 'high' },
+  fast: { model: SONNET, modelLabel: MODEL_LABELS[SONNET]!, effort: 'low' },
+  medium: { model: OPUS, modelLabel: MODEL_LABELS[OPUS]!, effort: 'medium' },
+  standard: { model: OPUS, modelLabel: MODEL_LABELS[OPUS]!, effort: 'high' },
+  deep: { model: OPUS, modelLabel: MODEL_LABELS[OPUS]!, effort: 'max' },
+  expert: { model: FABLE, modelLabel: MODEL_LABELS[FABLE]!, effort: 'medium' },
+  ultimate: { model: FABLE, modelLabel: MODEL_LABELS[FABLE]!, effort: 'high' },
 };
 
 /** i18n key for a preset's button label. */

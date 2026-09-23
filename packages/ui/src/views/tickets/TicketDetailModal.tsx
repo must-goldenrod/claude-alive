@@ -21,6 +21,7 @@ import {
   type DecisionOption,
 } from './ticketDisplay.ts';
 import type { EvaluateFn, ReplyFn } from './useTickets.ts';
+import { modelLabel, modelLabelWithId } from './runPresets.ts';
 
 interface TicketDetailModalProps {
   ticket: Ticket;
@@ -81,8 +82,8 @@ export function TicketDetailModal({ ticket, evaluation, onClose, onRetry, onCanc
   const meta: string[] = [formatStarted(ticket)];
   // Prefer the exact version the run actually reported; fall back to the
   // requested id while the ticket is still queued and nothing has come back yet.
-  if (ticket.model) meta.push(ticket.model);
-  else if (ticket.requestedModel) meta.push(ticket.requestedModel);
+  if (ticket.model) meta.push(modelLabel(ticket.model)!);
+  else if (ticket.requestedModel) meta.push(modelLabel(ticket.requestedModel)!);
   if (ticket.thinking) meta.push('thinking');
   if (ticket.effort) meta.push(`effort:${ticket.effort}`);
 
@@ -376,10 +377,10 @@ function RunInfo({ ticket, t }: { ticket: Ticket; t: (key: string) => string }) 
   // pin a full id: a `--fallback-model` hop, an unsupported `--model` on a remote
   // host, or a server-side substitution still makes them differ, and that
   // difference is exactly what makes a past ticket's cost/quality interpretable.
-  // Both stay raw here — the detail view is the record of what ran, not a label.
+  // Both keep the exact id beside the name — the detail view is the record of what ran.
   if (ticket.engine === 'gateway') rows.push([t('tickets.runEngine'), t('tickets.engineGateway')]);
-  if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), ticket.requestedModel]);
-  if (ticket.model) rows.push([t('tickets.runModel'), ticket.model]);
+  if (ticket.requestedModel) rows.push([t('tickets.runRequestedModel'), modelLabelWithId(ticket.requestedModel)]);
+  if (ticket.model) rows.push([t('tickets.runModel'), modelLabelWithId(ticket.model)]);
   if (ticket.effort) rows.push([t('tickets.runEffort'), ticket.effort]);
   if (ticket.thinking) rows.push([t('tickets.runThinking'), 'on']);
   // The resume handle. Recorded as soon as the agent announces it, so it is here
@@ -446,9 +447,9 @@ function Delegations({ delegations }: { delegations: TicketDelegation[] }) {
                 {/* A fallback took over (first choice rate-limited/retired): show both,
                     so a substituted answer is never mistaken for the requested model. */}
                 {d.requestedModel && (
-                  <span style={{ color: 'var(--text-secondary, #8b949e)' }}>{d.requestedModel} → </span>
+                  <span style={{ color: 'var(--text-secondary, #8b949e)' }}>{modelLabel(d.requestedModel)} → </span>
                 )}
-                {d.model}
+                {modelLabel(d.model)}
               </span>
               {meta && (
                 <span style={{ fontSize: 11, fontFamily: 'var(--font-mono, monospace)', color: 'var(--text-secondary, #8b949e)' }}>
@@ -757,7 +758,8 @@ function ReportRow({ label, children }: { label: string; children: ReactNode }) 
 
 /** `gemini/gemini-3.1-pro-preview` → `gemini-3.1-pro-preview`. */
 function shortModel(model: string): string {
-  return model.includes('/') ? model.slice(model.lastIndexOf('/') + 1) : model;
+  const bare = model.includes('/') ? model.slice(model.lastIndexOf('/') + 1) : model;
+  return modelLabel(bare) ?? bare;
 }
 
 /**

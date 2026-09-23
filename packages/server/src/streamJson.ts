@@ -109,14 +109,7 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
     case 'user':
       return { kind: 'activity' };
     case 'result': {
-      // modelUsage is keyed by model id (e.g. "claude-opus-4-8[1m]"); take the
-      // first key and strip any "[…]" context-window suffix.
-      const modelUsage = obj.modelUsage;
-      let model: string | null = null;
-      if (modelUsage && typeof modelUsage === 'object') {
-        const first = Object.keys(modelUsage as Record<string, unknown>)[0];
-        if (first) model = first.replace(/\[.*\]$/, '');
-      }
+      const model = primaryModel(obj.modelUsage);
       return {
         kind: 'result',
         result: {
@@ -132,6 +125,25 @@ export function parseStreamJsonLine(line: string): StreamEvent | null {
     default:
       return null;
   }
+}
+
+/**
+ * The model that served the turn. `modelUsage` is keyed by model id (e.g.
+ * "claude-opus-5[1m]") and also lists the CLI's background calls (Haiku titles,
+ * summaries), which can come first — so pick the entry that did the most work:
+ * highest cost, then most output tokens. The "[…]" context-window suffix is
+ * stripped.
+ */
+function primaryModel(modelUsage: unknown): string | null {
+  if (!modelUsage || typeof modelUsage !== 'object') return null;
+  let best: { id: string; cost: number; out: number } | null = null;
+  for (const [id, raw] of Object.entries(modelUsage as Record<string, unknown>)) {
+    const u = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+    const cost = typeof u.costUSD === 'number' ? u.costUSD : 0;
+    const out = typeof u.outputTokens === 'number' ? u.outputTokens : 0;
+    if (!best || cost > best.cost || (cost === best.cost && out > best.out)) best = { id, cost, out };
+  }
+  return best ? best.id.replace(/\[.*\]$/, '') : null;
 }
 
 /**
