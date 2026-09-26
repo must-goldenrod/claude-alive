@@ -55,7 +55,9 @@ beforeEach(async () => {
   clock = 0;
 });
 afterEach(async () => {
-  await rm(dir, { recursive: true, force: true });
+  // The runner can still be flushing the store when a test's condition is met;
+  // a write landing mid-rm surfaces as ENOTEMPTY, which rm retries on its own.
+  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
 });
 
 describe('isCwdAllowed', () => {
