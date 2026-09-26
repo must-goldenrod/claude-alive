@@ -64,10 +64,12 @@ export function PromptListContent({
       setSelectedId(null);
       return;
     }
-    if (!selectedId || !rows.some((row) => row.id === selectedId)) {
-      setSelectedId(rows[0]!.id);
-    }
-  }, [rows, selectedId]);
+    // Decide from the latest selection, not this render's: a click can land
+    // between the rows' commit and this effect, and must not be undone.
+    setSelectedId((current) =>
+      current && rows.some((row) => row.id === current) ? current : rows[0]!.id,
+    );
+  }, [rows]);
 
   // Honor a deep-link request from the dashboard. If the requested id
   // is already in the list, swap to it; otherwise leave the existing

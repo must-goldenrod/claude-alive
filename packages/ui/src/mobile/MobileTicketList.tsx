@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Ticket, TicketEvaluation } from '@claude-alive/core';
 import { displayStatus, STATUS_COLOR, projectName, ticketLastActivityAt } from '../views/tickets/ticketDisplay.ts';
 import { COLORS, screen, body, card, chip, primaryButton, actionBar, TYPE, clamp1, clamp2 } from './styles.ts';
 import { PullToRefresh } from './PullToRefresh.tsx';
 import { formatStamp } from './time.ts';
+import { oneOf, usePersistedState } from './viewState.ts';
 
 export interface MobileTicketListProps {
   tickets: Ticket[];
@@ -18,6 +19,7 @@ export interface MobileTicketListProps {
 }
 
 type Filter = 'all' | 'active' | 'decision' | 'done';
+const isFilter = oneOf<Filter>('all', 'active', 'decision', 'done');
 
 const MATCHES: Record<Filter, (t: Ticket) => boolean> = {
   all: () => true,
@@ -27,22 +29,20 @@ const MATCHES: Record<Filter, (t: Ticket) => boolean> = {
 };
 
 /**
- * The phone's home screen: everything that is waiting on you, newest activity
- * first — except tickets parked on a question, which are pinned to the top.
- * Those are the only ones where nothing moves until you act, and on a phone you
- * are usually opening the app precisely because something is stuck.
+ * The phone's home screen: every ticket, newest activity first, in the same
+ * order as the clock printed on each row.
+ *
+ * Tickets parked on a question used to be pinned above that order. With a few
+ * old ones never answered, the top of the list stopped being the latest thing
+ * and read as unsorted; the "answer" filter is where those are gathered now.
  */
 export function MobileTicketList({ tickets, evaluations, onOpen, onNew, connected = true, onRefresh }: MobileTicketListProps) {
   const { t } = useTranslation();
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = usePersistedState<Filter>('ticketFilter', 'all', isFilter);
 
   const rows = useMemo(() => {
     const visible = tickets.filter(MATCHES[filter]);
-    return [...visible].sort((a, b) => {
-      const blocked = (x: Ticket) => (x.state === 'decision' ? 0 : 1);
-      if (blocked(a) !== blocked(b)) return blocked(a) - blocked(b);
-      return ticketLastActivityAt(b) - ticketLastActivityAt(a);
-    });
+    return [...visible].sort((a, b) => ticketLastActivityAt(b) - ticketLastActivityAt(a));
   }, [tickets, filter]);
 
   const counts: Record<Filter, number> = {

@@ -40,6 +40,8 @@ export interface UseTicketsResult {
   tickets: Ticket[];
   evaluations: Record<string, TicketEvaluation>;
   loading: boolean;
+  /** The first fetch has answered; before that an empty list means "not yet", not "none". */
+  loaded: boolean;
   refresh: () => Promise<void>;
   createTicket: TicketCreateFn;
   retryTicket: (id: string) => Promise<boolean>;
@@ -59,6 +61,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
   const [byId, setById] = useState<Record<string, Ticket>>({});
   const [evalById, setEvalById] = useState<Record<string, TicketEvaluation>>({});
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -66,6 +69,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
       const res = await fetch(`${API_BASE}/api/tickets`);
       const data = (await res.json()) as { tickets: Ticket[] };
       setById(Object.fromEntries((data.tickets ?? []).map((t) => [t.id, t])));
+      setLoaded(true);
     } catch {
       // keep whatever we have; the WS will reconcile
     } finally {
@@ -98,6 +102,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
         });
       } else if (msg.type === 'ticket:snapshot') {
         setById(Object.fromEntries(msg.tickets.map((t) => [t.id, t])));
+        setLoaded(true);
       } else if (msg.type === 'evaluation:update') {
         setEvalById((prev) => ({ ...prev, [msg.evaluation.ticketId]: msg.evaluation }));
       }
@@ -193,6 +198,7 @@ export function useTickets(active: boolean, subscribeRaw: RawMessageSubscribe): 
     tickets,
     evaluations: evalById,
     loading,
+    loaded,
     refresh,
     createTicket,
     retryTicket: (id) => mutate(id, '/retry', 'POST'),

@@ -10,6 +10,13 @@ beforeEach(() => {
   // The branch list comes from the allowlisted endpoint; stub it so the
   // composer renders deterministically.
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: 'main', branches: ['main', 'dev'] }), { status: 200 })));
+  // The draft is persisted; each test starts from a clean device.
+  const m = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+  });
 });
 
 const projects = [
@@ -103,5 +110,26 @@ describe('MobileTicketCompose', () => {
     render(<MobileTicketCompose projects={[]} onCancel={() => {}} onCreate={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /폴더|folder/i }));
     expect(await screen.findByText(/CLAUDE_ALIVE_TICKET_ROOTS/)).toBeInTheDocument();
+  });
+});
+
+describe('MobileTicketCompose — draft', () => {
+  it('keeps a half-written goal and folder across a reload', () => {
+    const first = render(<MobileTicketCompose projects={projects} onCancel={() => {}} onCreate={vi.fn()} />);
+    fireEvent.change(goalBox(), { target: { value: '쓰다 만 목표' } });
+    first.unmount();
+    render(<MobileTicketCompose projects={projects} onCancel={() => {}} onCreate={vi.fn()} />);
+    expect(goalBox()).toHaveValue('쓰다 만 목표');
+  });
+
+  it('forgets the draft once the ticket is created', async () => {
+    const onCreate = vi.fn(async () => null);
+    const first = render(<MobileTicketCompose projects={[projects[0]!]} onCancel={() => {}} onCreate={onCreate} />);
+    fireEvent.change(goalBox(), { target: { value: '보낼 목표' } });
+    fireEvent.click(solve());
+    await waitFor(() => expect(onCreate).toHaveBeenCalled());
+    first.unmount();
+    render(<MobileTicketCompose projects={[projects[0]!]} onCancel={() => {}} onCreate={vi.fn()} />);
+    expect(goalBox()).toHaveValue('');
   });
 });

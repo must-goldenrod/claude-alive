@@ -1,11 +1,21 @@
 import '@testing-library/jest-dom/vitest';
 import '@claude-alive/i18n';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import type { Ticket } from '@claude-alive/core';
 import { MobileTicketList } from '../MobileTicketList.tsx';
 
 afterEach(cleanup);
+
+beforeEach(() => {
+  // The filter is persisted; each test starts from a clean device.
+  const m = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+  });
+});
 
 const ticket = (over: Partial<Ticket>): Ticket => ({
   id: 't1', seq: 1, goal: '로그인 버그를 고쳐줘', cwd: '/Users/me/work/app',
@@ -27,12 +37,12 @@ describe('MobileTicketList', () => {
     expect(screen.getByText('app')).toBeInTheDocument();
   });
 
-  it('puts tickets waiting on a human answer first — they are the ones that block', () => {
+  it('keeps the newest ticket on top — a waiting one is not pinned above it', () => {
     render(
       <MobileTicketList
         tickets={[
-          ticket({ id: 'a', goal: '실행중인 것', state: 'running' }),
-          ticket({ id: 'b', goal: '답을 기다리는 것', state: 'decision' }),
+          ticket({ id: 'a', goal: '방금 만든 것', state: 'running', createdAt: 2_000 }),
+          ticket({ id: 'b', goal: '예전에 답을 기다리는 것', state: 'decision', createdAt: 1_000 }),
         ]}
         evaluations={{}}
         onOpen={() => {}}
@@ -40,7 +50,19 @@ describe('MobileTicketList', () => {
       />,
     );
     const rows = screen.getAllByRole('button', { name: /것/ });
-    expect(rows[0]).toHaveTextContent('답을 기다리는 것');
+    expect(rows[0]).toHaveTextContent('방금 만든 것');
+  });
+
+  it('remembers the chosen filter across a reload', () => {
+    const props = {
+      tickets: [ticket({ id: 'a', goal: '실행중', state: 'running' }), ticket({ id: 'b', goal: '답변대기', state: 'decision' })],
+      evaluations: {}, onOpen: () => {}, onNew: () => {},
+    };
+    const first = render(<MobileTicketList {...props} />);
+    fireEvent.click(screen.getByRole('tab', { name: /답변|answer/i }));
+    first.unmount();
+    render(<MobileTicketList {...props} />);
+    expect(screen.queryByText('실행중')).not.toBeInTheDocument();
   });
 
   it('opens a ticket when its row is tapped', () => {

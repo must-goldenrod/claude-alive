@@ -46,6 +46,28 @@ describe('BranchPicker', () => {
     expect(screen.getByRole('option', { name: 'feat/x' })).toBeInTheDocument();
   });
 
+  it('ignores a slow answer for a folder that is no longer selected', async () => {
+    // The first folder's answer lands after the second folder's, and must not
+    // overwrite it — nor touch state once the picker has gone away.
+    let releaseOld: (() => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes(encodeURIComponent('/r/old'))) {
+          await new Promise<void>((resolve) => { releaseOld = resolve; });
+          return { ok: true, json: async () => ({ branches: { current: 'old-main', branches: ['old-main'], dirty: false } }) } as unknown as Response;
+        }
+        return { ok: true, json: async () => ({ branches: CLEAN }) } as unknown as Response;
+      }),
+    );
+    const { rerender } = render(<BranchPicker cwd="/r/old" />);
+    rerender(<BranchPicker cwd="/r/new" />);
+    expect(await screen.findByTestId('branch-select')).toHaveValue('main');
+    releaseOld?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByTestId('branch-select')).toHaveValue('main');
+  });
+
   it('checks out the branch chosen from the list', async () => {
     const calls = stubFetch({});
     render(<BranchPicker cwd="/r/proj" />);

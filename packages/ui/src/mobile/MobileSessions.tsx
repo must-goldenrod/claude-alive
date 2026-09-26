@@ -13,12 +13,22 @@ import { autoStartCommand } from './terminalPresets.ts';
 import type { MobileProject } from './types.ts';
 import type { RemoteTerminalLevel } from './capabilities.ts';
 import { primaryButton, actionBar } from './styles.ts';
+import { isString, readView, writeView } from './viewState.ts';
 import { useTranslation } from 'react-i18next';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
 /** How often the session list is refetched. */
 const POLL_MS = 4000;
+
+/**
+ * Polls a restored terminal may be missing from before it is given up on. A
+ * shell spawned just before the reload can take a poll to reach the index.
+ */
+const RESTORE_POLLS = 3;
+
+/** viewState key for the session whose terminal is on screen. */
+export const OPEN_SESSION_KEY = 'openSession';
 
 export interface MobileSessionsProps {
   subscribeRaw: RawMessageSubscribe;
@@ -88,7 +98,16 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<MobileSession[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Fetches that returned a list; before the first, "not found" means nothing. */
+  const [fetched, setFetched] = useState(0);
   const [open, setOpen] = useState<MobileSession | null>(null);
+  /**
+   * The terminal that was on screen before the page was reloaded. A phone
+   * browser drops a backgrounded tab; coming back should land in the same pty,
+   * not on the list. Consumed once found, or after RESTORE_POLLS lists without it.
+   */
+  const [restoreId] = useState(() => readView(OPEN_SESSION_KEY, isString) ?? null);
+  const restoreRef = useRef<string | null>(restoreId);
   const [attachedTab, setAttachedTab] = useState<string | null>(null);
   // A fresh feed per opened terminal: the xterm resets when it changes.
   const [feed, setFeed] = useState<TermFeed>(() => createTermFeed());
@@ -115,6 +134,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
         : [];
       if (!treeRes?.ok && !termRes?.ok) return;
       setSessions(mergeSessions(catalog, terminals));
+      setFetched((n) => n + 1);
     } catch {
       /* offline; the next tick retries */
     } finally {
@@ -196,6 +216,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
   /** Open a session straight into its pty. */
   const openSession = useCallback(async (session: MobileSession) => {
     setOpen(session);
+    writeView(OPEN_SESSION_KEY, session.sessionId);
     clearOutput();
     setExited(false);
     setAttachedTab(null);
@@ -238,6 +259,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
     clearOutput();
     setExited(false);
     rememberProject({ path: cwd, name: projectName(cwd) });
+    writeView(OPEN_SESSION_KEY, tabId);
     autoStartRef.current = options.autoStart ? autoStartCommand() : null;
     setOpen({
       sessionId: tabId, displayName: projectName(cwd), state: 'running', cwd,
@@ -247,7 +269,30 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
     send({ type: 'terminal:spawn', tabId, cwd, mode: 'shell', source: 'local', origin: 'mobile' });
   }, [send, clearOutput]);
 
-  const close = () => { setOpen(null); setAttachedTab(null); clearOutput(); };
+  const close = () => {
+    setOpen(null);
+    setAttachedTab(null);
+    clearOutput();
+    writeView(OPEN_SESSION_KEY, null);
+  };
+
+  // Reopen the restored terminal once the list can say whether it still exists.
+  useEffect(() => {
+    const pending = restoreRef.current;
+    if (!pending || fetched === 0) return;
+    if (open) {
+      restoreRef.current = null;
+      return;
+    }
+    const hit = sessions.find((s) => s.sessionId === pending);
+    if (hit) {
+      restoreRef.current = null;
+      void openSession(hit);
+    } else if (fetched >= RESTORE_POLLS) {
+      restoreRef.current = null;
+      writeView(OPEN_SESSION_KEY, null);
+    }
+  }, [fetched, sessions, open, openSession]);
 
   const canType = attachedTab !== null && (terminalLevel === 'input' || terminalLevel === 'shell');
 

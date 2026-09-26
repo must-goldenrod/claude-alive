@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   branchErrorKey, checkoutBranch, createBranch, deleteBranch, fetchBranches,
@@ -33,8 +33,13 @@ export function BranchPicker({ cwd, onChanged }: BranchPickerProps) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
+  // The folder whose answer may still be applied. A reply for a folder that has
+  // since changed — or arrives after unmount — is dropped, not rendered.
+  const activeCwd = useRef<string | null>(null);
+
   const reload = useCallback(async (path: string) => {
     const next = await fetchBranches(path);
+    if (activeCwd.current !== path) return;
     setList(next);
     setLoaded(true);
   }, []);
@@ -45,10 +50,12 @@ export function BranchPicker({ cwd, onChanged }: BranchPickerProps) {
       setLoaded(false);
       return;
     }
+    activeCwd.current = cwd;
     setLoaded(false);
     setError(null);
     setCreating(false);
     void reload(cwd);
+    return () => { activeCwd.current = null; };
   }, [cwd, reload]);
 
   /** Run one branch operation, then re-read so the row reflects reality. */
