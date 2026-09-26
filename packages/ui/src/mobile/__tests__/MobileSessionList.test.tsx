@@ -1,10 +1,20 @@
 import '@testing-library/jest-dom/vitest';
 import '@claude-alive/i18n';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { MobileSessionList, type MobileSession } from '../MobileSessionList.tsx';
 
 afterEach(cleanup);
+
+beforeEach(() => {
+  // The filter is persisted; each test starts from a clean device.
+  const m = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+  });
+});
 
 const session = (over: Partial<MobileSession>): MobileSession => ({
   sessionId: 's1', displayName: '로그인 리팩터링', state: 'ready',
@@ -32,7 +42,7 @@ describe('MobileSessionList', () => {
     expect(screen.getAllByRole('button', { name: /것/ })[0]).toHaveTextContent('방금 것');
   });
 
-  it('lifts a recently blocked session above more recent chatter', () => {
+  it('keeps the newest session on top — a waiting one is not lifted above it', () => {
     const now = 9_000_000;
     render(
       <MobileSessionList
@@ -44,7 +54,14 @@ describe('MobileSessionList', () => {
         loading={false}
       />,
     );
-    expect(screen.getAllByRole('button', { name: /것/ })[0]).toHaveTextContent('승인 기다리는 것');
+    expect(screen.getAllByRole('button', { name: /것/ })[0]).toHaveTextContent('방금 움직인 것');
+  });
+
+  it('fills its parent instead of growing with its rows, so the list can scroll', () => {
+    // `position: relative` here once overrode the screen's `absolute; inset: 0`,
+    // the pane grew to 6939px of content and nothing was left to scroll.
+    const { container } = render(<MobileSessionList sessions={[session({})]} onOpen={() => {}} loading={false} />);
+    expect((container.firstChild as HTMLElement).style.position).toBe('absolute');
   });
 
   it('does not lift a session that has been blocked since last month', () => {

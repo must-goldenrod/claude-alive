@@ -8,9 +8,13 @@ import { MobileTicketCompose } from './MobileTicketCompose.tsx';
 import type { MobileProject } from './types.ts';
 import { MobileTicketDetail } from './MobileTicketDetail.tsx';
 import { mergeProjects } from './mobileProjects.ts';
-import { MobileSessions } from './MobileSessions.tsx';
+import { MobileSessions, OPEN_SESSION_KEY } from './MobileSessions.tsx';
 import { parseCapabilities, type RemoteCapabilities } from './capabilities.ts';
 import { COLORS, chip } from './styles.ts';
+import { isStringOrNull, oneOf, usePersistedState, writeView } from './viewState.ts';
+
+const isScreen = oneOf('list', 'compose');
+const isTab = oneOf('tickets', 'sessions');
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
@@ -30,12 +34,14 @@ export interface MobileAppProps {
  */
 export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
   const { t } = useTranslation();
-  const { tickets, evaluations, refresh, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } =
+  const { tickets, evaluations, loaded, refresh, createTicket, retryTicket, replyTicket, cancelTicket, deleteTicket, evaluateTicket } =
     useTickets(true, subscribeRaw);
-  const [screen, setScreen] = useState<'list' | 'compose'>('list');
-  const [openId, setOpenId] = useState<string | null>(null);
+  // Persisted: a phone browser reloads a backgrounded tab, and coming back
+  // should land on the same screen rather than the top of the ticket list.
+  const [screen, setScreen] = usePersistedState('screen', 'list', isScreen);
+  const [openId, setOpenId] = usePersistedState<string | null>('openTicket', null, isStringOrNull);
   const [allowed, setAllowed] = useState<MobileProject[]>([]);
-  const [tab, setTab] = useState<'tickets' | 'sessions'>('tickets');
+  const [tab, setTab] = usePersistedState('tab', 'tickets', isTab);
   const [caps, setCaps] = useState<RemoteCapabilities>({ terminal: 'off', remote: false });
 
   // Asked once: which controls this server will honour. A local-only server
@@ -67,10 +73,11 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
   const projects = useMemo(() => mergeProjects(allowed, tickets), [allowed, tickets]);
   const open = openId ? tickets.find((t) => t.id === openId) ?? null : null;
 
-  // A ticket deleted elsewhere must not leave the phone on a dead screen.
+  // A ticket deleted elsewhere must not leave the phone on a dead screen. Only
+  // once the list has loaded: a restored id is not in the empty list yet.
   useEffect(() => {
-    if (openId && !tickets.some((t) => t.id === openId)) setOpenId(null);
-  }, [openId, tickets]);
+    if (loaded && openId && !tickets.some((t) => t.id === openId)) setOpenId(null);
+  }, [loaded, openId, tickets, setOpenId]);
 
   if (open) {
     return (
@@ -110,6 +117,8 @@ export function MobileApp({ subscribeRaw, connected, send }: MobileAppProps) {
     setTab('tickets');
     setScreen('list');
     setOpenId(null);
+    // Home is a deliberate exit: the terminal must not reopen on the next visit.
+    writeView(OPEN_SESSION_KEY, null);
   };
 
   const body =

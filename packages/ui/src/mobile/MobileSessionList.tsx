@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { projectName } from '../views/tickets/ticketDisplay.ts';
 import { COLORS, screen, body, card, chip, TYPE, clamp1, clamp2 } from './styles.ts';
 import { PullToRefresh } from './PullToRefresh.tsx';
 import { formatStamp } from './time.ts';
+import { oneOf, usePersistedState } from './viewState.ts';
 
 export interface MobileSession {
   sessionId: string;
@@ -24,6 +25,7 @@ export interface MobileSession {
 }
 
 export type SessionFilter = 'all' | 'active' | 'waiting' | 'done';
+const isSessionFilter = oneOf<SessionFilter>('all', 'active', 'waiting', 'done');
 
 export interface MobileSessionListProps {
   sessions: MobileSession[];
@@ -48,17 +50,6 @@ export function sessionGroup(session: MobileSession): Exclude<SessionFilter, 'al
 }
 
 /**
- * How far back from the newest session still counts as "now".
- *
- * The catalog keeps every session this machine has ever run — 610 of them here,
- * of which 2 were active in the last hour. A month-old session whose state was
- * never updated still reads as `starting`, so ordering by state alone put
- * ghosts at the top. Recency decides, and only a recently blocked session is
- * lifted above it.
- */
-const RECENT_MS = 60 * 60 * 1000;
-
-/**
  * How many rows the phone shows. Applied after sorting, not before: slicing the
  * catalog first handed the sort an arbitrary 60 of 610 and put July at the top.
  */
@@ -71,7 +62,12 @@ const GROUP_COLOR: Record<Exclude<SessionFilter, 'all'>, string> = {
 };
 
 /**
- * Every Claude session and every server-owned terminal, busiest first.
+ * Every Claude session and every server-owned terminal, newest activity first.
+ *
+ * The catalog keeps every session this machine has ever run — 610 of them here,
+ * of which 2 were active in the last hour. A month-old session whose state was
+ * never updated still reads as `starting`, so recency alone decides the order;
+ * a session waiting on approval is marked and filterable, not lifted.
  *
  * The heading of a row is the checkout, not the session title: on a phone the
  * first question is always "which project is this", and the title — often the
@@ -81,7 +77,7 @@ const GROUP_COLOR: Record<Exclude<SessionFilter, 'all'>, string> = {
  */
 export function MobileSessionList({ sessions, loading, onOpen, onRefresh }: MobileSessionListProps) {
   const { t } = useTranslation();
-  const [filter, setFilter] = useState<SessionFilter>('all');
+  const [filter, setFilter] = usePersistedState<SessionFilter>('sessionFilter', 'all', isSessionFilter);
 
   const counts = useMemo(() => {
     const out: Record<SessionFilter, number> = { all: sessions.length, active: 0, waiting: 0, done: 0 };
@@ -91,12 +87,7 @@ export function MobileSessionList({ sessions, loading, onOpen, onRefresh }: Mobi
 
   const rows = useMemo(() => {
     const visible = filter === 'all' ? sessions : sessions.filter((s) => sessionGroup(s) === filter);
-    const newest = sessions.reduce((max, s) => Math.max(max, s.lastActivityAt), 0);
-    const blocked = (s: MobileSession) =>
-      sessionGroup(s) === 'waiting' && newest - s.lastActivityAt < RECENT_MS ? 0 : 1;
-    return [...visible]
-      .sort((a, b) => blocked(a) - blocked(b) || b.lastActivityAt - a.lastActivityAt)
-      .slice(0, MAX_ROWS);
+    return [...visible].sort((a, b) => b.lastActivityAt - a.lastActivityAt).slice(0, MAX_ROWS);
   }, [sessions, filter]);
 
   const tabs: Array<{ id: SessionFilter; text: string }> = [
@@ -107,7 +98,9 @@ export function MobileSessionList({ sessions, loading, onOpen, onRefresh }: Mobi
   ];
 
   return (
-    <div style={{ ...screen, position: 'relative' }}>
+    // `screen` is already `absolute; inset: 0`. Overriding it with `relative`
+    // let this box grow to its content, so the pane below had nothing to scroll.
+    <div style={screen}>
       <div role="tablist" style={{ display: 'flex', gap: 6, padding: '10px 12px 0', overflowX: 'auto', flexShrink: 0 }}>
         {tabs.map((tab) => (
           <button

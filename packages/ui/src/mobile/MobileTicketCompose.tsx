@@ -8,6 +8,7 @@ import { Panel, Badge } from './parts.tsx';
 import { MobileFolderPicker } from './MobileFolderPicker.tsx';
 import { rememberProject } from './recentProjects.ts';
 import type { MobileProject, MobileCreateFn } from './types.ts';
+import { isString, usePersistedState, writeView } from './viewState.ts';
 
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:${window.location.port || '3141'}`;
 
@@ -93,8 +94,10 @@ function Toggle({ text, hint, on, onChange }: { text: string; hint: string; on: 
  */
 export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTicketComposeProps) {
   const { t } = useTranslation();
-  const [goal, setGoal] = useState('');
-  const [cwd, setCwd] = useState(projects.length === 1 ? projects[0]!.path : '');
+  // The goal and folder outlive a reload: a phone drops a backgrounded tab while
+  // the user is off copying the rest of the goal from another app.
+  const [goal, setGoal] = usePersistedState('draftGoal', '', isString);
+  const [cwd, setCwd] = usePersistedState('draftCwd', projects.length === 1 ? projects[0]!.path : '', isString);
   const [remotePath, setRemotePath] = useState('');
   const [locId, setLocId] = useState('local');
   const [preset, setPreset] = useState<TicketRunPreset>(DEFAULT_RUN_PRESET);
@@ -150,6 +153,8 @@ export function MobileTicketCompose({ projects, onCancel, onCreate }: MobileTick
     setBusy(false);
     if (message) setError(message);
     else {
+      writeView('draftGoal', null);
+      writeView('draftCwd', null);
       // Only a folder that actually started a ticket is worth offering next
       // time; remembering every tap would fill the list with mis-taps.
       if (!isRemote && cwd) rememberProject({ path: cwd, name: folderName || cwd });
