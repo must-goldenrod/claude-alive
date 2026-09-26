@@ -8,7 +8,7 @@
  * refetched from the server either way; what was lost is only this, and it is
  * small enough to keep per device in localStorage.
  */
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 
 export const VIEW_KEY_PREFIX = 'claude-alive.mobile.view.';
 
@@ -50,14 +50,10 @@ export function usePersistedState<T>(
   isValid: (value: unknown) => value is T,
 ): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => readView(key, isValid) ?? fallback);
-  const set = useCallback<Dispatch<SetStateAction<T>>>((next) => {
-    setValue((prev) => {
-      const resolved = typeof next === 'function' ? (next as (p: T) => T)(prev) : next;
-      writeView(key, resolved);
-      return resolved;
-    });
-  }, [key]);
-  return [value, set];
+  // Written after commit, not inside the updater: React may call an updater
+  // twice or for a render it then discards.
+  useEffect(() => writeView(key, value), [key, value]);
+  return [value, setValue];
 }
 
 /** Validator for a closed set of string values. */

@@ -21,6 +21,12 @@ const API_BASE = `${window.location.protocol}//${window.location.hostname}:${win
 /** How often the session list is refetched. */
 const POLL_MS = 4000;
 
+/**
+ * Polls a restored terminal may be missing from before it is given up on. A
+ * shell spawned just before the reload can take a poll to reach the index.
+ */
+const RESTORE_POLLS = 3;
+
 /** viewState key for the session whose terminal is on screen. */
 export const OPEN_SESSION_KEY = 'openSession';
 
@@ -92,13 +98,13 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
   const { t } = useTranslation();
   const [sessions, setSessions] = useState<MobileSession[]>([]);
   const [loading, setLoading] = useState(true);
-  /** At least one fetch has returned a list; before that "not found" means nothing. */
-  const [fetched, setFetched] = useState(false);
+  /** Fetches that returned a list; before the first, "not found" means nothing. */
+  const [fetched, setFetched] = useState(0);
   const [open, setOpen] = useState<MobileSession | null>(null);
   /**
    * The terminal that was on screen before the page was reloaded. A phone
    * browser drops a backgrounded tab; coming back should land in the same pty,
-   * not on the list. Consumed once, after the first list arrives.
+   * not on the list. Consumed once found, or after RESTORE_POLLS lists without it.
    */
   const [restoreId] = useState(() => readView(OPEN_SESSION_KEY, isString) ?? null);
   const restoreRef = useRef<string | null>(restoreId);
@@ -128,7 +134,7 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
         : [];
       if (!treeRes?.ok && !termRes?.ok) return;
       setSessions(mergeSessions(catalog, terminals));
-      setFetched(true);
+      setFetched((n) => n + 1);
     } catch {
       /* offline; the next tick retries */
     } finally {
@@ -273,12 +279,19 @@ export function MobileSessions({ subscribeRaw, send, terminalLevel, projects, co
   // Reopen the restored terminal once the list can say whether it still exists.
   useEffect(() => {
     const pending = restoreRef.current;
-    if (!pending || !fetched) return;
-    restoreRef.current = null;
-    if (open) return;
+    if (!pending || fetched === 0) return;
+    if (open) {
+      restoreRef.current = null;
+      return;
+    }
     const hit = sessions.find((s) => s.sessionId === pending);
-    if (hit) void openSession(hit);
-    else writeView(OPEN_SESSION_KEY, null);
+    if (hit) {
+      restoreRef.current = null;
+      void openSession(hit);
+    } else if (fetched >= RESTORE_POLLS) {
+      restoreRef.current = null;
+      writeView(OPEN_SESSION_KEY, null);
+    }
   }, [fetched, sessions, open, openSession]);
 
   const canType = attachedTab !== null && (terminalLevel === 'input' || terminalLevel === 'shell');

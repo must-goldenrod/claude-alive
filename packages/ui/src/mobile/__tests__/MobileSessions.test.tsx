@@ -65,4 +65,29 @@ describe('MobileSessions — reopening lands where the phone was', () => {
     await screen.findByRole('button', { name: /열어둔 셸/ });
     expect(send).not.toHaveBeenCalled();
   });
+
+  it('waits a poll for a terminal spawned just before the reload', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      localStorage.setItem('claude-alive.mobile.view.openSession', '"tab-1"');
+      let polls = 0;
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (String(url).includes('/api/terminals')) {
+          polls += 1;
+          const terminals = polls > 1
+            ? [{ tabId: 'tab-1', cwd: '/w/app', displayName: '막 띄운 셸', live: true, lastActivityAt: 5 }]
+            : [];
+          return new Response(JSON.stringify({ terminals }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ locations: [] }), { status: 200 });
+      }));
+      const send = vi.fn();
+      render(<MobileSessions subscribeRaw={noopSub} send={send} terminalLevel="input" projects={[]} connected />);
+      await waitFor(() => expect(polls).toBe(1));
+      await vi.advanceTimersByTimeAsync(4000);
+      await waitFor(() => expect(send).toHaveBeenCalledWith({ type: 'terminal:attach', tabId: 'tab-1' }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
