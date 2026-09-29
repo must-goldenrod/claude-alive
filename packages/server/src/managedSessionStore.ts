@@ -136,3 +136,22 @@ async function flush(): Promise<void> {
   await writeFile(STORE_TMP, JSON.stringify(cached, null, 2));
   await rename(STORE_TMP, STORE_FILE);
 }
+
+/**
+ * Drop every record `shouldDrop` selects, then flush once. Used on boot to
+ * clear records that can never be resumed. Returns how many were removed.
+ */
+export async function pruneManagedSessions(
+  shouldDrop: (record: ManagedSessionRecord) => boolean,
+): Promise<number> {
+  const keep: RecordMap = {};
+  let removed = 0;
+  for (const [k, v] of Object.entries(cached)) {
+    if (shouldDrop(v)) removed += 1;
+    else keep[k] = v;
+  }
+  if (removed === 0) return 0;
+  cached = keep;
+  await serializedFlush();
+  return removed;
+}

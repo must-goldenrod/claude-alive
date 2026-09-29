@@ -14,6 +14,7 @@ import {
   getManagedSessionIds,
   getManagedSessions,
   toResumableSessions,
+  pruneManagedSessions,
 } from './managedSessionStore.js';
 import { buildSpawnPlaceholderEvent } from './spawnPlaceholder.js';
 import { loadNames, getNames, saveName, removeName } from './nameStore.js';
@@ -37,7 +38,7 @@ import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
 import { createCatalogSignal } from './catalogSignal.js';
 import { resolveSessionTerminal } from './sessionTerminalLink.js';
-import { readTranscriptConversation } from './transcriptLocator.js';
+import { readTranscriptConversation, findTranscriptFile } from './transcriptLocator.js';
 import { augmentPath } from './envPath.js';
 import { createEfficioReader } from './efficioReader.js';
 import { createEfficioCollector, resolveEfficioRoot } from './efficioCollector.js';
@@ -130,6 +131,13 @@ await loadProjectNames();
 // (resumable) sessions. We also repopulate managedSessionIds so hooks that fire
 // for a resumed session are still tagged 'spawned-by-ui'.
 await loadManagedSessions();
+// A record whose session never wrote a transcript (a tab opened and left empty)
+// cannot be resumed; after a week of inactivity nothing will ever claim it.
+const STALE_EMPTY_SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const prunedSessions = await pruneManagedSessions(
+  (r) => Date.now() - r.lastActive > STALE_EMPTY_SESSION_MS && findTranscriptFile(r.claudeSessionId) === null,
+);
+if (prunedSessions > 0) console.log(`[session] pruned ${prunedSessions} empty session record(s)`);
 for (const id of getManagedSessionIds()) managedSessionIds.add(id);
 // Load the durable archive of completed sessions so the Archive view has history
 // from the moment the server comes up (the in-memory store starts empty).
@@ -840,6 +848,7 @@ function validateRemoteTicketCreate(input: { cwd: string; location?: { kind: str
 
 const httpServer = createHttpServer({
   onEvent,
+  onTabSession: (tabId, sessionId) => followTabSession(tabId, sessionId),
   getSnapshot,
   runs: runStore,
   remoteAccess,
@@ -1058,11 +1067,14 @@ const broadcaster = new WSBroadcaster({
   getTickets: () => ticketStore.list(),
   onClientMessage: (ws, msg) => {
     if (msg.type === 'terminal:spawn') {
-      // Idempotent: a spawn for a tab we already own is treated as a reattach.
-      if (terminalManager.has(msg.tabId)) {
+      // Idempotent: a spawn for a tab with a live pty is treated as a reattach.
+      if (terminalManager.isLive(msg.tabId)) {
         terminalManager.attach(msg.tabId, ws);
         return;
       }
+      // An exited pty (killed, or the user left) is replaced: a spawn for it is
+      // a request to resume, which the old entry would otherwise swallow.
+      if (terminalManager.has(msg.tabId)) terminalManager.close(msg.tabId);
       // Remember every Claude session UUID we mint or resume so the hook handler can
       // distinguish UI-spawned sessions from external CLI invocations.
       if (msg.claudeSessionId) managedSessionIds.add(msg.claudeSessionId);
@@ -1077,6 +1089,11 @@ const broadcaster = new WSBroadcaster({
       // This is what makes the Claude CLI /resume picker, sidebar, and tab label all share one name.
       const resolvedDisplayName =
         msg.displayName ?? (msg.cwd ? getProjectName(msg.cwd) : undefined);
+      // `claude --resume` on a session that never wrote a transcript exits at
+      // once; start it fresh under the same id so the tab keeps its identity.
+      const resumeId =
+        msg.resumeSessionId && findTranscriptFile(msg.resumeSessionId) !== null ? msg.resumeSessionId : undefined;
+      const freshId = resumeId ? msg.claudeSessionId : msg.claudeSessionId ?? msg.resumeSessionId;
       terminalManager.create(ws, {
         tabId: msg.tabId,
         cwd: msg.cwd,
@@ -1086,16 +1103,18 @@ const broadcaster = new WSBroadcaster({
         origin: msg.origin ?? 'desktop',
         skipPermissions: msg.skipPermissions,
         initialCommand: msg.initialCommand,
-        claudeSessionId: msg.claudeSessionId,
-        resumeSessionId: msg.resumeSessionId,
-        displayName: resolvedDisplayName,
+        claudeSessionId: freshId,
+        resumeSessionId: resumeId,
+        // Only an explicit name goes to `claude -n`: the project-name fallback
+        // gave every session in a project the same title in the /resume picker.
+        displayName: msg.displayName,
         // Local Claude terminals follow the engine chosen in Settings at spawn time.
         ...((msg.mode ?? 'claude') === 'claude' && msg.source !== 'ssh' && engineSettings.get().engine === 'gateway'
           ? { extraEnv: gatewayAgentEnv(engineSettings.get().presetModels.standard) }
           : {}),
       });
       // Persist Claude (non-SSH) sessions so they can be resumed after a restart.
-      const effectiveClaudeId = msg.resumeSessionId ?? msg.claudeSessionId;
+      const effectiveClaudeId = resumeId ?? freshId;
       if ((msg.mode ?? 'claude') === 'claude' && msg.source !== 'ssh' && effectiveClaudeId) {
         const now = Date.now();
         saveManagedSession({
@@ -1114,7 +1133,7 @@ const broadcaster = new WSBroadcaster({
     } else if (msg.type === 'terminal:attach') {
       // Reattach after a browser refresh. Alive → restore scrollback; gone → dormant.
       const result = terminalManager.attach(msg.tabId, ws);
-      if (result === 'missing') {
+      if (result === 'missing' || result === 'interrupted') {
         const rec = getManagedSession(msg.tabId);
         if (rec) {
           broadcaster.send(ws, {
@@ -1160,6 +1179,26 @@ const broadcaster = new WSBroadcaster({
     terminalManager.detachClient(ws);
   },
 });
+
+/**
+ * Follow a tab to the Claude session now running in it. `/clear` and an in-TUI
+ * `/resume` switch the session id; without this the registry kept the old id
+ * and a resume after a restart reopened the wrong conversation.
+ */
+function followTabSession(tabId: string, sessionId: string): void {
+  const rec = getManagedSession(tabId);
+  const changedLive = terminalManager.setClaudeSessionId(tabId, sessionId);
+  if (!rec || rec.claudeSessionId === sessionId) {
+    if (changedLive) broadcaster.broadcast({ type: 'terminal:session', tabId, claudeSessionId: sessionId });
+    return;
+  }
+  managedSessionIds.add(sessionId);
+  saveManagedSession({ ...rec, claudeSessionId: sessionId, lastActive: Date.now() }).catch((err) =>
+    console.error(`[session] failed to follow ${tabId} to ${sessionId}:`, err),
+  );
+  broadcaster.broadcast({ type: 'terminal:session', tabId, claudeSessionId: sessionId });
+  broadcastResumable();
+}
 
 // Catalog signals can now reach clients; anything emitted during boot was dropped.
 catalogSignal.connect((message) => broadcaster.broadcast(message));
@@ -1275,7 +1314,10 @@ httpServer.listen(PORT, HOST, () => {
 // Ignore SIGHUP so the server survives terminal close (daemon mode)
 process.on('SIGHUP', () => {});
 
-process.on('SIGINT', () => {
+// macOS shutdown and `launchctl stop` send SIGTERM, not SIGINT. Without a
+// handler the process died uncleaned and lingered in the shutdown stall
+// reports; both signals now run the same cleanup.
+function shutdown(): void {
   console.log('\n[server] shutting down...');
   // terminals cleaned up via onClientDisconnect
   for (const timer of despawnTimers.values()) clearTimeout(timer);
@@ -1291,4 +1333,6 @@ process.on('SIGINT', () => {
   broadcaster.close();
   httpServer.close();
   process.exit(0);
-});
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

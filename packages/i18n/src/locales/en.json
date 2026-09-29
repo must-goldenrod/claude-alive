@@ -382,6 +382,7 @@
     "parentDir": "Parent directory",
     "tabLabel": "Terminal {{n}}",
     "exited": "Exited",
+    "resumeTab": "Resume this conversation",
     "status": {
       "waiting": "Waiting"
     },
@@ -1198,6 +1199,7 @@
     "terminalNew": "New terminal",
     "terminalAttaching": "Attaching…",
     "terminalGone": "This terminal has exited",
+    "terminalResume": "Resume this conversation",
     "terminalReadOnly": "Read-only — input is not permitted",
     "roleUser": "You",
     "roleAssistant": "Agent",

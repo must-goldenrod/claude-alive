@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { WebSocket } from 'ws';
 import type { WSServerMessage } from '@claude-alive/core';
-import { TerminalManager } from '../terminalManager.js';
+import { TerminalManager, isInterruptedExit } from '../terminalManager.js';
 import type { ClaudeTerminal } from '../claudeTerminal.js';
 
 /** A fake ClaudeTerminal that captures the spawn callbacks so tests can drive output/exit. */
 class FakeTerminal {
   handler: ((data: string) => void) | null = null;
-  onExit: ((code: number) => void) | null = null;
+  onExit: ((code: number, signal: number) => void) | null = null;
   written: string[] = [];
   destroyed = false;
   resizes: Array<[number, number]> = [];
-  spawn(opts: { handler: (d: string) => void; onExit?: (c: number) => void }): void {
+  spawn(opts: { handler: (d: string) => void; onExit?: (c: number, s: number) => void }): void {
     this.handler = opts.handler;
     this.onExit = opts.onExit ?? null;
   }
@@ -219,5 +219,52 @@ describe('TerminalManager', () => {
     } finally {
       errSpy.mockRestore();
     }
+  });
+
+  it('flags a signal exit as interrupted and reports it on reattach instead of replaying', () => {
+    const a = fakeWs();
+    ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    ctx.fakes[0]!.onExit!(143, 0);
+    expect(a.received).toContainEqual({ type: 'terminal:exited', tabId: 'T1', exitCode: 143, interrupted: true });
+    const b = fakeWs();
+    expect(ctx.manager.attach('T1', b.ws)).toBe('interrupted');
+    expect(b.received).toEqual([]);
+  });
+
+  it('still replays a normally exited terminal on reattach', () => {
+    const a = fakeWs();
+    ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    ctx.fakes[0]!.onExit!(1, 0);
+    const b = fakeWs();
+    expect(ctx.manager.attach('T1', b.ws)).toBe('restored');
+    expect(b.received).toContainEqual({ type: 'terminal:exited', tabId: 'T1', exitCode: 1 });
+  });
+
+  it('does not flag a normal exit as interrupted', () => {
+    const a = fakeWs();
+    ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    ctx.fakes[0]!.onExit!(1, 0);
+    expect(a.received).toContainEqual({ type: 'terminal:exited', tabId: 'T1', exitCode: 1 });
+  });
+
+  it('re-points a live tab at a new Claude session once', () => {
+    const a = fakeWs();
+    ctx.manager.create(a.ws, { tabId: 'T1', claudeSessionId: 'sid-1' });
+    expect(ctx.manager.setClaudeSessionId('T1', 'sid-2')).toBe(true);
+    expect(ctx.manager.setClaudeSessionId('T1', 'sid-2')).toBe(false);
+    expect(ctx.manager.meta('T1')?.claudeSessionId).toBe('sid-2');
+    expect(ctx.manager.setClaudeSessionId('nope', 'sid-2')).toBe(false);
+  });
+});
+
+describe('isInterruptedExit', () => {
+  it.each([
+    [143, 0, true], // SIGTERM (macOS shutdown)
+    [129, 0, true], // SIGHUP
+    [0, 9, true], // SIGKILL seen by node-pty
+    [0, 0, false],
+    [1, 0, false], // /exit, Ctrl+C
+  ])('exitCode %i signal %i → %s', (code, signal, expected) => {
+    expect(isInterruptedExit(code, signal)).toBe(expected);
   });
 });

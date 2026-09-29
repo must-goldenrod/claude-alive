@@ -59,6 +59,8 @@ export function mergeSessions(catalog: MobileSession[], terminals: TerminalRow[]
       tabId: terminal.tabId,
       origin: terminal.origin ?? 'desktop',
       terminalLive: terminal.live,
+      // Keeps a Claude pty resumable from the phone once it has exited.
+      ...(terminal.claudeSessionId ? { providerSessionId: terminal.claudeSessionId } : {}),
     }));
 
   return [...merged, ...extra];

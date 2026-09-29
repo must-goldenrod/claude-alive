@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { COLORS, screen, topBar, secondaryButton, input, TYPE, clamp1 } from './styles.ts';
+import { COLORS, screen, topBar, secondaryButton, primaryButton, input, TYPE, clamp1 } from './styles.ts';
 import { MobileXterm } from './MobileXterm.tsx';
 import { loadPresets } from './terminalPresets.ts';
 import { formatStamp } from './time.ts';
@@ -28,6 +28,8 @@ export interface MobileTerminalProps {
   onFit?: (cols: number, rows: number) => void;
   /** Re-attach and replay the scrollback — the only refresh a live pty has. */
   onRefresh?: () => void | Promise<void>;
+  /** Start `claude --resume` for an exited session (after a reboot or restart). */
+  onResume?: () => void;
 }
 
 /**
@@ -58,7 +60,7 @@ const KEYS: ReadonlyArray<{ label: string; sequence: string }> = [
  */
 export function MobileTerminal({
   title, subtitle, feed, hasOutput, canType, exited, owned = false, lastActivityAt,
-  onBack, onSend, onKey, onFit, onRefresh,
+  onBack, onSend, onKey, onFit, onRefresh, onResume,
 }: MobileTerminalProps) {
   const { t } = useTranslation();
   const [line, setLine] = useState('');
@@ -106,6 +108,11 @@ export function MobileTerminal({
 
       {exited && (
         <p style={{ ...TYPE.meta, color: 'var(--accent-red)', margin: '8px 12px' }}>{t('mobile.terminalGone')}</p>
+      )}
+      {exited && onResume && (
+        <div style={{ padding: '0 12px 8px' }}>
+          <button style={primaryButton} onClick={onResume}>{t('mobile.terminalResume')}</button>
+        </div>
       )}
 
       {canType ? (

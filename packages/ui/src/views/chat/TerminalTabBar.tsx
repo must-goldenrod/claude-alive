@@ -26,6 +26,8 @@ export interface Tab {
   displayName?: string;
   /** True when the server has no live pty for this tab (post-restart); awaiting resume. */
   dormant?: boolean;
+  /** The pty was killed by a signal (reboot, kill) rather than left by the user; still resumable. */
+  interrupted?: boolean;
 }
 
 interface TerminalTabBarProps {
@@ -34,6 +36,8 @@ interface TerminalTabBarProps {
   onSelect: (tabId: string) => void;
   onAdd: () => void;
   onClose: (tabId: string) => void;
+  /** Resume an exited Claude tab in place (`claude --resume`). Omit to hide the button. */
+  onResume?: (tabId: string) => void;
   /** Reorder callback: move the tab at `fromIndex` so it sits at `toIndex` after the move. */
   onReorder?: (fromIndex: number, toIndex: number) => void;
 }
@@ -63,6 +67,11 @@ function statusIconColor(tab: Tab): string {
   return tab.exitCode === 0 ? 'var(--accent-green, #3fb950)' : 'var(--accent-red, #f85149)';
 }
 
+/** An exited local Claude tab that still knows its session — `claude --resume` can reopen it. */
+export function isResumableTab(tab: Tab): boolean {
+  return tab.exited && tab.source === 'local' && (tab.mode ?? 'claude') === 'claude' && !!tab.claudeSessionId;
+}
+
 function borderForSource(tab: Tab): string {
   if (tab.source === 'ssh') {
     const color = tab.sshError ? 'var(--accent-red, #f85149)' : 'var(--accent-purple, #bc8cff)';
@@ -77,6 +86,7 @@ export function TerminalTabBar({
   onSelect,
   onAdd,
   onClose,
+  onResume,
   onReorder,
 }: TerminalTabBarProps) {
   const { t } = useTranslation();
@@ -218,6 +228,29 @@ export function TerminalTabBar({
                 </span>
               )}
             </span>
+            {onResume && isResumableTab(tab) && (
+              <button
+                type="button"
+                aria-label={t('terminal.resumeTab')}
+                title={t('terminal.resumeTab')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onResume(tab.id);
+                }}
+                style={{
+                  fontSize: 11,
+                  lineHeight: 1,
+                  padding: '1px 4px',
+                  borderRadius: 3,
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--accent-blue)',
+                  cursor: 'pointer',
+                }}
+              >
+                ↻
+              </button>
+            )}
             {tabs.length > 1 && (
               <span
                 onClick={(e) => {

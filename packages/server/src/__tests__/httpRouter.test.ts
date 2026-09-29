@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import type { Server } from 'node:http';
 import { SessionStore } from '@claude-alive/core';
 import type { HookEventPayload } from '@claude-alive/core';
-import { createHttpServer } from '../httpRouter.js';
+import { createHttpServer, hookTabId } from '../httpRouter.js';
 import type { EfficioReader } from '../efficioReader.js';
 
 let server: Server;
@@ -154,6 +154,45 @@ describe('HTTP Router', () => {
         }),
       });
       expect(res.status).toBe(200);
+    });
+
+    it('reports the forwarding tab for a SessionStart that carries one', async () => {
+      const onTabSession = vi.fn();
+      const tabServer = createHttpServer({
+        onEvent: () => {},
+        onTabSession,
+        getSnapshot: () => ({}),
+        renameAgent: () => false,
+        removeAgent: () => false,
+        getStats: () => ({}),
+        getCompletedArchive: () => [],
+      } as Parameters<typeof createHttpServer>[0]);
+      const url = await new Promise<string>((resolve) => {
+        tabServer.listen(0, () => {
+          const addr = tabServer.address();
+          if (typeof addr === 'object' && addr) resolve(`http://localhost:${addr.port}`);
+        });
+      });
+      const post = (headers: Record<string, string>, event: string) =>
+        fetch(`${url}/api/event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify({ session_id: 'sid-new', hook_event_name: event, cwd: '/tmp' }),
+        });
+      const tab = 'tab-0f1e2d3c-4b5a-4678-9abc-def012345678';
+      await post({ 'X-Claude-Alive-Tab': tab }, 'SessionStart');
+      await post({ 'X-Claude-Alive-Tab': tab }, 'Stop');
+      await post({ 'X-Claude-Alive-Tab': 'evil; rm -rf' }, 'SessionStart');
+      await post({}, 'SessionStart');
+      tabServer.close();
+      expect(onTabSession).toHaveBeenCalledTimes(1);
+      expect(onTabSession).toHaveBeenCalledWith(tab, 'sid-new');
+    });
+
+    it('accepts only well-formed tab ids from the hook header', () => {
+      expect(hookTabId('tab-0f1e2d3c-4b5a-4678-9abc-def012345678')).toBe('tab-0f1e2d3c-4b5a-4678-9abc-def012345678');
+      expect(hookTabId(undefined)).toBeNull();
+      expect(hookTabId('tab-../../etc')).toBeNull();
     });
 
     it('rejects invalid JSON', async () => {

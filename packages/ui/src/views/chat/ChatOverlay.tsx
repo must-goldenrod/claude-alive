@@ -17,7 +17,7 @@ import {
 } from './sshPresets.ts';
 import type { SSHPreset, SSHPresetDraft } from './sshPresets.ts';
 import { loadRecentFolders, pushRecentFolder, removeRecentFolder } from './recentFolders.ts';
-import { loadOpenTabs, saveOpenTabs } from './openTabsStore.ts';
+import { isRestorableTab, loadOpenTabs, saveOpenTabs } from './openTabsStore.ts';
 import type { PersistedTab } from './openTabsStore.ts';
 import { makeTabId, generateFallbackUuid } from './tabId.ts';
 import { useSpreadView } from './useSpreadView.ts';
@@ -366,6 +366,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
   // Stable refs for callbacks — prevents useEffect re-runs on callback reference changes
   const onSpawnRef = useRef(onSpawn);
+  /** Set by the terminal-event effect; lets the tab bar's resume button reuse resumeInPlace. */
+  const resumeInPlaceRef = useRef<((tabId: string, claudeSessionId: string) => void) | null>(null);
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
   const onCloseRef = useRef(onClose);
@@ -720,17 +722,11 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   }, [restoreTab]);
 
   // Persist the set of open Claude tabs whenever it changes, so a reload can
-  // restore them. SSH/shell tabs and exited tabs are excluded — only resumable
+  // restore them. SSH/shell tabs and tabs the user exited are excluded — only resumable
   // Claude sessions are worth restoring.
   useEffect(() => {
     const persisted: PersistedTab[] = tabs
-      .filter(
-        (tab) =>
-          !tab.exited &&
-          tab.source === 'local' &&
-          (tab.mode ?? 'claude') === 'claude' &&
-          !!tab.claudeSessionId,
-      )
+      .filter(isRestorableTab)
       .map((tab) => ({
         tabId: tab.id,
         claudeSessionId: tab.claudeSessionId,
@@ -754,7 +750,9 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
   useEffect(() => {
     if (!connected) return;
     for (const tab of tabs) {
-      if (tab.exited) continue;
+      // An interrupted tab still reattaches: after a server restart the reply is
+      // `terminal:dormant`, which resumes it in place.
+      if (tab.exited && !tab.interrupted) continue;
       if (!termsRef.current.has(tab.id)) continue;
       if (attachedRef.current.has(tab.id)) continue;
       attachedRef.current.add(tab.id);
@@ -1184,9 +1182,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       });
       attachedRef.current.add(tabId);
       setTabs((prev) =>
-        prev.map((tb) => (tb.id === tabId ? { ...tb, dormant: false, exited: false } : tb)),
+        prev.map((tb) => (tb.id === tabId ? { ...tb, dormant: false, exited: false, interrupted: false } : tb)),
       );
     };
+    resumeInPlaceRef.current = resumeInPlace;
     terminalEventRef.current = (msg: WSServerMessage) => {
       if (msg.type === 'terminal:output') {
         termsRef.current.get(msg.tabId)?.term.write(msg.data);
@@ -1216,6 +1215,12 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         // has no session id (nothing to resume), leave it as-is.
         const tab = tabsRef.current.find((tb) => tb.id === msg.tabId);
         if (tab?.claudeSessionId) resumeInPlace(msg.tabId, tab.claudeSessionId);
+      } else if (msg.type === 'terminal:session') {
+        // `/clear` or an in-TUI `/resume` moved this tab to another session;
+        // persist the new id so a later resume opens what the tab now shows.
+        setTabs((prev) =>
+          prev.map((tb) => (tb.id === msg.tabId ? { ...tb, claudeSessionId: msg.claudeSessionId } : tb)),
+        );
       } else if (msg.type === 'terminal:exited') {
         const timer = idleTimersRef.current.get(msg.tabId);
         if (timer) {
@@ -1225,7 +1230,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         setTabs((prev) =>
           prev.map((tab) =>
             tab.id === msg.tabId
-              ? { ...tab, exited: true, exitCode: msg.exitCode, status: 'done' }
+              ? { ...tab, exited: true, exitCode: msg.exitCode, interrupted: msg.interrupted === true, status: 'done' }
               : tab,
           ),
         );
@@ -1505,6 +1510,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       <TerminalTabBar
         tabs={tabs}
         activeTabId={activeTabId}
+        onResume={(tabId) => {
+          const tab = tabs.find((tb) => tb.id === tabId);
+          if (tab?.claudeSessionId) resumeInPlaceRef.current?.(tabId, tab.claudeSessionId);
+        }}
         onSelect={(tabId) => {
           setActiveTabId(tabId);
           // Broadcast so the sidebar / pixel canvas highlight follows the user's tab choice.
