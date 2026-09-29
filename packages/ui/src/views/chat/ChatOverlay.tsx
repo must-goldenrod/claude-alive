@@ -366,6 +366,8 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
 
   // Stable refs for callbacks — prevents useEffect re-runs on callback reference changes
   const onSpawnRef = useRef(onSpawn);
+  /** Set by the terminal-event effect; lets the tab bar's resume button reuse resumeInPlace. */
+  const resumeInPlaceRef = useRef<((tabId: string, claudeSessionId: string) => void) | null>(null);
   const onInputRef = useRef(onInput);
   const onResizeRef = useRef(onResize);
   const onCloseRef = useRef(onClose);
@@ -1183,6 +1185,7 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
         prev.map((tb) => (tb.id === tabId ? { ...tb, dormant: false, exited: false, interrupted: false } : tb)),
       );
     };
+    resumeInPlaceRef.current = resumeInPlace;
     terminalEventRef.current = (msg: WSServerMessage) => {
       if (msg.type === 'terminal:output') {
         termsRef.current.get(msg.tabId)?.term.write(msg.data);
@@ -1507,6 +1510,10 @@ export function ChatOverlay({ open, onToggle, onSpawn, onInput, onResize, onClos
       <TerminalTabBar
         tabs={tabs}
         activeTabId={activeTabId}
+        onResume={(tabId) => {
+          const tab = tabs.find((tb) => tb.id === tabId);
+          if (tab?.claudeSessionId) resumeInPlaceRef.current?.(tabId, tab.claudeSessionId);
+        }}
         onSelect={(tabId) => {
           setActiveTabId(tabId);
           // Broadcast so the sidebar / pixel canvas highlight follows the user's tab choice.

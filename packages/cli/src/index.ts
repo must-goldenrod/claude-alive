@@ -149,6 +149,10 @@ function buildClaudeAlivePlist(): string {
   </dict>
   <key>ThrottleInterval</key>
   <integer>10</integer>
+  <!-- On shutdown launchd sends SIGTERM (the server cleans up and exits 0),
+       then SIGKILL after this many seconds, so a stuck server cannot stall a reboot. -->
+  <key>ExitTimeOut</key>
+  <integer>10</integer>
   <key>WorkingDirectory</key>
   <string>${xmlEscape(ALIVE_DIR)}</string>
   <key>StandardOutPath</key>
@@ -192,6 +196,11 @@ function claudeAliveAutostart(sub: 'enable' | 'disable' | 'status'): void {
       tryRun('launchctl', ['load', '-w', LAUNCHD_FILE]);
     }
     console.log(`  ✓ claude-alive autostart plist installed at ${LAUNCHD_FILE}`);
+    // A server started by hand still holds the port; the launchd copy retries
+    // every ThrottleInterval until that one stops, then takes over.
+    if (tryRun('lsof', ['-nP', `-iTCP:${process.env.CLAUDE_ALIVE_PORT ?? '3141'}`, '-sTCP:LISTEN'])) {
+      console.log('  ! a server is already listening — launchd takes over once it stops (pkill -TERM -f claude-alive/dist/server.js)');
+    }
   } else if (sub === 'disable') {
     if (existsSync(LAUNCHD_FILE)) {
       tryRun('launchctl', ['bootout', `gui/${uidShell()}/${LAUNCHD_LABEL}`]);

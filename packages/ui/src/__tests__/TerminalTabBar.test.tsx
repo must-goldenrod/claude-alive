@@ -66,3 +66,44 @@ describe('TerminalTabBar status label', () => {
     expect(screen.queryByText(/Waiting/)).toBeNull();
   });
 });
+
+describe('TerminalTabBar resume button', () => {
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const renderBar = (tab: Tab, onResume = vi.fn(), onSelect = vi.fn()) => {
+    render(
+      <TerminalTabBar
+        tabs={[tab]}
+        activeTabId="t1"
+        onSelect={onSelect}
+        onAdd={() => {}}
+        onClose={() => {}}
+        onResume={onResume}
+      />,
+    );
+    return { onResume, onSelect };
+  };
+
+  it('resumes an exited Claude tab without selecting it', () => {
+    const { onResume, onSelect } = renderBar(makeTab({ exited: true, exitCode: 143, claudeSessionId: 'sid' }));
+    screen.getByRole('button', { name: 'terminal.resumeTab' }).click();
+    expect(onResume).toHaveBeenCalledWith('t1');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('hides the button for live, ssh, shell, and session-less tabs', () => {
+    for (const tab of [
+      makeTab({ claudeSessionId: 'sid' }),
+      makeTab({ exited: true, source: 'ssh', claudeSessionId: 'sid' }),
+      makeTab({ exited: true, mode: 'shell', claudeSessionId: 'sid' }),
+      makeTab({ exited: true }),
+    ]) {
+      renderBar(tab);
+      expect(screen.queryByRole('button', { name: 'terminal.resumeTab' })).toBeNull();
+      cleanup();
+    }
+  });
+});

@@ -382,6 +382,7 @@
     "parentDir": "Parent directory",
     "tabLabel": "Terminal {{n}}",
     "exited": "Exited",
+    "resumeTab": "Resume this conversation",
     "status": {
       "waiting": "Waiting"
     },

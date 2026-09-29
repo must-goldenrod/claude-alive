@@ -382,6 +382,7 @@
     "parentDir": "상위 폴더",
     "tabLabel": "터미널 {{n}}",
     "exited": "종료됨",
+    "resumeTab": "이 대화 이어서 재개",
     "status": {
       "waiting": "대기중"
     },
