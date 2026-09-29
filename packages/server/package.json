@@ -16,7 +16,6 @@
     "@browserbasehq/stagehand": "^4.1.0",
     "@claude-alive/core": "workspace:*",
     "@claude-alive/storage": "workspace:*",
-    "@think-prompt/agent": "workspace:*",
     "better-sqlite3": "^12.11.1",
     "node-pty": "1.2.0-beta.11",
     "ws": "^8",

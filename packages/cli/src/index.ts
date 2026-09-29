@@ -114,9 +114,7 @@ function serverEntryPath(): string {
   return candidates[0]!;
 }
 
-// macOS launchd plist for the unified claude-alive server. As of D-048+
-// the absorbed think-prompt subsystem (prompt API + worker queue) runs
-// inside this same Node process, so one plist covers everything.
+// macOS launchd plist for the claude-alive server.
 
 const LAUNCHD_LABEL = 'com.claudealive.server';
 const LAUNCHD_FILE = `${homedir()}/Library/LaunchAgents/${LAUNCHD_LABEL}.plist`;
@@ -264,7 +262,7 @@ switch (command) {
     if (process.platform === 'darwin' && existsSync(LAUNCHD_FILE)) {
       claudeAliveAutostart('disable');
     }
-    console.log('\nDone. Prompt data is preserved at ~/.think-prompt/.');
+    console.log('\nDone.');
     break;
   }
 
@@ -453,11 +451,11 @@ switch (command) {
 
   default: {
     console.log(`
-claude-alive — Unified Claude Code dashboard + prompt quality coach
+claude-alive — Claude Code agent monitoring dashboard
 
 Usage:
   claude-alive install      Install Claude Code hooks (single-entry per event)
-  claude-alive uninstall    Remove hooks (prompt data preserved at ~/.think-prompt/)
+  claude-alive uninstall    Remove hooks
   claude-alive start        Start the dashboard server (:3141) and open the UI
                             (pass --no-open to skip browser launch)
                             (--remote opens it to other devices; --host <addr> to pick

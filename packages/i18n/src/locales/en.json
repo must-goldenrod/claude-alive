@@ -497,7 +497,6 @@
     },
     "subtab": {
       "outcome": "Outcome",
-      "quality": "Quality",
       "efficiency": "Efficiency",
       "process": "Process"
     },
@@ -840,51 +839,6 @@
       "growHeight": "Grow height",
       "maximize": "Maximize",
       "resetLayout": "Reset layout"
-    }
-  },
-  "prompt": {
-    "listTitle": "Recent prompts",
-    "empty": "No prompts captured yet. Use Claude Code with the hooks installed and they will appear here.",
-    "loading": "Loading…",
-    "unreachable": {
-      "title": "Failed to load prompt data",
-      "body": "Cannot reach the claude-alive server or the prompt API is not responding. Make sure the server is running and try again."
-    },
-    "subtab": {
-      "dashboard": "Dashboard",
-      "prompts": "Prompts"
-    },
-    "dashboard": {
-      "totalPrompts": "Total prompts",
-      "avgScore": "Avg score",
-      "avgScoreHint": "0–100 scale",
-      "goodRatio": "GOOD ratio",
-      "activeDays": "Active days (30d)",
-      "scoreTrend": "Score trend (last 30 days)",
-      "legendScore": "Avg score (0–100)",
-      "legendCount": "Prompt count",
-      "tierDistribution": "Tier distribution",
-      "topImprovements": "Common improvement areas",
-      "topImprovementsEmpty": "No rule hits yet.",
-      "recentCards": "Recent prompts"
-    },
-    "detail": {
-      "empty": "Select a prompt on the left to see improvements and coaching context.",
-      "notFound": "Prompt not found.",
-      "promptHeader": "Prompt",
-      "improvementsHeader": "Improvements",
-      "improvementsEmpty": "No improvements — looks like a strong prompt.",
-      "hitsHeader_one": "1 rule hit",
-      "hitsHeader_other": "{{count}} rule hits",
-      "hitsEmpty": "No rule hits — looks clean.",
-      "coachHeader": "Coaching hint injected into Claude",
-      "efficiencyShort": "efficiency",
-      "baselineDelta": "vs your baseline: {{delta}}"
-    },
-    "confidence": {
-      "high": "confident",
-      "medium": "estimate",
-      "low": "reference"
     }
   },
   "listView": {

@@ -127,14 +127,6 @@ export interface HttpRouterOptions {
    * data-less → routes return `available:false` so the UI can guide `collect`.
    */
   efficio?: EfficioReader;
-  /**
-   * Optional sub-router for paths owned by the absorbed think-prompt
-   * subsystem (`/api/prompts*`, `/api/sessions*`, `/v1/ingest/*`). When
-   * present, requests matching those prefixes are delegated to it before
-   * the built-in route table is consulted — Fastify mounted on the same
-   * http.Server with no second port.
-   */
-  promptRouter?: (req: IncomingMessage, res: ServerResponse) => void;
 
   /**
    * Server-owned canonical catalog (§I.5). Absent when the v2 event log could
@@ -458,7 +450,6 @@ export function createHttpServer(options: HttpRouterOptions) {
     removeProjectName,
     onProjectNamesChanged,
     uiDistPath,
-    promptRouter,
     workspaceTree,
     sessionConversation,
     sessionTerminal,
@@ -492,10 +483,7 @@ export function createHttpServer(options: HttpRouterOptions) {
       return;
     }
 
-    // The access gate sits ahead of every route *and* ahead of the prompt
-    // delegation below. Placing it after would leave `/api/prompts`,
-    // `/api/sessions` and `/v1/ingest/*` — prompt text and a write path —
-    // outside the policy entirely, since those return before the route table.
+    // The access gate sits ahead of every route.
     const auth = authorizeRequest(
       {
         method: req.method ?? 'GET',
@@ -517,20 +505,6 @@ export function createHttpServer(options: HttpRouterOptions) {
     // and buys nothing beyond the static handler.
     const sensitiveAllowed = auth.kind === 'local' || auth.kind === 'token';
     const remoteCaller = auth.kind === 'token' && !auth.fullAccess;
-
-    // Delegate prompt-subsystem paths to the mounted Fastify router.
-    // These paths are exclusively owned by the absorbed think-prompt code
-    // (read-only JSON API + browser-extension ingest); the built-in router
-    // never registers them, so there is no overlap risk.
-    if (
-      promptRouter &&
-      (url.pathname.startsWith('/api/prompts') ||
-        url.pathname.startsWith('/api/sessions') ||
-        url.pathname.startsWith('/v1/ingest/'))
-    ) {
-      promptRouter(req, res);
-      return;
-    }
 
     if (req.method === 'POST' && url.pathname === '/api/event') {
       try {

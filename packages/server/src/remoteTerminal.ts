@@ -52,9 +52,7 @@ export interface RouteRule {
 }
 
 /**
- * Read-only session routes, opened from `watch` upward. Deliberately GET-only
- * and deliberately not `/api/prompts`: the conversation endpoint already shows
- * what a session said, without also handing over the prompt-quality store.
+ * Read-only session routes, opened from `watch` upward. Deliberately GET-only.
  */
 const WATCH_ROUTES: readonly RouteRule[] = [
   { method: 'GET', pattern: /^\/api\/v2\/workspace-tree$/ },

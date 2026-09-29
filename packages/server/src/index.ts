@@ -1,7 +1,6 @@
 import { SessionStore, parseTranscriptTokens } from '@claude-alive/core';
 import type { HookEventPayload, Ticket, TicketLocation } from '@claude-alive/core';
 import { isRemoteLocation, editedPathFrom, resolveGatewayModel } from '@claude-alive/core';
-import { createPromptSubsystem, type PromptSubsystem } from '@think-prompt/agent';
 import { createHttpServer } from './httpRouter.js';
 import { WSBroadcaster } from './wsServer.js';
 import { TerminalManager } from './terminalManager.js';
@@ -142,28 +141,6 @@ for (const id of getManagedSessionIds()) managedSessionIds.add(id);
 // from the moment the server comes up (the in-memory store starts empty).
 await loadCompletedSessions();
 
-// Absorbed think-prompt subsystem. Owns its own SQLite handle and a
-// Fastify instance mounted onto our shared http.Server below; no second
-// port, no separate daemon. `ingest` is called from onEvent() to fan the
-// same hook payload into the prompt-quality pipeline.
-// Optional by design: this subsystem owns a native SQLite binding, and a Node
-// upgrade leaves that binding unloadable (NODE_MODULE_VERSION mismatch). A
-// failure here must not take the dashboard down with it — prompt analytics
-// degrade to unavailable and agents/terminals/WebSocket keep working (§C.7).
-// The failure is logged loudly rather than swallowed.
-let promptSubsystem: PromptSubsystem | null = null;
-try {
-  promptSubsystem = createPromptSubsystem();
-  await promptSubsystem.fastify.ready();
-} catch (error) {
-  promptSubsystem = null;
-  console.error(
-    '[prompt] subsystem failed to start — prompt analytics are disabled for this run. ' +
-      'If this is a native module error, run `pnpm rebuild better-sqlite3`.',
-    error,
-  );
-}
-
 const despawnTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // Read-only bridge to efficio's SQLite store (~/.efficio/efficio.db). The
@@ -281,10 +258,6 @@ function recordEditedFile(payload: HookEventPayload): void {
 }
 
 function onEvent(payload: HookEventPayload): void {
-  // Fan the same hook payload into the prompt-quality pipeline. Errors
-  // there are isolated inside `ingest` (fail-open) so the UI broadcast
-  // path below is never blocked.
-  promptSubsystem?.ingest(payload);
   // v2 dual-write: queued and error-isolated, never blocks the legacy path below.
   void canonicalPipeline.ingest(payload);
 
@@ -1014,15 +987,6 @@ const httpServer = createHttpServer({
           isLive: (tabId) => terminalManager.isLive(tabId),
         })
     : undefined,
-  promptRouter: (req, res) => {
-    if (!promptSubsystem) {
-      // Explicit over a confusing 404: the route exists, the subsystem does not.
-      res.writeHead(503, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'prompt subsystem unavailable', detail: 'see server logs' }));
-      return;
-    }
-    promptSubsystem.fastify.routing(req, res);
-  },
   onProjectNamesChanged: () => {
     // Push the new map to every connected client so the sidebar & tabs update instantly.
     broadcaster.broadcast({ type: 'project:names', names: getProjectNames() });
@@ -1321,8 +1285,6 @@ function shutdown(): void {
   efficioCollector.stop();
   efficioWatcher?.close();
   canonicalPipeline.close();
-  promptSubsystem?.fastify.close().catch(() => {});
-  promptSubsystem?.close();
   broadcaster.close();
   httpServer.close();
   process.exit(0);
