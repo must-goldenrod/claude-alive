@@ -17,11 +17,6 @@ const remoteConfig: RemoteAccessConfig = {
   terminalLevel: 'off',
 };
 
-const promptRouter = vi.fn((_req: unknown, res: { writeHead: (n: number) => void; end: (s: string) => void }) => {
-  res.writeHead(200);
-  res.end('{"prompts":[]}');
-});
-
 const onEvent = vi.fn();
 const ticketCreate = vi.fn(async () => ({ id: 't_1' }));
 
@@ -55,7 +50,6 @@ beforeAll(async () => {
     saveProjectName: async () => {},
     removeProjectName: async () => {},
     remoteAccess: remoteConfig,
-    promptRouter: promptRouter as never,
     tickets: {
       list: () => [],
       create: ticketCreate,
@@ -99,14 +93,6 @@ describe('remote mode on — no token', () => {
     expect((await fetch(`${base}/api/tickets`)).status).toBe(401);
     expect((await fetch(`${base}/api/status`)).status).toBe(401);
     expect((await fetch(`${base}/health`)).status).toBe(401);
-  });
-
-  it('refuses prompt-subsystem paths before delegating to them', async () => {
-    promptRouter.mockClear();
-    expect((await fetch(`${base}/api/prompts`)).status).toBe(401);
-    expect((await fetch(`${base}/api/sessions`)).status).toBe(401);
-    expect((await fetch(`${base}/v1/ingest/web`, { method: 'POST', body: '{}' })).status).toBe(401);
-    expect(promptRouter).not.toHaveBeenCalled();
   });
 
   it('does not reveal whether a route exists', async () => {

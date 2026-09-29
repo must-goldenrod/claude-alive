@@ -16,18 +16,10 @@ echo "[2/6] Cleaning npm-dist..."
 rm -rf "$OUT"
 mkdir -p "$OUT/dist" "$OUT/scripts" "$OUT/ui"
 
-# pino (absorbed via prompt-core in D-048) uses dynamic require() of node: builtins
-# and transport workers at runtime — esbuild can't statically resolve those when
-# bundling to ESM, so the bundled output throws "Dynamic require of 'node:os'".
-# Mark pino + its runtime-resolved deps external so Node loads them from
-# node_modules at install time. They must also be listed under `dependencies` in
-# the generated package.json below.
-# All runtime deps that either (a) ship native bindings or (b) use dynamic require()
-# at runtime are externalized here. When prompt-* packages were absorbed in D-048
-# the server bundle suddenly pulled in pino/fastify/better-sqlite3/franc-min — none
-# of which survive esbuild ESM bundling. Externalizing keeps the bundle small and
-# defers loading to install-time `node_modules`.
-EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --external:pino --external:pino-* --external:thread-stream --external:sonic-boom --external:on-exit-leak-free --external:real-require --external:atomic-sleep --external:safe-stable-stringify --external:fast-redact --external:quick-format-unescaped --external:process-warning --external:fastify --external:@fastify/* --external:@browserbasehq/* --external:@anthropic-ai/sdk --external:franc-min --external:trigram-utils --external:n-gram --external:collapse-white-space --external:commander --external:picocolors --external:zod"
+# Runtime deps that ship native bindings or resolve modules dynamically stay
+# external so Node loads them from node_modules at install time. Each one must
+# also be listed under `dependencies` in the generated package.json below.
+EXTERNAL_FLAGS="--external:ws --external:node-pty --external:better-sqlite3 --external:@browserbasehq/* --external:@anthropic-ai/sdk --external:zod"
 
 # Bundle the SAME CLI source the workspace uses (packages/cli/src/index.ts).
 # The CLI auto-detects whether the server entry lives at the workspace path
@@ -94,11 +86,6 @@ cat > "$OUT/package.json" << PKGJSON
     "ws": "^8",
     "node-pty": "1.2.0-beta.11",
     "better-sqlite3": "^12.11.1",
-    "pino": "^9.5.0",
-    "fastify": "^5.2.0",
-    "franc-min": "^6.2.0",
-    "commander": "^12.1.0",
-    "picocolors": "^1.1.1",
     "zod": "~4.4.3",
     "@browserbasehq/stagehand": "^4.1.0",
     "@anthropic-ai/sdk": "^0.127.0"

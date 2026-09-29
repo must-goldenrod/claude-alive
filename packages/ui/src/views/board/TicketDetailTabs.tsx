@@ -6,11 +6,10 @@ import { EmptyState } from './panels/EmptyState.tsx';
 import { EfficiencyPanel } from './panels/EfficiencyPanel.tsx';
 import { OutcomePanel } from './panels/OutcomePanel.tsx';
 import { ProcessPanel } from './panels/ProcessPanel.tsx';
-import { QualityPanel } from './panels/QualityPanel.tsx';
 
-type SubTab = 'outcome' | 'quality' | 'efficiency' | 'process';
+type SubTab = 'outcome' | 'efficiency' | 'process';
 
-const SUBTABS = ['outcome', 'quality', 'efficiency', 'process'] as const satisfies readonly SubTab[];
+const SUBTABS = ['outcome', 'efficiency', 'process'] as const satisfies readonly SubTab[];
 
 interface TicketDetailTabsProps {
   record: TicketEvaluation | null;
@@ -70,9 +69,6 @@ export function TicketDetailTabs({
       );
     }
 
-    if (panel === 'quality') {
-      return <QualityPanel sessionId={sessionId} />;
-    }
     if (panel === 'efficiency') {
       return <EfficiencyPanel sessionId={sessionId} />;
     }

@@ -11,7 +11,6 @@ import type {
 import { TicketDetailTabs } from '../TicketDetailTabs.tsx';
 import { EfficiencyPanel } from '../panels/EfficiencyPanel.tsx';
 import { ProcessPanel } from '../panels/ProcessPanel.tsx';
-import { QualityPanel } from '../panels/QualityPanel.tsx';
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -34,22 +33,6 @@ function jsonResponse(body: unknown, ok = true): Response {
     ok,
     json: async () => body,
   } as Response;
-}
-
-function prompt(id: string, sessionId: string, text = `prompt-${id}`) {
-  return {
-    id,
-    session_id: sessionId,
-    prompt: text,
-    char_len: text.length,
-    word_count: 1,
-    created_at: '2026-07-24T00:00:00.000Z',
-    turn_index: 1,
-    final_score: 0.8,
-    rule_score: 0.7,
-    usage_score: 0.9,
-    tier: 'good',
-  };
 }
 
 const AXIS_KEYS = ['w2', 'wc', 'bash', 'w3'] as const satisfies readonly EfficioAxisKey[];
@@ -124,7 +107,6 @@ beforeEach(() => {
 });
 
 describe.each([
-  ['QualityPanel', QualityPanel, /loading|불러오는 중/i],
   ['EfficiencyPanel', EfficiencyPanel, /loading|불러오는 중/i],
   ['ProcessPanel', ProcessPanel, /loading|불러오는 중/i],
 ] as const)('%s join states', (_name, Panel, loadingText) => {
@@ -146,124 +128,6 @@ describe.each([
       await expect(pending.promise).rejects.toThrow('network');
     });
     expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
-  });
-});
-
-describe('QualityPanel', () => {
-  it('renders only prompts joined by session_id from the real filtered endpoint', async () => {
-    const pending = deferred<Response>();
-    vi.mocked(fetch).mockReturnValueOnce(pending.promise);
-
-    render(<QualityPanel sessionId="S /?한글" />);
-
-    expect(screen.getByText(/loading|불러오는 중/i)).toBeInTheDocument();
-    await act(async () => {
-      pending.resolve(
-        jsonResponse({
-          prompts: [
-            prompt('match', 'S /?한글'),
-            prompt('other', 'OTHER'),
-          ],
-        }),
-      );
-      await pending.promise;
-    });
-    expect(await screen.findByText('prompt-match')).toBeInTheDocument();
-    expect(screen.queryByText('prompt-other')).not.toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(
-      `/api/prompts?limit=500&session_id=${encodeURIComponent('S /?한글')}`,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-  });
-
-  it('shows no data when no prompt matches', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({ prompts: [prompt('other', 'OTHER')] }),
-    );
-
-    render(<QualityPanel sessionId="S" />);
-
-    expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
-  });
-
-  it('ignores malformed rows from unrelated sessions', async () => {
-    vi.mocked(fetch).mockResolvedValueOnce(
-      jsonResponse({
-        prompts: [
-          { session_id: 'OTHER' },
-          prompt('valid-target', 'S'),
-        ],
-      }),
-    );
-
-    render(<QualityPanel sessionId="S" />);
-
-    expect(await screen.findByText('prompt-valid-target')).toBeInTheDocument();
-  });
-
-  it('selects a filtered prompt and renders its full detail and rule hits', async () => {
-    vi.mocked(fetch).mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes('/api/prompts?')) {
-        return jsonResponse({
-          prompts: [
-            prompt('first', 'S', 'First filtered prompt'),
-            prompt('second', 'S', 'Second filtered prompt'),
-          ],
-        });
-      }
-      if (url.endsWith('/api/prompts/second')) {
-        return jsonResponse({
-          prompt: {
-            ...prompt('second', 'S', 'Second filtered prompt detail'),
-            coach_context: 'Coach this prompt',
-            judge_score: 0.7,
-            computed_at: '2026-07-24T00:01:00.000Z',
-            rules_version: 1,
-          },
-          hits: [
-            {
-              rule_id: 'R-DETAIL',
-              severity: 5,
-              message: 'Add an explicit acceptance criterion',
-              evidence: 'missing criterion',
-            },
-          ],
-        });
-      }
-      return jsonResponse({}, false);
-    });
-
-    render(<QualityPanel sessionId="S" />);
-
-    fireEvent.click(
-      await screen.findByRole('button', { name: /second filtered prompt/i }),
-    );
-    expect(await screen.findByText('Second filtered prompt detail')).toBeInTheDocument();
-    expect(screen.getByText('R-DETAIL')).toBeInTheDocument();
-    expect(screen.getByText('Add an explicit acceptance criterion')).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/prompts/second',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    );
-  });
-
-  it('ignores an older response after the session changes', async () => {
-    const first = deferred<Response>();
-    vi.mocked(fetch)
-      .mockReturnValueOnce(first.promise)
-      .mockResolvedValueOnce(jsonResponse({ prompts: [prompt('new', 'NEW')] }));
-    const { rerender } = render(<QualityPanel sessionId="OLD" />);
-
-    rerender(<QualityPanel sessionId="NEW" />);
-    expect(await screen.findByText('prompt-new')).toBeInTheDocument();
-
-    await act(async () => {
-      first.resolve(jsonResponse({ prompts: [prompt('old', 'OLD')] }));
-      await first.promise;
-    });
-    await waitFor(() => expect(screen.queryByText('prompt-old')).not.toBeInTheDocument());
-    expect(screen.getByText('prompt-new')).toBeInTheDocument();
   });
 });
 
@@ -429,7 +293,6 @@ describe('ProcessPanel', () => {
 });
 
 it.each([
-  ['QualityPanel', QualityPanel],
   ['EfficiencyPanel', EfficiencyPanel],
   ['ProcessPanel', ProcessPanel],
 ] as const)('%s aborts its request when unmounted', async (_name, Panel) => {
@@ -447,9 +310,6 @@ it.each([
 it('TicketDetailTabs mounts each joined panel from its sub-tab', async () => {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const url = String(input);
-    if (url.includes('/api/prompts?')) {
-      return jsonResponse({ prompts: [prompt('quality', 'S')] });
-    }
     if (url.includes('/api/efficio/profiles?')) {
       return jsonResponse({
         modelVersion: 1,
@@ -468,19 +328,12 @@ it('TicketDetailTabs mounts each joined panel from its sub-tab', async () => {
       guideRefreshKey={0}
       onLabel={vi.fn()}
       onReflect={vi.fn()}
-      initialSubTab="quality"
     />,
   );
 
-  expect(await screen.findByText('prompt-quality')).toBeInTheDocument();
   expect(
     vi.mocked(fetch).mock.calls.some(([input]) =>
       String(input).includes('/api/efficio/profiles?'),
-    ),
-  ).toBe(false);
-  expect(
-    vi.mocked(fetch).mock.calls.some(([input]) =>
-      String(input).includes('/api/completed?'),
     ),
   ).toBe(false);
 

@@ -187,7 +187,7 @@ describe('TicketList', () => {
 });
 
 describe('WorkTab', () => {
-  it('shows the no-session empty state in quality, efficiency, and process', async () => {
+  it('shows the no-session empty state in efficiency and process', async () => {
     ticketApi.fetchRecords.mockResolvedValue([
       rec({ ticketId: 'without-session', headline: 'Sessionless ticket' }),
     ]);
@@ -195,7 +195,7 @@ describe('WorkTab', () => {
     render(<WorkTab active focusedRunId="ticket:without-session" />);
     await screen.findByText('Sessionless ticket');
 
-    for (const name of [/quality|품질/i, /efficiency|효율/i, /process|과정/i]) {
+    for (const name of [/efficiency|효율/i, /process|과정/i]) {
       fireEvent.click(screen.getByRole('tab', { name }));
       expect(screen.getByText(/no linked session|연결된 세션 없음/i)).toBeInTheDocument();
     }
@@ -215,7 +215,7 @@ describe('WorkTab', () => {
     await screen.findByText('Linked ticket');
     expect(screen.getByText('Linked outcome')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /quality|품질/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /efficiency|효율/i }));
     expect(screen.getByText(/loading|불러오는 중/i)).toBeInTheDocument();
     expect(await screen.findByText(/no data|데이터 없음/i)).toBeInTheDocument();
     expect(screen.queryByText(/no linked session|연결된 세션 없음/i)).not.toBeInTheDocument();
@@ -229,7 +229,6 @@ describe('WorkTab', () => {
     render(<WorkTab active focusedRunId="ticket:keyboard" />);
     await screen.findByText('Keyboard ticket');
     const outcomeTab = screen.getByRole('tab', { name: /outcome|성과/i });
-    const qualityTab = screen.getByRole('tab', { name: /quality|품질/i });
     const efficiencyTab = screen.getByRole('tab', { name: /efficiency|효율/i });
     const processTab = screen.getByRole('tab', { name: /process|과정/i });
 
@@ -239,7 +238,7 @@ describe('WorkTab', () => {
       'aria-labelledby',
       'ticket-detail-tab-outcome',
     );
-    for (const tab of [outcomeTab, qualityTab, efficiencyTab, processTab]) {
+    for (const tab of [outcomeTab, efficiencyTab, processTab]) {
       const panelId = tab.getAttribute('aria-controls');
       expect(panelId).not.toBeNull();
       expect(document.getElementById(panelId!)).toHaveAttribute('role', 'tabpanel');
@@ -248,11 +247,11 @@ describe('WorkTab', () => {
 
     outcomeTab.focus();
     fireEvent.keyDown(outcomeTab, { key: 'ArrowRight' });
-    expect(qualityTab).toHaveFocus();
-    expect(qualityTab).toHaveAttribute('aria-selected', 'true');
-    expect(qualityTab).toHaveAttribute('tabindex', '0');
+    expect(efficiencyTab).toHaveFocus();
+    expect(efficiencyTab).toHaveAttribute('aria-selected', 'true');
+    expect(efficiencyTab).toHaveAttribute('tabindex', '0');
 
-    fireEvent.keyDown(qualityTab, { key: 'ArrowLeft' });
+    fireEvent.keyDown(efficiencyTab, { key: 'ArrowLeft' });
     expect(outcomeTab).toHaveFocus();
     fireEvent.keyDown(outcomeTab, { key: 'ArrowLeft' });
     expect(processTab).toHaveFocus();
