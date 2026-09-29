@@ -233,9 +233,6 @@ importers:
       '@think-prompt/agent':
         specifier: workspace:*
         version: link:../prompt-agent
-      '@think-prompt/worker':
-        specifier: workspace:*
-        version: link:../prompt-worker
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1

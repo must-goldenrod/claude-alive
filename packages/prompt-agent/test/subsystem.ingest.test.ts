@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -111,5 +111,32 @@ describe('createPromptSubsystem ingest → /api/prompts', () => {
 
     const rows = await listPrompts('s4');
     expect(rows).toHaveLength(0);
+  });
+  it('does not enqueue transcript jobs on Stop/SubagentStop (no consumer runs)', () => {
+    const base = { tool: 'system' as const, session_id: 's5', timestamp: Date.now() };
+    sub.ingest({
+      ...base,
+      event: 'SubagentStop',
+      data: {
+        session_id: 's5',
+        hook_event_name: 'SubagentStop',
+        cwd: '/tmp/proj',
+        agent_id: 'a1',
+        agent_type: 'Explore',
+        agent_transcript_path: '/tmp/proj/agent.jsonl',
+      },
+    } as HookEventPayload);
+    sub.ingest({
+      ...base,
+      event: 'Stop',
+      data: {
+        session_id: 's5',
+        hook_event_name: 'Stop',
+        cwd: '/tmp/proj',
+        transcript_path: '/tmp/proj/s5.jsonl',
+      },
+    } as HookEventPayload);
+
+    expect(existsSync(join(tmpRoot, 'queue.jsonl'))).toBe(false);
   });
 });

@@ -26,7 +26,6 @@ import {
   bumpToolRollup,
   createLogger,
   endSession,
-  enqueue,
   finishSubagent,
   getPaths,
   insertPromptUsage,
@@ -164,15 +163,9 @@ export function createPromptSubsystem(deps: PromptSubsystemDeps = {}): PromptSub
             agent_id: data.agent_id ?? sessionId,
             transcript_path: data.agent_transcript_path ?? null,
           });
-          if (data.agent_transcript_path) {
-            enqueue(paths.queueFile, 'parse_subagent_transcript', {
-              session_id: sessionId,
-              agent_id: data.agent_id ?? sessionId,
-              agent_transcript_path: data.agent_transcript_path,
-            });
-          } else {
-            finishSubagent(db, sessionId, data.agent_id ?? sessionId, {});
-          }
+          // Transcript parsing ran in the removed queue worker; nothing
+          // consumes the queue any more, so close the subagent row directly.
+          finishSubagent(db, sessionId, data.agent_id ?? sessionId, {});
           break;
         }
         case 'PostToolUse': {
@@ -191,13 +184,6 @@ export function createPromptSubsystem(deps: PromptSubsystemDeps = {}): PromptSub
         }
         case 'Stop': {
           endSession(db, sessionId);
-          if (data.transcript_path) {
-            enqueue(paths.queueFile, 'parse_transcript', {
-              session_id: sessionId,
-              transcript_path: data.transcript_path,
-            });
-          }
-          enqueue(paths.queueFile, 'session_end', { session_id: sessionId });
           break;
         }
         default:

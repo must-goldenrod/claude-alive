@@ -34,7 +34,6 @@ import {
 import { createUsageRecordsCache } from './usage/jsonlUsage.js';
 import { SystemMetricsPoller } from './systemMetrics.js';
 import { UsageLimitsPoller } from './usage/rateLimitsPoller.js';
-import { startWorkerLoop } from './promptWorker.js';
 import { createCanonicalPipeline } from './canonicalPipeline.js';
 import { createCatalogSignal } from './catalogSignal.js';
 import { resolveSessionTerminal } from './sessionTerminalLink.js';
@@ -1270,11 +1269,6 @@ if (existsSync(efficioDir)) {
   }
 }
 
-// Start the prompt-worker queue consumer in-process. No pidfile, no fork:
-// the worker shares the server process lifecycle. Errors inside the loop
-// are logged but never bubble up to take the server down.
-const stopWorkerLoop = startWorkerLoop();
-
 // Reconcile tickets left in flight by a previous run: in-flight → failed
 // (interrupted, not reattachable), queued → re-scheduled. Runs now that the
 // broadcaster exists so state changes reach connected clients.
@@ -1326,7 +1320,6 @@ function shutdown(): void {
   usagePoller.stop();
   efficioCollector.stop();
   efficioWatcher?.close();
-  stopWorkerLoop();
   canonicalPipeline.close();
   promptSubsystem?.fastify.close().catch(() => {});
   promptSubsystem?.close();
